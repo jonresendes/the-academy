@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LearnHub</title>
+  <meta name="description" content="A learning environment with study rooms, tests, games and a display case of achievements.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Lexend:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a href="#/" class="brand"><span class="brand-mark">◆</span> LearnHub</a>
+    <nav class="topnav">
+      <a href="#/" data-nav="home">Courses</a>
+      <a href="#/case" data-nav="case">Display Case</a>
+      <a href="#/settings" data-nav="settings">Settings</a>
+    </nav>
+    <div class="level-pill" id="levelPill" title="Current difficulty level"></div>
+  </header>
+
+  <main id="app" class="app"></main>
+
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+
+  <!-- ===== COURSES ===== -->
+  <!-- Add one <script> line per course file. Order here is the order on the home page. -->
+  <script src="courses/english.js"></script>
+  <script src="courses/science.js"></script>
+
+  <!-- ===== APP ===== -->
+  <script src="js/storage.js"></script>
+  <script src="js/util.js"></script>
+  <script src="js/badges.js"></script>
+  <script src="js/games.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
