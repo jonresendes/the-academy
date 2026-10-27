@@ -2,24 +2,24 @@
 
 A static learning environment for any number of courses. Each unit has a **Study Room** (slides), a **Test Room** (adaptive quiz) and a **Game Room** (7 games), and every achievement lands in **The Display Case**. Everything is plain HTML/CSS/JS — no build step, no server — so it deploys straight to GitHub Pages.
 
+All files live side by side in the repository root (no folders), so you can upload them straight to GitHub:
+
 ```
-learnhub/
-├── index.html          app shell — add one <script> line per course here
-├── css/styles.css      palette + every component (change colours in :root)
-├── js/
-│   ├── storage.js      settings + progress (localStorage)
-│   ├── util.js         level-aware content helpers
-│   ├── badges.js       award engine (badge → medal → trophy)
-│   ├── games.js        the 7 games
-│   └── app.js          router + pages
-└── courses/
-    ├── english.js      sample course — copy this to start a new one
-    └── science.js
+index.html      app shell — add one <script> line per course here
+styles.css      palette + every component (change colours in :root)
+storage.js      settings, progress and Focus Plan (localStorage)
+util.js         level-aware content helpers
+badges.js       award engine (badge → medal → trophy)
+games.js        the 7 games
+app.js          router + pages
+english.js      sample course — copy this to start a new one
+science.js
+README.md
 ```
 
 ## Deploy on GitHub Pages
 
-1. Create a repository and push this folder (keep `index.html` at the root).
+1. Create a repository and upload all the files into its root (GitHub → Add file → Upload files).
 2. Repository **Settings → Pages → Source: Deploy from a branch → main / (root)**.
 3. Your app is live at `https://<user>.github.io/<repo>/`.
 
@@ -57,9 +57,9 @@ The student sees a 🎯 banner, a smaller course and a *My goals* checklist per 
 
 ## Adding a course
 
-1. Copy `courses/english.js` to `courses/<your-course>.js`.
+1. Copy `english.js` to `<your-course>.js`.
 2. Change `id`, `title`, `icon`, `color`, the `awards` names and the `units`.
-3. Add `<script src="courses/<your-course>.js"></script>` to `index.html` next to the others.
+3. Add `<script src="<your-course>.js"></script>` to `index.html` next to the others.
 
 That's it — the home page, Display Case and all games pick it up automatically.
 
