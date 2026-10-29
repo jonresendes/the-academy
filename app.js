@@ -36,10 +36,7 @@
     if (!units.length) return 0;
     return Math.round(units.reduce((a, u) => a + unitProgress(course, u), 0) / units.length);
   }
-  function updateLevelPill() {
-    const pill = document.getElementById('levelPill');
-    pill.textContent = 'Level ' + Settings.level + ' · ' + LEVEL_NAMES[Settings.level];
-  }
+  function updateLevelPill() { /* the level is intentionally never shown to students */ }
   const GOAL_LABELS = { study: ['📖', 'Read every slide in the Study Room'], testPass: ['📝', 'Pass the test'], testPerfect: ['💯', 'Get a perfect test score'],
                         games3: ['🎮', 'Finish 3 games'], allGames: ['🎖️', 'Finish every game'], unitMedal: ['🏅', 'Earn the unit medal'] };
   /** Goals checklist for a unit (Focus Plan goals, or the standard set). */
@@ -99,7 +96,7 @@
           '<a class="room" href="#/test/' + course.id + '/' + unit.id + '"><span class="room-icon">📝</span><span>Test Room</span></a>' +
           '<a class="room" href="#/games/' + course.id + '/' + unit.id + '"><span class="room-icon">🎮</span><span>Game Room</span></a>' +
           '</div></div>';
-      }).join('') + '</div>' + (unitsFor(course).length ? '' : '<div class="empty">No units are in this course\'s Focus Plan yet. A guardian can choose some in Settings.</div>');
+      }).join('') + '</div>' + (unitsFor(course).length ? '' : '<div class="empty">No units are in this course\'s Focus Plan yet. A teacher can choose some in Settings.</div>');
   }
 
   /* ----- Study Room ----- */
@@ -123,7 +120,7 @@
       const s = slides[i];
       app.innerHTML = crumbs([{ label: 'Courses', href: '#/' }, { label: course.title, href: '#/course/' + course.id }, { label: unit.title }, { label: 'Study Room' }]) +
         '<div class="page-head"><div><h1>📖 Study Room</h1><p class="muted">' + esc(unit.title) + '</p></div>' +
-        '<span class="tag">' + LEVEL_NAMES[Settings.level] + ' level</span></div>' +
+        '</div>' +
         '<div class="lesson-tabs">' + lessons.map(les => '<a href="#/study/' + course.id + '/' + unit.id + '/' + les._idx + '" class="' + (les._idx === lessonIdx ? 'active' : '') + (lessonDone(les._idx) ? ' done' : '') + '">' + esc(les.title) + '</a>').join('') + '</div>' +
         '<div class="slide">' + (s.visual ? '<div class="slide-visual">' + s.visual + '</div>' : '') +
         '<div class="btn-row between"><h2>' + esc(L(s.title)) + '</h2>' + speakBtn(L(s.title) + '. ' + String(L(s.body)).replace(/[*#-]/g, '')) + '</div>' +
@@ -153,7 +150,7 @@
     setCourseColor(course); setNav('home');
     const u = Progress.unit(course.id, unit.id);
     const head = crumbs([{ label: 'Courses', href: '#/' }, { label: course.title, href: '#/course/' + course.id }, { label: unit.title }, { label: 'Test Room' }]) +
-      '<div class="page-head"><div><h1>📝 Test Room</h1><p class="muted">' + esc(unit.title) + '</p></div><span class="tag">' + LEVEL_NAMES[Settings.level] + ' level</span></div>';
+      '<div class="page-head"><div><h1>📝 Test Room</h1><p class="muted">' + esc(unit.title) + '</p></div></div>';
 
     const level = Settings.level;
     const count = level === 1 ? 5 : level === 2 ? 8 : 12;
@@ -209,7 +206,7 @@
     let games = Games.available(course, unit);
     if (Settings.level === 1) games = games.filter(g => g.gentle).concat(games.filter(g => !g.gentle)); // gentle games first
     app.innerHTML = crumbs([{ label: 'Courses', href: '#/' }, { label: course.title, href: '#/course/' + course.id }, { label: unit.title }, { label: 'Game Room' }]) +
-      '<div class="page-head"><div><h1>🎮 Game Room</h1><p class="muted">' + esc(unit.title) + ' · finish 3 games for a badge, all of them for a medal</p></div><span class="tag">' + LEVEL_NAMES[Settings.level] + ' level</span></div>' +
+      '<div class="page-head"><div><h1>🎮 Game Room</h1><p class="muted">' + esc(unit.title) + ' · finish 3 games for a badge, all of them for a medal</p></div></div>' +
       '<div class="grid">' + games.map(g => '<a class="card link" href="#/game/' + course.id + '/' + unit.id + '/' + g.id + '"><div class="card-icon">' + g.icon + '</div><h3>' + esc(g.name) + '</h3><p class="muted small">' + esc(g.desc) + '</p>' +
         (u.games[g.id] ? '<span class="tag ok">✓ Completed' + (u.gameScores[g.id] !== undefined ? ' · best ' + u.gameScores[g.id] : '') + '</span>' : (g.gentle ? '<span class="tag">Gentle</span>' : '<span class="tag accent">Challenge</span>')) + '</a>').join('') + '</div>';
   }
@@ -243,12 +240,20 @@
   /* ----- Settings ----- */
   function pageSettings() {
     setCourseColor(null); setNav('settings');
-    const locked = !!Settings.get('guardianPin') && !sessionStorage.getItem('learnhub.unlocked');
+    const hasPin = !!Settings.get('guardianPin');
+    const locked = hasPin && !sessionStorage.getItem('learnhub.unlocked');
     const sw = (key, label, help) => '<div class="setting-row"><div><label>' + label + '</label><div class="help">' + help + '</div></div><button class="switch ' + (Settings.get(key) ? 'on' : '') + '" data-switch="' + key + '" role="switch" aria-checked="' + !!Settings.get(key) + '"></button></div>';
     const seg = (key, label, help, options) => '<div class="setting-row"><div><label>' + label + '</label><div class="help">' + help + '</div></div><div class="seg">' + options.map(o => '<button data-seg="' + key + '" data-v="' + o[0] + '" class="' + (String(Settings.get(key)) === String(o[0]) ? 'on' : '') + '">' + o[1] + '</button>').join('') + '</div></div>';
-    app.innerHTML = '<div class="page-head"><div><h1>⚙️ Settings</h1><p class="muted">Set up the experience for the student. A parent or guardian can lock the level with a PIN.</p></div></div>' +
-      '<div class="card" style="margin-bottom:1.25rem"><h2>Difficulty level</h2><p class="muted small">Changes the language in lessons, the number and style of questions, and the size of game boards.' + (locked ? ' <strong>Locked by a guardian PIN.</strong>' : '') + '</p>' +
-      '<div class="level-cards">' + [1, 2, 3].map(l => '<button class="level-card ' + (Settings.level === l ? 'on' : '') + '" data-level="' + l + '"' + (locked ? ' disabled' : '') + '><h3>Level ' + l + ' · ' + LEVEL_NAMES[l] + '</h3><p>' + LEVEL_DESC[l] + '</p></button>').join('') + '</div></div>' +
+
+    const teacherInner = locked ? '' :
+      '<div class="teacher-section"><h3>Challenge level</h3><p class="muted small">Changes the language in lessons, the number and style of questions, and the size of game boards. Students never see which level is active.</p>' +
+      '<div class="level-cards">' + [1, 2, 3].map(l => '<button class="level-card ' + (Settings.level === l ? 'on' : '') + '" data-level="' + l + '"><h3>Level ' + l + ' · ' + LEVEL_NAMES[l] + '</h3><p>' + LEVEL_DESC[l] + '</p></button>').join('') + '</div></div>' +
+      '<div class="teacher-section"><h3>🔍 Find lessons by keyword</h3><p class="muted small">Pick a unit and type a word or phrase. Lessons that mention it are listed in order; apply them and the student sees only those lessons for that unit.</p>' + lessonSearchHtml() + '</div>' +
+      '<div class="teacher-section">' + focusPlanHtml(false) + '</div>' +
+      '<div class="teacher-section"><h3>🎨 Colouring page learning breaks</h3>' +
+      seg('colouringEvery', 'Show a learning card every…', 'How many areas the student colours before a lesson card appears. "Student chooses" lets them pick inside the game.', [['student', 'Student chooses'], [1, '1'], [3, '3'], [5, '5'], [10, '10'], [0, 'Off']]) + '</div>';
+
+    app.innerHTML = '<div class="page-head"><div><h1>⚙️ Settings</h1><p class="muted">Accessibility options are open to everyone. Teaching controls live behind the Teacher Lock.</p></div></div>' +
       '<div class="card" style="margin-bottom:1.25rem"><h2>Accessibility</h2>' +
       seg('fontScale', 'Text size', 'Make everything larger.', [[1, 'Normal'], [1.15, 'Large'], [1.3, 'Extra large']]) +
       seg('font', 'Reading font', 'Lexend is designed for easier reading.', [['default', 'Standard'], ['lexend', 'Lexend']]) +
@@ -256,25 +261,79 @@
       seg('motion', 'Animation', 'Reduced motion removes flips, spins and slide effects.', [['normal', 'Normal'], ['reduced', 'Reduced']]) +
       sw('readAloud', 'Read aloud buttons', 'Show 🔊 buttons that read slides and questions out loud.') + '</div>' +
       '<div class="card" style="margin-bottom:1.25rem"><h2>Student</h2><div class="setting-row"><div><label>Name</label><div class="help">Shown on the home page.</div></div><input class="text-input" style="max-width:260px" id="nameInput" value="' + esc(Settings.get('studentName')) + '" placeholder="Student name"></div></div>' +
-      '<div class="card" style="margin-bottom:1.25rem"><h2>Guardian lock</h2><p class="muted small">When a PIN is set, the difficulty level can only be changed after entering it. The PIN is stored on this device only.</p>' +
-      '<div class="btn-row">' + (Settings.get('guardianPin')
+      '<div class="card teacher-card" style="margin-bottom:1.25rem"><div class="setting-row" style="padding-top:0"><div><h2 style="margin:0">🔒 Teacher Lock</h2><div class="help">' +
+        (locked ? 'Enter the PIN to open the teaching controls.' : hasPin ? 'Unlocked for this session. Lock again before handing the device back.' : 'No PIN yet — set one so students cannot open this section.') + '</div></div>' +
+      '<div class="btn-row">' + (hasPin
         ? (locked ? '<input class="text-input" style="max-width:180px" id="pinInput" type="password" inputmode="numeric" placeholder="Enter PIN"><button class="btn" id="unlockBtn">Unlock</button>'
-                  : '<span class="tag ok">Unlocked for this session</span><button class="btn secondary" id="lockBtn">Lock again</button><button class="btn ghost" id="removePin">Remove PIN</button>')
+                  : '<button class="btn secondary" id="lockBtn">🔒 Lock now</button><button class="btn ghost" id="removePin">Remove PIN</button>')
         : '<input class="text-input" style="max-width:180px" id="pinInput" type="password" inputmode="numeric" placeholder="Choose a PIN"><button class="btn" id="setPin">Set PIN</button>') + '</div></div>' +
-      focusPlanHtml(locked) +
+      teacherInner + '</div>' +
       '<div class="card"><h2>Progress</h2><p class="muted small">Progress and awards are saved in this browser.</p><button class="btn ghost" id="resetBtn">Reset all progress</button></div>';
 
-    app.querySelectorAll('[data-level]').forEach(b => b.addEventListener('click', () => { Settings.set('level', +b.dataset.level); updateLevelPill(); pageSettings(); }));
+    app.querySelectorAll('[data-level]').forEach(b => b.addEventListener('click', () => { Settings.set('level', +b.dataset.level); pageSettings(); }));
     app.querySelectorAll('[data-seg]').forEach(b => b.addEventListener('click', () => { const v = b.dataset.v; Settings.set(b.dataset.seg, isNaN(v) ? v : +v); pageSettings(); }));
     app.querySelectorAll('[data-switch]').forEach(b => b.addEventListener('click', () => { Settings.set(b.dataset.switch, !Settings.get(b.dataset.switch)); pageSettings(); }));
     app.querySelector('#nameInput').addEventListener('change', e => Settings.set('studentName', e.target.value.trim()));
     const on = (id, fn) => { const el = app.querySelector(id); if (el) el.addEventListener('click', fn); };
     on('#setPin', () => { const v = app.querySelector('#pinInput').value.trim(); if (v.length < 4) return alert('Choose at least 4 digits.'); Settings.set('guardianPin', v); sessionStorage.setItem('learnhub.unlocked', '1'); pageSettings(); });
     on('#unlockBtn', () => { if (app.querySelector('#pinInput').value === Settings.get('guardianPin')) { sessionStorage.setItem('learnhub.unlocked', '1'); pageSettings(); } else alert('Wrong PIN.'); });
+    const pin = app.querySelector('#pinInput'); if (pin) pin.addEventListener('keydown', e => { if (e.key === 'Enter') { const b = app.querySelector('#unlockBtn, #setPin'); if (b) b.click(); } });
     on('#lockBtn', () => { sessionStorage.removeItem('learnhub.unlocked'); pageSettings(); });
-    on('#removePin', () => { Settings.set('guardianPin', ''); sessionStorage.removeItem('learnhub.unlocked'); pageSettings(); });
+    on('#removePin', () => { if (confirm('Remove the Teacher Lock PIN? Students will be able to open the teaching controls.')) { Settings.set('guardianPin', ''); sessionStorage.removeItem('learnhub.unlocked'); pageSettings(); } });
     on('#resetBtn', () => { if (confirm('Erase all progress and awards on this device?')) { Progress.reset(); pageSettings(); } });
-    bindFocusPlan(locked);
+    if (!locked) { bindFocusPlan(false); bindLessonSearch(); }
+  }
+
+  /* ----- Keyword → lessons search (inside Teacher Lock) ----- */
+  const searchState = { course: '', unit: '', q: '' };
+  function lessonText(lesson) {
+    const parts = [lesson.title];
+    (lesson.slides || []).forEach(sl => { [sl.title, sl.body].forEach(v => { if (v && typeof v === 'object') Object.values(v).forEach(x => parts.push(x)); else parts.push(v); }); });
+    return parts.filter(Boolean).join(' \n ').toLowerCase();
+  }
+  function lessonSearchHtml() {
+    const course = findCourseAll(searchState.course) || courses()[0]; if (!course) return '<p class="muted">No courses yet.</p>';
+    searchState.course = course.id;
+    const unit = course.units.find(u => u.id === searchState.unit) || course.units[0]; if (!unit) return '';
+    searchState.unit = unit.id;
+    const q = searchState.q.trim().toLowerCase();
+    const words = q.split(/\s+/).filter(Boolean);
+    const hits = q ? unit.lessons.map((les, i) => ({ i, les, text: lessonText(les) })).filter(x => words.every(w => x.text.includes(w))) : [];
+    const f = Focus.unitEntry(course.id, unit.id);
+    return '<div class="search-row">' +
+      '<select class="text-input" id="searchCourse">' + courses().map(c => '<option value="' + c.id + '"' + (c.id === course.id ? ' selected' : '') + '>' + c.icon + ' ' + esc(c.title) + '</option>').join('') + '</select>' +
+      '<select class="text-input" id="searchUnit">' + course.units.map(u => '<option value="' + u.id + '"' + (u.id === unit.id ? ' selected' : '') + '>' + esc(u.title) + '</option>').join('') + '</select>' +
+      '<input class="text-input" id="searchQ" placeholder="Keyword, e.g. capital letter" value="' + esc(searchState.q) + '"><button class="btn" id="searchGo">Search</button></div>' +
+      (q ? (hits.length
+        ? '<div class="search-hits">' + hits.map(h => '<div class="search-hit"><span class="tag">Lesson ' + (h.i + 1) + '</span> <strong>' + esc(h.les.title) + '</strong><div class="muted small">' + esc(snippet(h.text, words[0])) + '</div></div>').join('') + '</div>' +
+          '<div class="btn-row" style="margin-top:0.75rem"><button class="btn success" id="searchApply">Show only these ' + hits.length + ' lesson' + (hits.length > 1 ? 's' : '') + ' to the student</button>' +
+          (f ? '<span class="muted small">This unit is already in the Focus Plan — applying replaces its lesson list.</span>' : '<span class="muted small">This turns the Focus Plan on and adds this unit.</span>') + '</div>'
+        : '<p class="muted">No lessons in <strong>' + esc(unit.title) + '</strong> mention "' + esc(searchState.q) + '".</p>') : '');
+  }
+  function snippet(text, word) {
+    const i = text.indexOf(word); if (i < 0) return '';
+    const a = Math.max(0, i - 50), b = Math.min(text.length, i + 70);
+    return (a ? '…' : '') + text.slice(a, b).replace(/\s*\n\s*/g, ' ').replace(/\*\*/g, '') + (b < text.length ? '…' : '');
+  }
+  function bindLessonSearch() {
+    const g = id => app.querySelector(id);
+    if (!g('#searchCourse')) return;
+    g('#searchCourse').addEventListener('change', e => { searchState.course = e.target.value; searchState.unit = ''; pageSettings(); });
+    g('#searchUnit').addEventListener('change', e => { searchState.unit = e.target.value; pageSettings(); });
+    const run = () => { searchState.q = g('#searchQ').value; pageSettings(); };
+    g('#searchGo').addEventListener('click', run);
+    g('#searchQ').addEventListener('keydown', e => { if (e.key === 'Enter') run(); });
+    const ap = g('#searchApply');
+    if (ap) ap.addEventListener('click', () => {
+      const course = findCourseAll(searchState.course), unit = course.units.find(u => u.id === searchState.unit);
+      const words = searchState.q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+      const idx = unit.lessons.map((les, i) => ({ i, t: lessonText(les) })).filter(x => words.every(w => x.t.includes(w))).map(x => x.i).sort((a, b) => a - b);
+      Focus.includeUnit(course.id, unit.id, true);
+      Focus.unitEntry(course.id, unit.id).lessons = idx.length === unit.lessons.length ? null : idx;
+      Focus.save(); Focus.setEnabled(true);
+      sessionStorage.setItem('learnhub.planOpen', course.id);
+      pageSettings();
+    });
   }
 
   /* ----- Focus Plan editor (inside Settings) ----- */
@@ -300,10 +359,10 @@
                : '') + '</div>';
         }).join('') + '</div>' : '') + '</div>';
     }).join('');
-    return '<div class="card" style="margin-bottom:1.25rem"><div class="setting-row" style="padding-top:0"><div><h2 style="margin:0">🎯 Focus Plan</h2><div class="help">For a student working well below grade level: choose exactly which units, lessons, words and question topics they see, and the goals they work toward. Everything else is hidden for them.' + (locked ? ' <strong>Locked by the guardian PIN.</strong>' : '') + '</div></div>' +
+    return '<div class="setting-row" style="padding-top:0"><div><h3 style="margin:0">🎯 Focus Plan</h3><div class="help">For a student working well below grade level: choose exactly which units, lessons, words and question topics they see, and the goals they work toward. Everything else is hidden for them.</div></div>' +
       '<button class="switch ' + (Focus.enabled ? 'on' : '') + '" id="focusSwitch" role="switch" aria-checked="' + Focus.enabled + '"' + dis + '></button></div>' +
       '<p class="muted small">Tick a unit to add it to the plan, then narrow it down. Leaving every lesson, word or topic selected means "all of them". A course with no ticked units is shown in full.</p>' +
-      body + '</div>';
+      body;
   }
   function bindFocusPlan(locked) {
     const on = (sel, fn) => app.querySelectorAll(sel).forEach(el => el.addEventListener(el.type === 'checkbox' ? 'change' : 'click', fn));

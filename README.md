@@ -14,6 +14,7 @@ games.js        the 7 games
 app.js          router + pages
 english.js      sample course — copy this to start a new one
 science.js
+colouring.js    line-art pictures for the Colouring Page
 README.md
 ```
 
@@ -27,7 +28,7 @@ You can also just open `index.html` locally — it works from a file:// URL too.
 
 ## Difficulty levels
 
-Students or guardians set the level in **Settings**. A guardian PIN locks it.
+The level is set inside **Settings → Teacher Lock** and is never shown to the student (no badge, no label anywhere in the app).
 
 | | Level 1 · Explorer | Level 2 · Scholar | Level 3 · Challenger |
 |---|---|---|---|
@@ -41,9 +42,18 @@ Students or guardians set the level in **Settings**. A guardian PIN locks it.
 
 Accessibility settings: text size, Lexend reading font, high contrast, reduced motion, read-aloud buttons (browser speech).
 
+## Teacher Lock
+
+Everything a teacher or parent controls lives in **Settings → 🔒 Teacher Lock**. Set a PIN once; from then on the section is hidden until the PIN is entered (unlock lasts for the browser session — press **Lock now** before handing the device back). Inside:
+
+- **Challenge level** (1 Explorer / 2 Scholar / 3 Challenger)
+- **Find lessons by keyword** — pick a course and unit, type a word or phrase, and every lesson in that unit whose slides mention it is listed in chronological order. *Show only these lessons to the student* turns the Focus Plan on, adds the unit, and sets its lesson list to just those lessons.
+- **Focus Plan** (below)
+- **Colouring page learning breaks** — how often a lesson card interrupts the Colouring Page (every 1 / 3 / 5 / 10 areas, off, or let the student choose).
+
 ## Focus Plan (students working well below grade level)
 
-**Settings → Focus Plan** lets a guardian or teacher choose exactly which pieces of a course a student works toward. It sits behind the guardian PIN when one is set.
+The Focus Plan lets a teacher choose exactly which pieces of a course a student works toward.
 
 - Flip the switch on, open a course and **tick the units** to include. A course with no ticked units stays fully available; a course with ticked units shows *only* those.
 - Inside a ticked unit, narrow it further by tapping chips on/off:
@@ -132,6 +142,18 @@ Notes on questions:
 - `match` — the test samples 3 / 4 / 8 pairs by level.
 - `cat` groups questions into Jeopardy categories (needs ≥ 2 categories with enough questions each; otherwise the board is built automatically).
 - Slide bodies accept light markdown: blank lines for paragraphs, `- ` for bullets, `**bold**`.
+
+## Colouring Page
+
+A gentle game: pick a colour from the grid, tap any area inside the black lines to fill it. Fill every area to finish (counts toward the games badges). While colouring, **learning cards** from a chosen lesson pop up every N areas and must be dismissed ("Got it") before colouring continues; with breaks off, a *Did you know?* spot at the side rotates through the lesson's slides and the unit's vocabulary instead.
+
+Pictures live in `colouring.js`, keyed by `courseId/unitId`. Each is an inline SVG whose fillable areas carry `class="region"` (white fill, black stroke). The bundled pictures are original drawings. To add your own, paste any public-domain / CC0 line-art SVG, add `class="region"` to each closed shape, and register it:
+
+```js
+LearnHub.colouring['science/cells'].push({ title: 'Animal cell', svg: '<svg viewBox="…">…</svg>' });
+```
+
+Good sources of public-domain line art: openclipart.org, publicdomainvectors.org, Wikimedia Commons (filter by CC0 / public domain). Shapes must be closed paths for tap-to-fill to work; strokes with no fill will not colour.
 
 ## Awards
 

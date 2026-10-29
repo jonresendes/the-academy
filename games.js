@@ -363,7 +363,104 @@
     }
   };
 
-  const ALL = [matching, memory, reveal, fill, jeopardy, wheel, millionaire];
+  /* ---------- 8. Colouring Page ---------- */
+  const PALETTE = ['#e03131', '#f76707', '#fcc419', '#8ce99a', '#2f9e44', '#15aabf', '#4dabf7', '#1c7ed6', '#7048e8', '#f06595',
+                   '#c47f3a', '#8d5524', '#e9ecef', '#868e96', '#343a40', '#ffffff'];
+  const colouring = {
+    id: 'colouring', name: 'Colouring Page', icon: '🎨', gentle: true,
+    desc: 'Pick a colour, tap an area to fill it. Lesson cards pop up as you go.',
+    canPlay: (c, u) => ((window.LearnHub.colouring || {})[c.id + '/' + u.id] || []).length > 0,
+    render(ctx) {
+      const pics = window.LearnHub.colouring[ctx.course.id + '/' + ctx.unit.id];
+      const lessons = window.LH.lessonsFor(ctx.unit);
+      const teacherEvery = Settings.get('colouringEvery');
+      const studentChooses = teacherEvery === 'student' || teacherEvery === undefined;
+      const state = { pic: 0, lesson: lessons.length ? lessons[0]._idx : 0, every: studentChooses ? 3 : +teacherEvery };
+
+      const setup = () => {
+        ctx.host.innerHTML = '<h3>Set up your colouring page</h3>' +
+          '<div class="plan-section"><div class="plan-label">Picture</div><div class="word-bank">' + pics.map((p, i) => '<button class="chip' + (i === state.pic ? ' on' : '') + '" data-pic="' + i + '">' + esc(p.title) + '</button>').join('') + '</div></div>' +
+          (lessons.length ? '<div class="plan-section"><div class="plan-label">Lesson to learn while colouring</div><div class="word-bank">' + lessons.map(l => '<button class="chip' + (l._idx === state.lesson ? ' on' : '') + '" data-les="' + l._idx + '">' + esc(l.title) + '</button>').join('') + '</div></div>' : '') +
+          (studentChooses ? '<div class="plan-section"><div class="plan-label">Show a learning card every…</div><div class="word-bank">' + [[1, '1 area'], [3, '3 areas'], [5, '5 areas'], [10, '10 areas'], [0, 'Off (facts scroll at the side)']].map(o => '<button class="chip' + (o[0] === state.every ? ' on' : '') + '" data-every="' + o[0] + '">' + o[1] + '</button>').join('') + '</div></div>'
+            : '<p class="muted small">Learning cards: ' + (state.every ? 'every ' + state.every + ' area' + (state.every > 1 ? 's' : '') : 'off — facts scroll at the side') + ' (set by your teacher).</p>') +
+          '<div class="btn-row" style="margin-top:1rem"><button class="btn lg" id="startColouring">🎨 Start colouring</button></div>';
+        ctx.host.querySelectorAll('[data-pic]').forEach(b => b.addEventListener('click', () => { state.pic = +b.dataset.pic; setup(); }));
+        ctx.host.querySelectorAll('[data-les]').forEach(b => b.addEventListener('click', () => { state.lesson = +b.dataset.les; setup(); }));
+        ctx.host.querySelectorAll('[data-every]').forEach(b => b.addEventListener('click', () => { state.every = +b.dataset.every; setup(); }));
+        ctx.host.querySelector('#startColouring').addEventListener('click', play);
+      };
+
+      const play = () => {
+        const pic = pics[state.pic];
+        const lesson = ctx.unit.lessons[state.lesson] || { slides: [] };
+        const cards = window.LH.slidesFor(lesson).map(s => ({ title: L(s.title), body: L(s.body), visual: s.visual || '' }));
+        const facts = cards.map(c => c.title + ': ' + shorten(String(c.body).replace(/[*\n-]+/g, ' ').trim(), 150))
+          .concat(termsFor(ctx.unit).map(t => t.term + ' — ' + t.def));
+        let colour = PALETTE[0], fills = 0, cardIdx = 0, factIdx = 0;
+        const filled = new Set();
+        ctx.host.innerHTML = '<div class="colouring">' +
+          '<div class="colouring-left"><div class="game-head"><span class="tag accent">' + esc(pic.title) + '</span><span class="muted" id="colProgress"></span></div>' +
+          '<div class="colouring-canvas">' + pic.svg + '</div>' +
+          '<div class="btn-row" style="margin-top:0.75rem"><button class="btn ghost sm" id="colClear">Start over</button><button class="btn secondary sm" id="colSetup">Change picture</button></div></div>' +
+          '<div class="colouring-right"><div class="plan-label">Colours</div><div class="palette">' + PALETTE.map(c => '<button class="swatch' + (c === colour ? ' on' : '') + '" data-c="' + c + '" style="background:' + c + '" aria-label="' + c + '"></button>').join('') + '</div>' +
+          (state.every === 0 && facts.length ? '<div class="fact-spot"><div class="plan-label">💡 Did you know?</div><div id="factText"></div></div>' : '') +
+          '</div></div><div class="learn-card-host"></div>';
+        const svg = ctx.host.querySelector('.colouring-canvas svg');
+        const regions = [...svg.querySelectorAll('.region')];
+        regions.forEach((r, i) => r.dataset.i = i);
+        const progress = () => { ctx.host.querySelector('#colProgress').textContent = filled.size + ' of ' + regions.length + ' areas coloured'; };
+        progress();
+        const showFact = () => { const el = ctx.host.querySelector('#factText'); if (el && facts.length) { el.textContent = facts[factIdx % facts.length]; factIdx++; } };
+        showFact();
+        let factTimer = null;
+        if (state.every === 0 && facts.length > 1) factTimer = setInterval(showFact, 9000);
+        const stopTimer = () => { if (factTimer) clearInterval(factTimer); };
+        w_onLeave(ctx.host, stopTimer);
+
+        ctx.host.querySelectorAll('.swatch').forEach(b => b.addEventListener('click', () => {
+          colour = b.dataset.c; ctx.host.querySelectorAll('.swatch').forEach(x => x.classList.toggle('on', x === b));
+        }));
+        const learnCard = (then) => {
+          if (!cards.length) return then();
+          const c = cards[cardIdx % cards.length]; cardIdx++;
+          const host = ctx.host.querySelector('.learn-card-host');
+          host.innerHTML = '<div class="learn-overlay"><div class="learn-card">' + (c.visual ? '<div class="slide-visual">' + c.visual + '</div>' : '') +
+            '<div class="btn-row between"><h2>' + esc(c.title) + '</h2>' + speakBtn(c.title + '. ' + String(c.body).replace(/[*#-]/g, '')) + '</div>' +
+            '<div class="slide-body">' + window.LH.md(c.body) + '</div>' +
+            '<div class="btn-row" style="justify-content:flex-end;margin-top:1rem"><button class="btn success" id="learnOk">Got it — keep colouring 🎨</button></div></div></div>';
+          host.querySelector('#learnOk').addEventListener('click', () => { host.innerHTML = ''; then(); });
+        };
+        const finishIfDone = () => {
+          if (filled.size < regions.length) return;
+          stopTimer();
+          setTimeout(() => {
+            resultCard(ctx.host, 'Masterpiece!', ['You coloured every area of <strong>' + esc(pic.title) + '</strong>' + (cards.length && state.every ? ' and read ' + Math.min(cardIdx, cards.length) + ' lesson card' + (cardIdx === 1 ? '' : 's') : '') + '.'], ctx);
+            ctx.finish({ score: regions.length, max: regions.length });
+          }, 600);
+        };
+        regions.forEach(r => r.addEventListener('click', () => {
+          if (ctx.host.querySelector('.learn-overlay')) return;
+          r.setAttribute('fill', colour);
+          const wasNew = !filled.has(r.dataset.i) && colour !== '#ffffff';
+          if (colour === '#ffffff') filled.delete(r.dataset.i); else filled.add(r.dataset.i);
+          progress();
+          if (wasNew) { fills++; if (state.every > 0 && fills % state.every === 0 && filled.size < regions.length) return learnCard(finishIfDone); }
+          finishIfDone();
+        }));
+        ctx.host.querySelector('#colClear').addEventListener('click', () => { regions.forEach(r => r.setAttribute('fill', '#fff')); filled.clear(); fills = 0; progress(); });
+        ctx.host.querySelector('#colSetup').addEventListener('click', () => { stopTimer(); setup(); });
+      };
+      setup();
+    }
+  };
+  function shorten(t, n) { return t.length <= n ? t : t.slice(0, n).replace(/\s+\S*$/, '') + '…'; }
+  // stop background timers when the game host is replaced (route change)
+  function w_onLeave(host, fn) {
+    const mo = new MutationObserver(() => { if (!document.body.contains(host)) { fn(); mo.disconnect(); } });
+    mo.observe(document.body, { childList: true, subtree: true });
+  }
+
+  const ALL = [matching, memory, reveal, fill, colouring, jeopardy, wheel, millionaire];
 
   function available(course, unit) {
     return ALL.filter(g => g.canPlay(course, unit));

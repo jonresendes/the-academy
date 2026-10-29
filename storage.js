@@ -13,7 +13,8 @@
     motion: 'normal',    // 'normal' | 'reduced'
     readAloud: true,     // show speaker buttons
     guardianPin: '',     // when set, the level is locked unless the PIN is entered
-    studentName: ''
+    studentName: '',
+    colouringEvery: 'student' // 'student' | 0 (off) | 1 | 3 | 5 | 10 — learning cards in the Colouring Page
   };
 
   function load(key, fallback) {
