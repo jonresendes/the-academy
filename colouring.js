@@ -101,4 +101,26 @@ window.LearnHub.colouring = window.LearnHub.colouring || {};
     '<rect ' + R + ' x="242" y="175" width="18" height="24"/>' +
     '<path ' + R + ' d="M40 90 a18 18 0 0 1 34 -8 a16 16 0 0 1 30 10 a14 14 0 0 1 -6 26 h-64 a14 14 0 0 1 6 -28z"/>' + // cloud
     '</svg>' });
+
+  /* ---------- OLC4O / Unit 1: the detective's desk ---------- */
+  reg('olc4o/unit-1', { title: 'The detective\'s desk', svg:
+    '<svg viewBox="0 0 420 300" xmlns="http://www.w3.org/2000/svg">' +
+    '<rect ' + R + ' x="0" y="0" width="420" height="300"/>' +                             // wall
+    '<rect ' + R + ' x="0" y="200" width="420" height="100"/>' +                           // desk
+    '<rect ' + R + ' x="40" y="120" width="120" height="90" rx="4"/>' +                    // notebook
+    '<rect ' + R + ' x="52" y="132" width="96" height="66" rx="2"/>' +                     // notebook page
+    '<circle ' + R + ' cx="250" cy="130" r="48"/>' +                                       // magnifier rim
+    '<circle ' + R + ' cx="250" cy="130" r="34"/>' +                                       // magnifier glass
+    '<path ' + R + ' d="M284 164 l50 50 l-18 18 l-50 -50z"/>' +                             // magnifier handle
+    '<path ' + R + ' d="M320 70 l70 0 l0 36 l-70 0z"/>' +                                  // envelope
+    '<path ' + R + ' d="M320 70 l35 24 l35 -24"/>' +                                       // envelope flap (thin shape)
+    '<ellipse ' + R + ' cx="100" cy="60" rx="56" ry="12"/>' +                              // hat brim
+    '<path ' + R + ' d="M64 60 q36 -58 72 0z"/>' +                                         // hat crown
+    '<rect ' + R + ' x="64" y="48" width="72" height="12"/>' +                             // hat band
+    '<path ' + R + ' d="M190 262 l140 -36 l4 14 l-140 36z"/>' +                             // pencil body
+    '<path ' + R + ' d="M330 226 l26 1 l-22 13z"/>' +                                       // pencil tip
+    '<path ' + R + ' d="M190 262 l-16 8 l20 6z"/>' +                                        // eraser
+    '<ellipse ' + R + ' cx="380" cy="250" rx="26" ry="14"/>' +                             // mug base
+    '<rect ' + R + ' x="354" y="216" width="52" height="36" rx="6"/>' +                   // mug
+    '</svg>' });
 })();

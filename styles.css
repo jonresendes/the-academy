@@ -375,3 +375,14 @@ p { margin: 0 0 1rem; }
 .learn-card { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow-lg); padding: 2rem; max-width: 560px; width: 100%; max-height: 90vh; overflow: auto; animation: pop var(--motion) ease-out; }
 .learn-card .slide-visual { font-size: 3rem; line-height: 1; margin-bottom: 0.75rem; }
 .learn-card .slide-body { font-size: 1.1rem; }
+
+/* ---------- slide extras: tables, quotes, bar charts ---------- */
+.md-table { border-collapse: collapse; width: 100%; font-size: 0.95rem; margin: 0.5rem 0 1rem; }
+.md-table th, .md-table td { border: 1px solid var(--line); padding: 0.4rem 0.6rem; text-align: left; vertical-align: top; }
+.md-table th { background: var(--surface-2); font-weight: 800; }
+.md-table tr:nth-child(even) td { background: #fafbfe; }
+.slide-body blockquote { margin: 0 0 1rem; padding: 0.9rem 1.1rem; border-left: 5px solid var(--course, var(--primary)); background: var(--surface-2); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; font-size: 1.02rem; }
+.bars { display: grid; grid-template-columns: auto 1fr auto; gap: 0.4rem 0.75rem; align-items: center; margin: 0.5rem 0 1rem; font-size: 0.95rem; }
+.bars .bar { height: 22px; border-radius: 6px; background: var(--course, var(--primary)); }
+.bars .lbl { font-weight: 700; } .bars .val { font-weight: 800; }
+.bars-title { font-weight: 800; margin-bottom: 0.25rem; } .bars-axis { font-size: 0.85rem; color: var(--muted); }

@@ -14,6 +14,7 @@ games.js        the 7 games
 app.js          router + pages
 english.js      sample course — copy this to start a new one
 science.js
+olc4o.js        OLC4O Literacy — Unit 1 · Reading Like a Detective (Lessons 1–7)
 colouring.js    line-art pictures for the Colouring Page
 README.md
 ```
@@ -141,7 +142,11 @@ Notes on questions:
 - `fill` — put `___` in the prompt. Levels 1–2 show a word bank from `bank`; Level 3 types the answer (case/punctuation-insensitive).
 - `match` — the test samples 3 / 4 / 8 pairs by level.
 - `cat` groups questions into Jeopardy categories (needs ≥ 2 categories with enough questions each; otherwise the board is built automatically).
-- Slide bodies accept light markdown: blank lines for paragraphs, `- ` for bullets, `**bold**`.
+- Slide bodies accept light markdown: blank lines for paragraphs, `- ` for bullets, `**bold**`, `> ` for a quoted passage (a reading text), and `| a | b |` rows for a table (first row is the header). A slide can also carry `html: '<div>…</div>'` for raw HTML such as a bar chart (see the `GRAPH` block in `olc4o.js`).
+
+## OLC4O Literacy course
+
+`olc4o.js` holds Unit 1 (seven lessons) built from the Unit 1 slideshows, worksheets and answer keys. Each lesson's vocabulary, case text (Jaden's Tuesday, Why employers talk about skills, Bouncing back, The second sitting, the Riverside schedule and graph, Priya's e-mail and the Food Handler web page, the model reflection) and worksheet questions are in the app, with Level 1 using shortened passages and plain sentences. Questions carry `cat: 'L1 …' … 'L7 …'`, so the Focus Plan's *Question topics* and Jeopardy's categories line up with the lessons. Add Unit 2 as a second entry in `units`.
 
 ## Colouring Page
 

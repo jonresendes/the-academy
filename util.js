@@ -40,6 +40,12 @@
     const blocks = String(text || '').trim().split(/\n\s*\n/);
     return blocks.map(b => {
       const lines = b.split('\n');
+      if (lines.length > 1 && lines.every(l => /^\s*\|/.test(l))) {          // | a | b | table rows; first row = header
+        const rows = lines.map(l => l.trim().replace(/^\||\|$/g, '').split('|').map(c => inline(c.trim())));
+        return '<table class="md-table"><thead><tr>' + rows[0].map(c => '<th>' + c + '</th>').join('') + '</tr></thead><tbody>' +
+          rows.slice(1).map(r => '<tr>' + r.map(c => '<td>' + c + '</td>').join('') + '</tr>').join('') + '</tbody></table>';
+      }
+      if (/^\s*>\s/.test(lines[0])) return '<blockquote>' + lines.map(l => inline(l.replace(/^\s*>\s?/, ''))).join('<br>') + '</blockquote>';
       if (lines.every(l => /^\s*-\s+/.test(l))) {
         return '<ul>' + lines.map(l => '<li>' + inline(l.replace(/^\s*-\s+/, '')) + '</li>').join('') + '</ul>';
       }
