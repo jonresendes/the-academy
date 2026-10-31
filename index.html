@@ -2086,8 +2086,9 @@ function startAllc() {
     <g>${W.c.map(([id, d]) => `<path class="cty" data-id="${id}" d="${d}" style="--f:${col[id]}"/>`).join("")}</g>
     <g class="leaders"></g>
     <g>${W.m.map(([id, x, y]) => `<circle class="mk" data-id="${id}" data-x0="${x}" data-y0="${y}" cx="${x}" cy="${y}" r="6" style="--f:${col[id]}"/>`).join("")}</g>
-    <g class="fx"></g></g><use href="#acworld" x="${W.w}"/><use href="#acworld" x="${-W.w}"/></svg>`;
+    <g class="fx"></g></g></svg>`;
   const svg = $("#ac-map svg");
+  wrapCopies(svg, svg.querySelector("#acworld"));
   show("s-allc");
   scaleMarkers(svg); enableZoom(svg, $("#ac-map"), { wrap: true });
   svg.addEventListener("zoomed", acLabels);
@@ -2149,6 +2150,7 @@ function acHit(svg, e) {
   let best = null, bd = 1e9;
   svg.querySelectorAll("#acworld .mk").forEach(m => { const d = Math.hypot(+m.getAttribute("cx") - x, +m.getAttribute("cy") - y); if (d < bd) { bd = d; best = m.dataset.id; } });
   if (bd <= 12 * k) return best;
+  const t = e.target.closest && e.target.closest(".cty[data-id]"); if (t) return t.dataset.id;
   const pt = new DOMPoint(x, y);
   for (const el of svg.querySelectorAll("#acworld .cty")) if (el.isPointInFill(pt)) return el.dataset.id;
   return null;
@@ -2280,8 +2282,7 @@ function worldSVG() {
   return `<svg class="map world" viewBox="0 0 ${W.w} ${W.h}" preserveAspectRatio="xMidYMid meet" data-w="${W.w}" data-h="${W.h}"><g id="exworld">
     <path class="land" d="${W.land}"/>
     ${W.c.map(([k, d]) => `<path class="cont" data-cont="${k}" d="${d}" style="--f:${CONT[k].col}"><title>${CONT[k].n}</title></path>`).join("")}
-    ${W.l.map(([k, x, y]) => `<text class="clbl" x="${x}" y="${y}">${CONT[k].n}</text>`).join("")}</g>
-    <use href="#exworld" x="${W.w}"/><use href="#exworld" x="${-W.w}"/></svg>`;
+    ${W.l.map(([k, x, y]) => `<text class="clbl" x="${x}" y="${y}">${CONT[k].n}</text>`).join("")}</g></svg>`;
 }
 function svgPoint(svg, e) {
   const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
@@ -2290,10 +2291,38 @@ function svgPoint(svg, e) {
 const svgScale = svg => { const m = svg.getScreenCTM(); return m ? m.a : 1; };
 /* Size the small-country dots for fingers, then push apart any that would overlap,
    with a thin line back to each country's real spot. */
+/* Endless left-right scrolling: real copies of the map sit either side of it.
+   (Real copies rather than <use> links, so colours and taps work in every browser.)
+   Changes to the main map (countries found, markers moved, labels) are mirrored onto the copies. */
+function wrapCopies(svg, g) {
+  const W = +svg.dataset.w;
+  let k = 0; g.querySelectorAll("*").forEach(el => { if (!el.closest(".fx")) el.dataset.wk = k++; });
+  const copies = [W, -W].map(dx => {
+    const c = g.cloneNode(true); c.removeAttribute("id"); c.classList.add("wrapc");
+    c.setAttribute("transform", `translate(${dx} 0)`); c.setAttribute("aria-hidden", "true");
+    const byK = new Map(); c.querySelectorAll("[data-wk]").forEach(el => byK.set(el.dataset.wk, el));
+    svg.appendChild(c); return { c, byK, fx: c.querySelector(".fx"), lead: c.querySelector(".leaders") };
+  });
+  const fx = g.querySelector(".fx"), lead = g.querySelector(".leaders");
+  new MutationObserver(muts => {
+    let fxDirty = false, leadDirty = false;
+    for (const m of muts) {
+      const t = m.target;
+      if (fx && fx.contains(t)) { fxDirty = true; continue; }
+      if (lead && lead.contains(t) && m.type === "childList") { leadDirty = true; continue; }
+      if (m.type === "attributes" && t.dataset && t.dataset.wk != null) {
+        const v = t.getAttribute(m.attributeName);
+        copies.forEach(cp => { const el = cp.byK.get(t.dataset.wk); if (el) v == null ? el.removeAttribute(m.attributeName) : el.setAttribute(m.attributeName, v); });
+      }
+    }
+    if (fxDirty) copies.forEach(cp => { if (cp.fx) cp.fx.innerHTML = fx.innerHTML; });
+    if (leadDirty) copies.forEach(cp => { if (cp.lead) cp.lead.innerHTML = lead.innerHTML; });
+  }).observe(g, { subtree: true, attributes: true, childList: true, characterData: true });
+}
 function scaleMarkers(svg) {
   const k = 1 / svgScale(svg), r = 7.5 * k, min = 2 * r + 10 * k;
   const W = +svg.dataset.w || svg.viewBox.baseVal.width, H = +svg.dataset.h || svg.viewBox.baseVal.height;
-  const mk = [...svg.querySelectorAll(".mk:not(.hid)")].map((el, i) => ({ el, x0: +el.dataset.x0, y0: +el.dataset.y0, x: +el.dataset.x0, y: +el.dataset.y0, i }));
+  const mk = [...svg.querySelectorAll(".mk:not(.hid)")].filter(el => !el.closest(".wrapc")).map((el, i) => ({ el, x0: +el.dataset.x0, y0: +el.dataset.y0, x: +el.dataset.x0, y: +el.dataset.y0, i }));
   for (let it = 0; it < 120; it++) {
     let moved = false;
     for (let a = 0; a < mk.length; a++) for (let b = a + 1; b < mk.length; b++) {
@@ -2823,11 +2852,12 @@ function renderExplorer() {
   const svg = box.querySelector("svg");
   if (EX.map !== "WORLD") { scaleMarkers(svg); enableZoom(svg, box); svg.addEventListener("zoomed", () => { if (EX.sel) highlightSel(); }); P.cont[EX.map] = 1; saveP(); if (CONT_KEYS.every(k => P.cont[k])) award("carto"); }
   if (EX.map === "WORLD") {
+    wrapCopies(svg, svg.querySelector("#exworld"));
     enableZoom(svg, box, { wrap: true });
     svg.addEventListener("click", e => {
       // works on the wrapped-around copies too: map the tap back onto the real map
       const p = svgPoint(svg, e), W = +svg.dataset.w, pt = new DOMPoint(((p.x % W) + W) % W, p.y);
-      const el = [...svg.querySelectorAll("#exworld .cont")].find(c => c.isPointInFill(pt));
+      const el = (e.target.closest && e.target.closest(".cont")) || [...svg.querySelectorAll("#exworld .cont")].find(c => c.isPointInFill(pt));
       if (el) { EX.map = el.dataset.cont; EX.sel = null; renderExplorer(); sfx("tap"); }
     });
   } else {
@@ -2990,7 +3020,7 @@ if (window.history && history.pushState) {
 }
 
 /* ================= check for updates ================= */
-const APP_VERSION = "atlas-v14";
+const APP_VERSION = "atlas-v15";
 const verNum = v => +((String(v).match(/(\d+)\s*$/) || [0, 0])[1]);
 async function remoteVersion() {
   const res = await fetch("sw.js?check=" + Date.now(), { cache: "no-store" });
