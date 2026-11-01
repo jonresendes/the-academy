@@ -1,0 +1,31 @@
+/* LearnHub service worker — offline cache + update detection.
+   BUMP THE VERSION every time you deploy changed files; that is what
+   makes installed copies show the "Update available" notice. */
+const VERSION = 'learnhub-v3';
+const FILES = [
+  './', './index.html', './styles.css', './manifest.json', './icon-192.png', './icon-512.png',
+  './storage.js', './util.js', './badges.js', './games.js', './app.js', './pwa.js', './colouring.js',
+  './english.js', './science.js', './olc4o.js'
+];
+
+self.addEventListener('install', e => {
+  e.waitUntil(caches.open(VERSION).then(c => c.addAll(FILES)));
+});
+self.addEventListener('activate', e => {
+  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== VERSION).map(k => caches.delete(k)))).then(() => self.clients.claim()));
+});
+self.addEventListener('message', e => { if (e.data === 'SKIP_WAITING') self.skipWaiting(); });
+
+// Network first (always fresh when online), cache fallback (works offline).
+self.addEventListener('fetch', e => {
+  if (e.request.method !== 'GET') return;
+  const url = new URL(e.request.url);
+  if (url.origin !== location.origin) return;           // fonts etc. go straight to the network
+  e.respondWith(
+    fetch(e.request).then(res => {
+      const copy = res.clone();
+      caches.open(VERSION).then(c => c.put(e.request, copy));
+      return res;
+    }).catch(() => caches.match(e.request, { ignoreSearch: true }).then(r => r || caches.match('./index.html')))
+  );
+});
