@@ -38,7 +38,7 @@
         ? ['Tap the <strong>⋮ menu</strong> in the top-right corner of Chrome.', 'Tap <strong>Add to Home screen</strong> or <strong>Install app</strong>.', 'Tap <strong>Install</strong>.']
         : isSafari
           ? ['In Safari, open the <strong>File</strong> menu and choose <strong>Add to Dock…</strong>.']
-          : ['Click the <strong>install icon</strong> at the right end of the address bar (a monitor with a down-arrow), or open the <strong>⋮ menu</strong> → <strong>Cast, save and share</strong> → <strong>Install page as app…</strong>.', 'Click <strong>Install</strong>.'],
+          : ['Open Chrome\'s <strong>⋮ menu</strong> → <strong>Cast, save and share</strong> → <strong>Install page as app…</strong>, then click <strong>Install</strong>.', 'The dialog should be titled <strong>Install LearnHub</strong> and show a blue diamond icon. If it says <em>"Install this page as an app"</em> with a plain letter instead, the browser could not load the app\'s manifest or icons — open <strong>Settings → App</strong> in LearnHub to see which file is missing.'],
     uninstall: isIOS
       ? ['On the Home Screen, press and hold the <strong>LearnHub</strong> icon.', 'Tap <strong>Remove App</strong> → <strong>Delete App</strong>.']
       : isAndroid
