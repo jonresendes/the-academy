@@ -1,4 +1,4 @@
-# LearnHub
+# The Academy · Learn Hub
 
 A static learning environment for any number of courses. Each unit has a **Study Room** (slides), a **Test Room** (adaptive quiz) and a **Game Room** (7 games), and every achievement lands in **The Display Case**. Everything is plain HTML/CSS/JS — no build step, no server — so it deploys straight to GitHub Pages.
 
@@ -19,7 +19,8 @@ colouring.js    line-art pictures for the Colouring Page
 pwa.js          install button, update notice, phone back button
 sw.js           service worker (offline cache) — bump VERSION on every deploy
 manifest.json   app name, colours and icons for installing
-icon-192.png / icon-512.png
+icon-192.png / icon-512.png   app icons (the "A" badge)
+logo.png        header logo
 README.md
 ```
 

@@ -62,7 +62,7 @@
   function pageHome() {
     setCourseColor(null); setNav('home');
     const name = Settings.get('studentName');
-    app.innerHTML = '<div class="page-head"><div><h1>' + (name ? 'Welcome back, ' + esc(name) + '!' : 'Welcome to LearnHub') + '</h1>' +
+    app.innerHTML = '<div class="page-head"><div><h1>' + (name ? 'Welcome back, ' + esc(name) + '!' : 'Welcome to The Academy') + '</h1>' +
       '<p class="muted">Pick a course. Each unit has a Study Room, a Test Room and a Game Room.</p></div></div>' +
       (Focus.enabled && Object.keys(Focus.data.courses).length ? '<div class="plan-banner">🎯 <strong>Focus Plan is on.</strong> Courses with a plan show only the pieces chosen for you.</div>' : '') +
       (courses().length ? '<div class="grid">' + courses().map(c => {
@@ -296,7 +296,8 @@
     const rows = d.installed ? '' :
       '<div class="setting-row"><div><label>Website check</label><div class="help">Everything below must be ✓ for the browser to offer a proper install. A missing item means that file is not uploaded to the website.</div></div>' +
       '<div class="small" style="display:grid;gap:0.3rem;text-align:right">' +
-      '<div>HTTPS ' + ok(d.https) + '</div><div>manifest.json ' + ok(d.manifest) + '</div><div>icon-192.png ' + ok(d.icon192) + '</div><div>icon-512.png ' + ok(d.icon512) + '</div><div>sw.js (offline) ' + ok(d.sw) + '</div></div></div>';
+      '<div>HTTPS ' + ok(d.https) + '</div><div>manifest.json ' + ok(d.manifest) + '</div><div>icon-192.png ' + ok(d.icon192) + '</div><div>icon-512.png ' + ok(d.icon512) + '</div><div>sw.js (offline) ' + ok(d.sw) + '</div>' +
+      Object.keys(d).filter(k => k.startsWith('file:') && !d[k]).map(k => '<div>' + esc(k.slice(5)) + ' ' + ok(false) + '</div>').join('') + '</div></div>';
     card.innerHTML = '<h2>📱 App</h2>' +
       '<div class="setting-row" style="padding-top:0"><div><label>Status</label><div class="help">' + (d.standalone ? 'You are using the installed app.' : d.installed ? 'LearnHub is installed on this device. Open it from your home screen or app list.' : 'LearnHub is not installed on this device yet. Installing adds an icon and lets it work offline.') + '</div></div>' +
       (d.installed ? '<span class="tag ok">Installed</span>' : '<span class="tag">Not installed</span>') + '</div>' + rows +

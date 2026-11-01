@@ -1,15 +1,16 @@
 /* LearnHub service worker — offline cache + update detection.
    BUMP THE VERSION every time you deploy changed files; that is what
    makes installed copies show the "Update available" notice. */
-const VERSION = 'learnhub-v7';
+const VERSION = 'learnhub-v9';
 const FILES = [
-  './', './index.html', './styles.css', './manifest.json', './icon-192.png', './icon-512.png',
+  './', './index.html', './styles.css', './manifest.json', './icon-192.png', './icon-512.png', './logo.png',
   './storage.js', './util.js', './badges.js', './games.js', './app.js', './pwa.js', './colouring.js',
   './english.js', './science.js', './olc4o.js'
 ];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(VERSION).then(c => c.addAll(FILES)));
+  // Cache each file on its own so one missing file cannot break the whole install.
+  e.waitUntil(caches.open(VERSION).then(c => Promise.all(FILES.map(f => c.add(f).catch(() => null)))).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
   e.waitUntil(

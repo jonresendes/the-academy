@@ -70,7 +70,8 @@ p { margin: 0 0 1rem; }
   background: var(--surface);
   border-bottom: 1px solid var(--line);
 }
-.brand { font-weight: 800; font-size: 1.25rem; color: var(--text); display: flex; align-items: center; gap: 0.4rem; }
+.brand { display: flex; align-items: center; }
+.brand-logo { height: 44px; width: auto; display: block; }
 .brand-mark { color: var(--primary); }
 .topnav { display: flex; gap: 0.25rem; flex: 1; }
 .topnav a {
@@ -404,6 +405,7 @@ body { overflow-x: hidden; }
   .app { padding-left: max(0.9rem, env(safe-area-inset-left)); padding-right: max(0.9rem, env(safe-area-inset-right)); }
   .topbar { gap: 0.5rem 0.75rem; }
   .brand { flex: 1; }
+  .brand-logo { height: 36px; }
   .install-btn { order: 2; }
   .topnav { order: 3; }
   .topnav a { padding: 0.4rem 0.6rem; font-size: 0.95rem; }

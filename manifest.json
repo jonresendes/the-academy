@@ -1,13 +1,13 @@
 {
-  "name": "LearnHub",
-  "short_name": "LearnHub",
+  "name": "The Academy — Learn Hub",
+  "short_name": "The Academy",
   "description": "Study rooms, tests, games and a display case of achievements.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#f4f6fb",
-  "theme_color": "#3b5bdb",
+  "theme_color": "#2c3a8f",
   "id": "./",
   "related_applications": [{ "platform": "webapp", "url": "https://jonresendes.github.io/the-academy/manifest.json" }],
   "icons": [
