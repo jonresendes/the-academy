@@ -268,7 +268,9 @@
                   : '<button class="btn secondary" id="lockBtn">🔒 Lock now</button><button class="btn ghost" id="removePin">Remove PIN</button>')
         : '<input class="text-input" style="max-width:180px" id="pinInput" type="password" inputmode="numeric" placeholder="Choose a PIN"><button class="btn" id="setPin">Set PIN</button>') + '</div></div>' +
       teacherInner + '</div>' +
+      '<div class="card" style="margin-bottom:1.25rem" id="appCard"><h2>📱 App</h2><p class="muted small">Checking…</p></div>' +
       '<div class="card"><h2>Progress</h2><p class="muted small">Progress and awards are saved in this browser.</p><button class="btn ghost" id="resetBtn">Reset all progress</button></div>';
+    renderAppCard();
 
     app.querySelectorAll('[data-level]').forEach(b => b.addEventListener('click', () => { Settings.set('level', +b.dataset.level); pageSettings(); }));
     app.querySelectorAll('[data-seg]').forEach(b => b.addEventListener('click', () => { const v = b.dataset.v; Settings.set(b.dataset.seg, isNaN(v) ? v : +v); pageSettings(); }));
@@ -282,6 +284,30 @@
     on('#removePin', () => { if (confirm('Remove the Teacher Lock PIN? Students will be able to open the teaching controls.')) { Settings.set('guardianPin', ''); sessionStorage.removeItem('learnhub.unlocked'); pageSettings(); } });
     on('#resetBtn', () => { if (confirm('Erase all progress and awards on this device?')) { Progress.reset(); pageSettings(); } });
     if (!locked) { bindFocusPlan(false); bindLessonSearch(); }
+  }
+
+  /* ----- App card (install / uninstall / diagnostics) ----- */
+  async function renderAppCard() {
+    const card = app.querySelector('#appCard'); if (!card) return;
+    if (!window.PWA) { setTimeout(renderAppCard, 100); return; }   // pwa.js loads after app.js
+    const d = await PWA.diagnostics();
+    if (!app.querySelector('#appCard')) return;
+    const ok = v => v ? '<span class="tag ok">✓ OK</span>' : '<span class="tag" style="background:var(--danger-soft);color:var(--danger)">✕ Missing</span>';
+    const rows = d.installed ? '' :
+      '<div class="setting-row"><div><label>Website check</label><div class="help">Everything below must be ✓ for the browser to offer a proper install. A missing item means that file is not uploaded to the website.</div></div>' +
+      '<div class="small" style="display:grid;gap:0.3rem;text-align:right">' +
+      '<div>HTTPS ' + ok(d.https) + '</div><div>manifest.json ' + ok(d.manifest) + '</div><div>icon-192.png ' + ok(d.icon192) + '</div><div>icon-512.png ' + ok(d.icon512) + '</div><div>sw.js (offline) ' + ok(d.sw) + '</div></div></div>';
+    card.innerHTML = '<h2>📱 App</h2>' +
+      '<div class="setting-row" style="padding-top:0"><div><label>Status</label><div class="help">' + (d.standalone ? 'You are using the installed app.' : d.installed ? 'LearnHub is installed on this device. Open it from your home screen or app list.' : 'LearnHub is not installed on this device yet. Installing adds an icon and lets it work offline.') + '</div></div>' +
+      (d.installed ? '<span class="tag ok">Installed</span>' : '<span class="tag">Not installed</span>') + '</div>' + rows +
+      '<div class="btn-row" style="margin-top:0.75rem">' +
+      (d.installed ? '<button class="btn secondary" id="appUninstall">Uninstall…</button><button class="btn ghost" id="appForget">Not installed here? Reset</button>'
+                   : '<button class="btn" id="appInstall">⬇️ Install LearnHub</button><button class="btn ghost" id="appHow">How to install</button>') + '</div>';
+    const on = (id, fn) => { const el = card.querySelector(id); if (el) el.addEventListener('click', fn); };
+    on('#appInstall', async () => { await PWA.install(); renderAppCard(); });
+    on('#appHow', () => PWA.installHelp());
+    on('#appUninstall', () => PWA.uninstallHelp());
+    on('#appForget', () => { PWA.forget(); renderAppCard(); });
   }
 
   /* ----- Keyword → lessons search (inside Teacher Lock) ----- */

@@ -35,6 +35,8 @@ You can also just open `index.html` locally — it works from a file:// URL too.
 
 The app is a Progressive Web App. On Android Chrome and desktop Chrome/Edge an **⬇️ Install app** button appears in the header (also available from the browser menu → *Install app* / *Add to Home screen*). On iPhone use Safari → Share → *Add to Home Screen*. Installed copies work offline.
 
+**Settings → App** shows whether LearnHub is installed on this device, offers Install / Uninstall instructions, and — when not installed — checks that `manifest.json`, both icons and `sw.js` are actually being served (a ✕ means that file is missing from the website). The header's Install button disappears once the app is installed on the device. If you host the app at a different address, update the `related_applications` URL in `manifest.json` so the browser can report installed status.
+
 **Updates.** `sw.js` holds a `VERSION` string. Every time you upload changed files, change that string (e.g. `learnhub-v3` → `learnhub-v4`) and upload `sw.js` too. Installed copies then show an *"A new version is ready — Update now"* notice the next time they open (they also check hourly while open). If you forget to bump it, online users still get the new files (the app is network-first) but offline copies won't refresh.
 
 **Phone back button.** The app keeps its own history, so the phone's back button steps back through the pages you visited. On the home page, one press shows "Press back again to close"; a second press within two seconds asks *Close LearnHub?* with Keep learning / Close app.

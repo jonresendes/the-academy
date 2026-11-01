@@ -5,44 +5,84 @@
   /* ---------- install ---------- */
   let deferredPrompt = null;
   const installBtn = document.getElementById('installBtn');
+  const KEY_INSTALLED = 'learnhub.installed';
   const standalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
   const ua = navigator.userAgent;
   const isIOS = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const isAndroid = /Android/.test(ua);
   const isSafari = /Safari/.test(ua) && !/Chrome|CriOS|Edg|OPR/.test(ua);
+  const flag = { get: () => { try { return localStorage.getItem(KEY_INSTALLED) === '1'; } catch (e) { return false; } },
+                 set: v => { try { v ? localStorage.setItem(KEY_INSTALLED, '1') : localStorage.removeItem(KEY_INSTALLED); } catch (e) {} } };
+  if (standalone()) flag.set(true);                       // running as the installed app = definitely installed here
 
-  if (installBtn) installBtn.hidden = standalone();        // inside the installed app there is nothing to install
-  window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredPrompt = e; if (installBtn) installBtn.hidden = standalone(); });
-  window.addEventListener('appinstalled', () => { deferredPrompt = null; if (installBtn) installBtn.hidden = true; });
+  /** Is LearnHub installed on this device? Uses the browser's answer when it can give one. */
+  async function isInstalled() {
+    if (standalone() || flag.get()) return true;
+    try {
+      if (navigator.getInstalledRelatedApps) { const apps = await navigator.getInstalledRelatedApps(); if (apps && apps.length) { flag.set(true); return true; } }
+    } catch (e) {}
+    return false;
+  }
+  async function refreshButton() {
+    if (!installBtn) return;
+    installBtn.hidden = await isInstalled();              // header button disappears once installed; Settings takes over
+  }
+  refreshButton();
+  window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredPrompt = e; refreshButton(); });
+  window.addEventListener('appinstalled', () => { deferredPrompt = null; flag.set(true); refreshButton(); if (location.hash === '#/settings') window.dispatchEvent(new HashChangeEvent('hashchange')); });
 
-  function installHelp() {
-    const steps = isIOS
+  const steps = {
+    install: isIOS
       ? ['Open this page in <strong>Safari</strong> (other iPhone browsers cannot install apps).', 'Tap the <strong>Share</strong> button (the square with an arrow).', 'Scroll down and tap <strong>Add to Home Screen</strong>, then <strong>Add</strong>.']
       : isAndroid
         ? ['Tap the <strong>⋮ menu</strong> in the top-right corner of Chrome.', 'Tap <strong>Add to Home screen</strong> or <strong>Install app</strong>.', 'Tap <strong>Install</strong>.']
         : isSafari
           ? ['In Safari, open the <strong>File</strong> menu and choose <strong>Add to Dock…</strong>.']
-          : ['Click the <strong>install icon</strong> at the right end of the address bar (a monitor with a down-arrow), or open the <strong>⋮ menu</strong> → <strong>Cast, save and share</strong> → <strong>Install page as app…</strong>.', 'Click <strong>Install</strong>.'];
-    const already = '<p class="muted small" style="margin-top:1rem">If the install option is missing, this address is probably <strong>already installed</strong> under another name (for example an older app). Remove that app first — on a computer open <code>chrome://apps</code>, right-click it and choose <em>Remove from Chrome</em>; on a phone long-press its icon and choose <em>Uninstall</em> — then come back here and try again.</p>';
+          : ['Click the <strong>install icon</strong> at the right end of the address bar (a monitor with a down-arrow), or open the <strong>⋮ menu</strong> → <strong>Cast, save and share</strong> → <strong>Install page as app…</strong>.', 'Click <strong>Install</strong>.'],
+    uninstall: isIOS
+      ? ['On the Home Screen, press and hold the <strong>LearnHub</strong> icon.', 'Tap <strong>Remove App</strong> → <strong>Delete App</strong>.']
+      : isAndroid
+        ? ['Press and hold the <strong>LearnHub</strong> icon on your Home screen or app list.', 'Tap <strong>Uninstall</strong> (or drag it to <em>Uninstall</em>).']
+        : ['Open the installed LearnHub window, click the <strong>⋮ menu</strong> in its title bar and choose <strong>Uninstall LearnHub</strong>.', 'Or type <code>chrome://apps</code> in Chrome\'s address bar, right-click LearnHub and choose <strong>Remove from Chrome</strong>.']
+  };
+  function dialog(title, list, note) {
     const d = document.createElement('div'); d.className = 'learn-overlay'; d.id = 'installHelp';
-    d.innerHTML = '<div class="learn-card" style="max-width:520px"><div class="btn-row between"><h2>Install LearnHub</h2><button class="btn ghost sm" id="installHelpClose">✕</button></div>' +
-      '<ol style="padding-left:1.3rem;font-size:1.05rem">' + steps.map(x => '<li style="margin-bottom:0.5rem">' + x + '</li>').join('') + '</ol>' + already + '</div>';
+    d.innerHTML = '<div class="learn-card" style="max-width:520px"><div class="btn-row between"><h2>' + title + '</h2><button class="btn ghost sm" id="installHelpClose">✕</button></div>' +
+      '<ol style="padding-left:1.3rem;font-size:1.05rem">' + list.map(x => '<li style="margin-bottom:0.5rem">' + x + '</li>').join('') + '</ol>' + (note || '') + '</div>';
     document.body.appendChild(d);
     d.querySelector('#installHelpClose').addEventListener('click', () => d.remove());
     d.addEventListener('click', e => { if (e.target === d) d.remove(); });
   }
+  const installHelp = () => dialog('Install LearnHub', steps.install,
+    '<p class="muted small" style="margin-top:1rem">If the browser only offers "Install this page as an app" with a plain letter icon, it has not found the app\'s manifest or icons — open <strong>Settings → App</strong> in LearnHub to see which file is missing on the website.</p>');
+  const uninstallHelp = () => dialog('Uninstall LearnHub', steps.uninstall,
+    '<p class="muted small" style="margin-top:1rem">Websites cannot uninstall themselves, so this is done from the device. Your progress stays saved in the browser.</p>');
 
-  if (installBtn) installBtn.addEventListener('click', async () => {
+  async function install() {
     if (deferredPrompt) {
       try {
         deferredPrompt.prompt();
         const choice = await deferredPrompt.userChoice;
         deferredPrompt = null;
-        if (choice && choice.outcome === 'accepted') { installBtn.hidden = true; return; }
+        if (choice && choice.outcome === 'accepted') { flag.set(true); refreshButton(); return true; }
       } catch (e) { /* fall through to the instructions */ }
     }
-    installHelp();
-  });
+    installHelp(); return false;
+  }
+  if (installBtn) installBtn.addEventListener('click', install);
+
+  /** Check that the files the browser needs for installing are really being served. */
+  async function diagnostics() {
+    const out = { https: /^https:/.test(location.protocol) || location.hostname === 'localhost', manifest: null, icon192: null, icon512: null, sw: null, standalone: standalone(), installed: await isInstalled(), promptAvailable: !!deferredPrompt };
+    const check = async (url) => { try { const r = await fetch(url, { cache: 'no-store' }); return r.ok; } catch (e) { return false; } };
+    out.manifest = await check('manifest.json');
+    out.icon192 = await check('icon-192.png');
+    out.icon512 = await check('icon-512.png');
+    try { out.sw = 'serviceWorker' in navigator && !!(await navigator.serviceWorker.getRegistration()); } catch (e) { out.sw = false; }
+    return out;
+  }
+
+  window.PWA = { isInstalled, install, installHelp, uninstallHelp, diagnostics, forget: () => { flag.set(false); refreshButton(); }, standalone };
 
   /* ---------- update notice ---------- */
   function notice(text, btnLabel, onClick) {
