@@ -1,56 +1,31 @@
-// Atlas Explorers offline support.
-// Change VERSION whenever you upload a new index.html so phones pick up the update.
-const VERSION = "atlas-v16";
-const CORE = [
-  "./",
-  "index.html",
-  "manifest.json",
-  "icon-192.png",
-  "icon-512.png",
-  "apple-touch-icon.png",
-  "favicon-32.png",
-  "icon.svg"
+/* LearnHub service worker — offline cache + update detection.
+   BUMP THE VERSION every time you deploy changed files; that is what
+   makes installed copies show the "Update available" notice. */
+const VERSION = 'learnhub-v3';
+const FILES = [
+  './', './index.html', './styles.css', './manifest.json', './icon-192.png', './icon-512.png',
+  './storage.js', './util.js', './badges.js', './games.js', './app.js', './pwa.js', './colouring.js',
+  './english.js', './science.js', './olc4o.js'
 ];
 
-// Download fresh copies (skipping the browser's own short-term cache) so an update is really new.
-self.addEventListener("install", event => {
-  event.waitUntil(
-    caches.open(VERSION)
-      .then(cache => cache.addAll(CORE.map(u => new Request(u, { cache: "reload" }))))
-      .then(() => self.skipWaiting())
-  );
+self.addEventListener('install', e => {
+  e.waitUntil(caches.open(VERSION).then(c => c.addAll(FILES)));
 });
-
-self.addEventListener("activate", event => {
-  event.waitUntil(
-    caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== VERSION).map(k => caches.delete(k))))
-      .then(() => self.clients.claim())
-  );
+self.addEventListener('activate', e => {
+  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== VERSION).map(k => caches.delete(k)))).then(() => self.clients.claim()));
 });
+self.addEventListener('message', e => { if (e.data === 'SKIP_WAITING') self.skipWaiting(); });
 
-// Serve from the cache first so the game opens instantly and offline,
-// then refresh the cached copy in the background when online.
-self.addEventListener("fetch", event => {
-  const req = event.request;
-  if (req.method !== "GET") return;
-  const url = new URL(req.url);
-  // The "Check for updates" button always asks the website directly.
-  if (url.pathname.endsWith("/sw.js")) return;
-  const isFont = url.hostname === "fonts.googleapis.com" || url.hostname === "fonts.gstatic.com";
-  if (url.origin !== self.location.origin && !isFont) return;
-
-  event.respondWith(
-    caches.open(VERSION).then(async cache => {
-      const key = req.mode === "navigate" ? "index.html" : req;
-      const cached = await cache.match(key, { ignoreSearch: req.mode === "navigate" });
-      const network = fetch(req)
-        .then(res => {
-          if (res && (res.ok || res.type === "opaque")) cache.put(key, res.clone());
-          return res;
-        })
-        .catch(() => cached);
-      return cached || network;
-    })
+// Network first (always fresh when online), cache fallback (works offline).
+self.addEventListener('fetch', e => {
+  if (e.request.method !== 'GET') return;
+  const url = new URL(e.request.url);
+  if (url.origin !== location.origin) return;           // fonts etc. go straight to the network
+  e.respondWith(
+    fetch(e.request).then(res => {
+      const copy = res.clone();
+      caches.open(VERSION).then(c => c.put(e.request, copy));
+      return res;
+    }).catch(() => caches.match(e.request, { ignoreSearch: true }).then(r => r || caches.match('./index.html')))
   );
 });

@@ -16,6 +16,10 @@ english.js      sample course — copy this to start a new one
 science.js
 olc4o.js        OLC4O Literacy — Unit 1 · Reading Like a Detective (Lessons 1–7)
 colouring.js    line-art pictures for the Colouring Page
+pwa.js          install button, update notice, phone back button
+sw.js           service worker (offline cache) — bump VERSION on every deploy
+manifest.json   app name, colours and icons for installing
+icon-192.png / icon-512.png
 README.md
 ```
 
@@ -26,6 +30,14 @@ README.md
 3. Your app is live at `https://<user>.github.io/<repo>/`.
 
 You can also just open `index.html` locally — it works from a file:// URL too.
+
+## Installing on a phone or computer
+
+The app is a Progressive Web App. On Android Chrome and desktop Chrome/Edge an **⬇️ Install app** button appears in the header (also available from the browser menu → *Install app* / *Add to Home screen*). On iPhone use Safari → Share → *Add to Home Screen*. Installed copies work offline.
+
+**Updates.** `sw.js` holds a `VERSION` string. Every time you upload changed files, change that string (e.g. `learnhub-v3` → `learnhub-v4`) and upload `sw.js` too. Installed copies then show an *"A new version is ready — Update now"* notice the next time they open (they also check hourly while open). If you forget to bump it, online users still get the new files (the app is network-first) but offline copies won't refresh.
+
+**Phone back button.** The app keeps its own history, so the phone's back button steps back through the pages you visited. On the home page, one press shows "Press back again to close"; a second press within two seconds asks *Close LearnHub?* with Keep learning / Close app.
 
 ## Difficulty levels
 
