@@ -2695,7 +2695,7 @@ function syncToggles() {
   $("#p-vibe").setAttribute("aria-pressed", S.vibe); $("#p-vibe").textContent = S.vibe ? "📳 Vibration on" : "📴 Vibration off";
 }
 function confirmBox(title, text, yes, onYes) {
-  $("#c-title").textContent = title; $("#c-text").textContent = text; $("#c-yes").textContent = yes;
+  $("#c-title").textContent = title; $("#c-text").textContent = text; $("#c-yes").textContent = yes; $("#c-no").textContent = "Keep playing";
   $("#confirm").hidden = false;
   $("#c-yes").onclick = () => { $("#confirm").hidden = true; onYes(); };
   $("#c-no").onclick = () => { $("#confirm").hidden = true; };
@@ -3020,7 +3020,7 @@ if (window.history && history.pushState) {
 }
 
 /* ================= check for updates ================= */
-const APP_VERSION = "atlas-v15";
+const APP_VERSION = "atlas-v16";
 const verNum = v => +((String(v).match(/(\d+)\s*$/) || [0, 0])[1]);
 async function remoteVersion() {
   const res = await fetch("sw.js?check=" + Date.now(), { cache: "no-store" });
@@ -3062,10 +3062,34 @@ function setupUpdates() {
     const gh = $("#upd-gh"); gh.hidden = false;
     gh.href = `https://github.com/${m[1]}/${repo && !/\.html$/.test(repo) ? repo : m[1] + ".github.io"}`;
   }
-  // Quiet check when the game opens
-  if (navigator.onLine && location.protocol === "https:") setTimeout(() => remoteVersion().then(v => {
-    if (v > verNum(APP_VERSION)) toast("🆕", "A new version is ready!", "Open Settings and tap Check for updates.");
-  }).catch(() => {}), 2500);
+  // Automatic checks: when the game opens, whenever it comes back on screen, and every 20 minutes.
+  if (location.protocol !== "https:") return;
+  setTimeout(autoCheck, 2500);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) autoCheck(); });
+  addEventListener("online", autoCheck);
+  setInterval(autoCheck, 20 * 60 * 1000);
+}
+let updWaiting = 0, updSnooze = 0, updLast = 0;
+async function autoCheck() {
+  if (!navigator.onLine || Date.now() - updLast < 60 * 1000) return;
+  updLast = Date.now();
+  try {
+    const v = await remoteVersion();
+    if (v > verNum(APP_VERSION)) { updWaiting = v; offerUpdate(); }
+  } catch (e) {}
+}
+// Ask, but never in the middle of a round: wait until the player is back on a menu or results screen.
+function offerUpdate() {
+  if (!updWaiting || updWaiting === updSnooze) return;
+  const busy = (G.active && !$("#s-game").hidden) || (NTA.on && !NTA.done && !$("#s-allc").hidden)
+    || [...document.querySelectorAll(".overlay")].some(o => !o.hidden);
+  if (busy) { clearTimeout(offerUpdate.t); offerUpdate.t = setTimeout(offerUpdate, 4000); return; }
+  sfx("unlock");
+  confirmBox("🆕 New version ready!", `Version ${updWaiting} of Atlas Explorers is here. Update now? It only takes a few seconds, and your scores, stamps and trophies are kept.`, "Update now", () => {
+    toast("🆕", "Updating…", "The game will restart."); applyUpdate();
+  });
+  $("#c-no").textContent = "Later";
+  $("#c-no").onclick = () => { $("#confirm").hidden = true; updSnooze = updWaiting; };
 }
 
 /* ================= install as an app ================= */
@@ -3107,7 +3131,9 @@ $("#m-install").onclick = async () => {
 };
 $("#installhelp").addEventListener("click", e => { if (e.target.id === "installhelp") $("#installhelp").hidden = true; });
 if (HAS_MANIFEST && "serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
-  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then(reg => {
+    document.addEventListener("visibilitychange", () => { if (!document.hidden && navigator.onLine) reg.update().catch(() => {}); });
+  }).catch(() => {}));
 }
 updateInstall();
 setupUpdates();
