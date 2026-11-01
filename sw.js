@@ -1,7 +1,7 @@
 /* LearnHub service worker — offline cache + update detection.
    BUMP THE VERSION every time you deploy changed files; that is what
    makes installed copies show the "Update available" notice. */
-const VERSION = 'learnhub-v5';
+const VERSION = 'learnhub-v6';
 const FILES = [
   './', './index.html', './styles.css', './manifest.json', './icon-192.png', './icon-512.png',
   './storage.js', './util.js', './badges.js', './games.js', './app.js', './pwa.js', './colouring.js',

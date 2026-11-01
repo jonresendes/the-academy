@@ -5,17 +5,44 @@
   /* ---------- install ---------- */
   let deferredPrompt = null;
   const installBtn = document.getElementById('installBtn');
-  window.addEventListener('beforeinstallprompt', e => {
-    e.preventDefault(); deferredPrompt = e;
-    if (installBtn) installBtn.hidden = false;
-  });
+  const standalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  const ua = navigator.userAgent;
+  const isIOS = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isAndroid = /Android/.test(ua);
+  const isSafari = /Safari/.test(ua) && !/Chrome|CriOS|Edg|OPR/.test(ua);
+
+  if (installBtn) installBtn.hidden = standalone();        // inside the installed app there is nothing to install
+  window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredPrompt = e; if (installBtn) installBtn.hidden = standalone(); });
+  window.addEventListener('appinstalled', () => { deferredPrompt = null; if (installBtn) installBtn.hidden = true; });
+
+  function installHelp() {
+    const steps = isIOS
+      ? ['Open this page in <strong>Safari</strong> (other iPhone browsers cannot install apps).', 'Tap the <strong>Share</strong> button (the square with an arrow).', 'Scroll down and tap <strong>Add to Home Screen</strong>, then <strong>Add</strong>.']
+      : isAndroid
+        ? ['Tap the <strong>⋮ menu</strong> in the top-right corner of Chrome.', 'Tap <strong>Add to Home screen</strong> or <strong>Install app</strong>.', 'Tap <strong>Install</strong>.']
+        : isSafari
+          ? ['In Safari, open the <strong>File</strong> menu and choose <strong>Add to Dock…</strong>.']
+          : ['Click the <strong>install icon</strong> at the right end of the address bar (a monitor with a down-arrow), or open the <strong>⋮ menu</strong> → <strong>Cast, save and share</strong> → <strong>Install page as app…</strong>.', 'Click <strong>Install</strong>.'];
+    const already = '<p class="muted small" style="margin-top:1rem">If the install option is missing, this address is probably <strong>already installed</strong> under another name (for example an older app). Remove that app first — on a computer open <code>chrome://apps</code>, right-click it and choose <em>Remove from Chrome</em>; on a phone long-press its icon and choose <em>Uninstall</em> — then come back here and try again.</p>';
+    const d = document.createElement('div'); d.className = 'learn-overlay'; d.id = 'installHelp';
+    d.innerHTML = '<div class="learn-card" style="max-width:520px"><div class="btn-row between"><h2>Install LearnHub</h2><button class="btn ghost sm" id="installHelpClose">✕</button></div>' +
+      '<ol style="padding-left:1.3rem;font-size:1.05rem">' + steps.map(x => '<li style="margin-bottom:0.5rem">' + x + '</li>').join('') + '</ol>' + already + '</div>';
+    document.body.appendChild(d);
+    d.querySelector('#installHelpClose').addEventListener('click', () => d.remove());
+    d.addEventListener('click', e => { if (e.target === d) d.remove(); });
+  }
+
   if (installBtn) installBtn.addEventListener('click', async () => {
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    await deferredPrompt.userChoice;
-    deferredPrompt = null; installBtn.hidden = true;
+    if (deferredPrompt) {
+      try {
+        deferredPrompt.prompt();
+        const choice = await deferredPrompt.userChoice;
+        deferredPrompt = null;
+        if (choice && choice.outcome === 'accepted') { installBtn.hidden = true; return; }
+      } catch (e) { /* fall through to the instructions */ }
+    }
+    installHelp();
   });
-  window.addEventListener('appinstalled', () => { if (installBtn) installBtn.hidden = true; });
 
   /* ---------- update notice ---------- */
   function notice(text, btnLabel, onClick) {
