@@ -177,7 +177,7 @@
     const p = hash.replace(/^#\/?/, '').split('/');
     switch (p[0]) {
       case 'study': case 'quiz': case 'assign': return '#/lesson/' + p[1] + '/' + p[2] + '/' + p[3];
-      case 'lesson': case 'test': case 'games': return '#/course/' + p[1];
+      case 'lesson': case 'test': case 'games': case 'work': return '#/course/' + p[1];
       case 'game': return '#/games/' + p[1] + '/' + p[2];
       case 'print': return p[3] === 'unit' || p[3] === 'test' ? '#/course/' + p[1] : '#/lesson/' + p[1] + '/' + p[2] + '/' + (p[4] || 0);
       case 'course': case 'case': case 'settings': case 'signin': return '#/';

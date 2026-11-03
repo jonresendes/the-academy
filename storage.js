@@ -25,18 +25,21 @@
   const KEY_PROGRESS = 'learnhub.progress';   // + '.' + studentId
   const KEY_FOCUS = 'learnhub.focus';         // + '.' + studentId
 
-  const PREF_KEYS = ['fontScale', 'font', 'contrast', 'motion', 'readAloud'];
+  const PREF_KEYS = ['fontScale', 'font', 'contrast', 'tint', 'motion', 'readAloud', 'dictation'];
   const DEFAULT_PREFS = {
     fontScale: 1,        // 1, 1.15, 1.3
     font: 'default',     // 'default' | 'lexend'
     contrast: 'normal',  // 'normal' | 'high' | 'inverted'
+    tint: 'none',        // Irlen-style colour overlay: 'none' | 'cream' | 'blue' | 'green' | 'rose' | 'yellow' | 'grey' | 'peach' | 'lavender'
     motion: 'normal',    // 'normal' | 'reduced'
-    readAloud: true      // show speaker buttons
+    readAloud: true,     // show speaker buttons
+    dictation: true      // show 🎤 dictation and record buttons
   };
   const DEFAULT_SETTINGS = Object.assign({
     guardianPin: '',          // 6-digit Teacher Lock PIN
     colouringEvery: 'student',// 'student' | 0 (off) | 1 | 3 | 5 | 10 — learning cards in the Colouring Page
     allowSelfSignup: true,    // students may add their own name on the sign-in screen
+    googleClientId: '',       // OAuth client ID for the Google Drive export (set by the master account)
     level: 2                  // legacy device level (kept for migration only)
   }, DEFAULT_PREFS);
 
@@ -81,7 +84,11 @@
         level: 2, courseLevels: {}, courses: null, coursesLocked: false,
         accommodations: { reduce: false, simplify: false, chunk: false },
         prefs: Object.assign({}, DEFAULT_PREFS, pick(Settings.data, PREF_KEYS)),
-        suggestions: {}
+        suggestions: {},
+        track: {},             // { [courseId]: { mode: 'modified', band: 'k2' | 'g35' | 'g68' } }  — Modified program
+        archived: [],          // course ids the student has archived (hidden from the home page)
+        levelLog: {},          // { [courseId]: [{ at, from, to, by, reason, lesson, pct }] }  — every level change
+        lessonLevels: {}       // { [courseId]: { [lessonIdx]: { level, pct, at } } }  — level at which each quiz was passed
       }, extra || {});
       this.data.list.push(s); this.save();
       return s;
@@ -96,7 +103,11 @@
     /** Sign a student in (or out with null). */
     setCurrent(id) {
       this.data.current = id; this.save();
-      Progress.load(); Focus.load(); Settings.apply();
+      // The old single Teacher Lock PIN becomes the master account's PIN.
+  if (Settings.data.guardianPin && !Staff.master) { Staff.setMaster('Master', '', Settings.data.guardianPin); }
+  if (Staff.master && Staff.master.pin) Settings.data.guardianPin = Staff.master.pin;   // keep the legacy flag in step
+
+  Progress.load(); Focus.load(); Settings.apply();
     },
     /** Effective level for a course (per-course override, else the student's default). */
     levelFor(courseId, student) {
@@ -115,6 +126,27 @@
     /** Can this student see the course? (null list = every course) */
     enrolled(courseId, student) { const s = student || this.current; return !s || !Array.isArray(s.courses) || s.courses.includes(courseId); },
     setCourses(id, list, locked) { const s = this.byId(id); if (!s) return; s.courses = list; if (locked !== undefined) s.coursesLocked = !!locked; this.save(); },
+    /** Modified program setting for a course: null = standard track. */
+    trackFor(courseId, student) { const s = student || this.current; const t = s && s.track && s.track[courseId]; return t && t.mode === 'modified' ? t : null; },
+    setTrack(id, courseId, band) { const s = this.byId(id); if (!s) return; s.track = s.track || {}; if (band) s.track[courseId] = { mode: 'modified', band }; else delete s.track[courseId]; this.save(); },
+    /** Move a student's level for a course by one step (student self-moves) or to any level (teacher). Logged. */
+    moveLevel(id, courseId, to, by, reason, extra) {
+      const s = this.byId(id); if (!s) return false;
+      const from = this.levelFor(courseId, s); to = Math.min(4, Math.max(1, +to));
+      if (to === from) return false;
+      if (by === 'student' && Math.abs(to - from) !== 1) return false;   // students never skip a level
+      s.courseLevels = s.courseLevels || {}; s.courseLevels[courseId] = to;
+      s.levelLog = s.levelLog || {}; (s.levelLog[courseId] = s.levelLog[courseId] || []).push(Object.assign({ at: new Date().toISOString(), from, to, by: by || 'teacher', reason: reason || '' }, extra || {}));
+      if (s.suggestions) delete s.suggestions[courseId];
+      this.save(); return true;
+    },
+    /** The level this student was at before the latest change (for "go back"). */
+    previousLevel(courseId, student) { const s = student || this.current; const log = s && s.levelLog && s.levelLog[courseId]; return log && log.length ? log[log.length - 1].from : null; },
+    /** Remember the level at which a lesson quiz was passed (for end-of-course grading). */
+    recordLessonLevel(courseId, lessonIdx, level, pct) { const s = this.current; if (!s) return; s.lessonLevels = s.lessonLevels || {}; const c = s.lessonLevels[courseId] = s.lessonLevels[courseId] || {}; const prev = c[lessonIdx]; if (!prev || pct >= prev.pct || level > prev.level) c[lessonIdx] = { level, pct, at: new Date().toISOString() }; this.save(); },
+    /** Student-side archive of a course (hide from the home page; teachers can still assign it). */
+    archiveCourse(id, courseId, on) { const s = this.byId(id); if (!s) return; s.archived = (s.archived || []).filter(x => x !== courseId); if (on) s.archived.push(courseId); this.save(); },
+    isArchived(courseId, student) { const s = student || this.current; return !!(s && (s.archived || []).includes(courseId)); },
     /** Record a level suggestion after a test (teacher reviews it in Settings). */
     suggest(courseId, unitTitle, pct) {
       const s = this.current; if (!s) return null;
@@ -128,6 +160,60 @@
     AVATARS, COLOURS
   };
   function pick(obj, keys) { const o = {}; keys.forEach(k => { if (obj && obj[k] !== undefined) o[k] = obj[k]; }); return o; }
+
+  /* ---------- Staff: one master account + classroom teachers ----------
+     learnhub.staff = { master: { name, email, pin }, teachers: [{ id, name, pin, createdAt }] }
+     Who is "unlocked" right now lives in sessionStorage ('learnhub.staffId' = 'master' | teacher id). */
+  const KEY_STAFF = 'learnhub.staff';
+  const Staff = {
+    data: load(KEY_STAFF, { master: null, teachers: [] }),
+    save() { save(KEY_STAFF, this.data); },
+    get master() { return this.data.master; },
+    setMaster(name, email, pin) { this.data.master = { name, email, pin }; this.save(); },
+    get teachers() { return this.data.teachers || (this.data.teachers = []); },
+    addTeacher(name, pin) { const t = { id: 't' + Date.now().toString(36), name: String(name).trim().slice(0, 40), pin: String(pin), createdAt: new Date().toISOString() }; this.teachers.push(t); this.save(); return t; },
+    updateTeacher(id, patch) { const t = this.teachers.find(x => x.id === id); if (t) { Object.assign(t, patch); this.save(); } },
+    removeTeacher(id) { this.data.teachers = this.teachers.filter(t => t.id !== id); this.save(); Sections.list.forEach(sec => { if (sec.teacherId === id) sec.teacherId = null; }); Sections.save(); },
+    /** Try a PIN: returns 'master', a teacher id, or null. */
+    unlock(pin) {
+      if (this.master && this.master.pin === pin) return 'master';
+      const t = this.teachers.find(x => x.pin === pin); return t ? t.id : null;
+    },
+    get currentId() { return sessionStorage.getItem('learnhub.staffId') || null; },
+    get current() { const id = this.currentId; if (!id) return null; if (id === 'master') return Object.assign({ id: 'master', role: 'master' }, this.master || { name: 'Master' }); const t = this.teachers.find(x => x.id === id); return t ? Object.assign({ role: 'teacher' }, t) : null; },
+    get isMaster() { return this.currentId === 'master'; },
+    signIn(id) { sessionStorage.setItem('learnhub.staffId', id); sessionStorage.setItem('learnhub.unlocked', '1'); },
+    signOut() { sessionStorage.removeItem('learnhub.staffId'); sessionStorage.removeItem('learnhub.unlocked'); }
+  };
+
+  /* ---------- Sections (classes): a course + a teacher + a roster, archivable ----------
+     learnhub.sections = { list: [{ id, name, courseId, teacherId, term, students: [ids], archived, createdAt }], current: { [staffId]: sectionId } } */
+  const KEY_SECTIONS = 'learnhub.sections';
+  const Sections = {
+    data: load(KEY_SECTIONS, { list: [], current: {} }),
+    save() { save(KEY_SECTIONS, this.data); },
+    get list() { return this.data.list; },
+    byId(id) { return this.list.find(x => x.id === id) || null; },
+    /** Sections a staff member may see (master: all). */
+    visible(staffId, includeArchived) { return this.list.filter(sec => (staffId === 'master' || sec.teacherId === staffId) && (includeArchived || !sec.archived)); },
+    add(name, courseId, teacherId, term) { const sec = { id: 'sec' + Date.now().toString(36), name: String(name).trim().slice(0, 60), courseId, teacherId: teacherId || null, term: term || '', students: [], archived: false, createdAt: new Date().toISOString() }; this.list.push(sec); this.save(); return sec; },
+    update(id, patch) { const sec = this.byId(id); if (sec) { Object.assign(sec, patch); this.save(); } },
+    remove(id) { this.data.list = this.list.filter(x => x.id !== id); this.save(); },
+    setArchived(id, on) { this.update(id, { archived: !!on }); },
+    /** Current section for a staff member (null = all my students). */
+    currentFor(staffId) { const id = (this.data.current || {})[staffId]; const sec = id && this.byId(id); return sec || null; },
+    setCurrent(staffId, sectionId) { this.data.current = this.data.current || {}; if (sectionId) this.data.current[staffId] = sectionId; else delete this.data.current[staffId]; this.save(); },
+    /** Enrol a student in a section (and in its course). */
+    enrol(sectionId, studentId, on) {
+      const sec = this.byId(sectionId); if (!sec) return;
+      sec.students = (sec.students || []).filter(x => x !== studentId); if (on) sec.students.push(studentId);
+      this.save();
+      const s = Students.byId(studentId);
+      if (s && on && sec.courseId) { if (Array.isArray(s.courses) && !s.courses.includes(sec.courseId)) s.courses.push(sec.courseId); s.archived = (s.archived || []).filter(c => c !== sec.courseId); Students.save(); }
+    },
+    /** Sections a student belongs to. */
+    forStudent(studentId, includeArchived) { return this.list.filter(sec => (sec.students || []).includes(studentId) && (includeArchived || !sec.archived)); }
+  };
 
   /* ---------- Settings ----------
      Accessibility preferences belong to the signed-in student (and fall back to the
@@ -149,14 +235,15 @@
     /** The achievement level in force right now: the signed-in student's level for the
         course being viewed (set by app.js via Settings.activeCourse). */
     activeCourse: null,
-    get level() { return Students.levelFor(this.activeCourse); },
-    /** True when the PIN is set and this session has not unlocked it. */
-    get locked() { return !!this.data.guardianPin && !sessionStorage.getItem('learnhub.unlocked'); },
+    get level() { const t = Students.trackFor && Students.trackFor(this.activeCourse); return t ? 1 : Students.levelFor(this.activeCourse); },
+    /** True when a Teacher Lock exists and this session has not unlocked it. */
+    get locked() { return (!!this.data.guardianPin || !!(Staff.master && Staff.master.pin)) && !sessionStorage.getItem('learnhub.unlocked'); },
     apply() {
       const b = document.body;
       document.documentElement.style.setProperty('--font-scale', this.get('fontScale'));
       b.dataset.font = this.get('font');
       b.dataset.contrast = this.get('contrast');
+      b.dataset.tint = this.get('tint') || 'none';
       b.dataset.motion = this.get('motion');
     }
   };
@@ -209,36 +296,41 @@
        } } }
      A course with no entry is fully available; when `enabled` is true, a course WITH an
      entry shows only the units listed in it. */
-  const Focus = {
-    data: { enabled: false, courses: {} },
-    key() { const s = Students.current; return s ? KEY_FOCUS + '.' + s.id : KEY_FOCUS + '.anon'; },
-    load() { this.data = load(this.key(), { enabled: false, courses: {} }); this.data.courses = this.data.courses || {}; },
-    save() { save(this.key(), this.data); },
-    get enabled() { return !!this.data.enabled; },
-    setEnabled(v) { this.data.enabled = !!v; this.save(); },
-    courseEntry(courseId) { return this.data.courses[courseId] || null; },
-    unitEntry(courseId, unitId) { const c = this.courseEntry(courseId); return c && c.units ? c.units[unitId] || null : null; },
-    /** Is this course restricted by a plan right now? */
-    active(courseId) { return this.enabled && !!this.courseEntry(courseId); },
-    includeUnit(courseId, unitId, on) {
-      const c = this.data.courses[courseId] || (this.data.courses[courseId] = { units: {} });
-      if (on) c.units[unitId] = c.units[unitId] || { lessons: null, terms: null, cats: null, goals: ['study', 'testPass', 'games3'] };
-      else delete c.units[unitId];
-      if (!Object.keys(c.units).length) delete this.data.courses[courseId];
-      this.save();
-    },
-    /** Toggle one item in a unit's list field (lessons / terms / cats / goals). `all` is the full list of possible values. */
-    toggle(courseId, unitId, field, value, all) {
-      const u = this.unitEntry(courseId, unitId); if (!u) return;
-      let list = u[field] === null || u[field] === undefined ? (field === 'goals' ? [] : all.slice()) : u[field].slice();
-      const i = list.findIndex(x => String(x) === String(value));
-      if (i >= 0) list.splice(i, 1); else list.push(value);
-      // back to "everything" when the whole list is selected (goals stay explicit)
-      u[field] = (field !== 'goals' && list.length === all.length) ? null : list;
-      this.save();
-    },
-    reset() { this.data = { enabled: false, courses: {} }; this.save(); }
-  };
+  function focusStore(keyFn) {
+    return {
+      data: { enabled: false, courses: {} },
+      key: keyFn,
+      load() { this.data = load(this.key(), { enabled: false, courses: {} }); this.data.courses = this.data.courses || {}; return this; },
+      save() { save(this.key(), this.data); },
+      get enabled() { return !!this.data.enabled; },
+      setEnabled(v) { this.data.enabled = !!v; this.save(); },
+      courseEntry(courseId) { return this.data.courses[courseId] || null; },
+      unitEntry(courseId, unitId) { const c = this.courseEntry(courseId); return c && c.units ? c.units[unitId] || null : null; },
+      /** Is this course restricted by a plan right now? */
+      active(courseId) { return this.enabled && !!this.courseEntry(courseId); },
+      includeUnit(courseId, unitId, on) {
+        const c = this.data.courses[courseId] || (this.data.courses[courseId] = { units: {} });
+        if (on) c.units[unitId] = c.units[unitId] || { lessons: null, terms: null, cats: null, goals: ['study', 'testPass', 'games3'] };
+        else delete c.units[unitId];
+        if (!Object.keys(c.units).length) delete this.data.courses[courseId];
+        this.save();
+      },
+      /** Toggle one item in a unit's list field (lessons / terms / cats / goals). `all` is the full list of possible values. */
+      toggle(courseId, unitId, field, value, all) {
+        const u = this.unitEntry(courseId, unitId); if (!u) return;
+        let list = u[field] === null || u[field] === undefined ? (field === 'goals' ? [] : all.slice()) : u[field].slice();
+        const i = list.findIndex(x => String(x) === String(value));
+        if (i >= 0) list.splice(i, 1); else list.push(value);
+        u[field] = (field !== 'goals' && list.length === all.length) ? null : list;   // back to "everything" when the whole list is selected
+        this.save();
+      },
+      reset() { this.data = { enabled: false, courses: {} }; this.save(); }
+    };
+  }
+  /** The signed-in student's Focus Plan (what the app filters by). */
+  const Focus = focusStore(() => { const s = Students.current; return s ? KEY_FOCUS + '.' + s.id : KEY_FOCUS + '.anon'; });
+  /** A teacher's editing handle on ANY student's plan (does not affect what the signed-in student sees until they sign in). */
+  Focus.forStudent = (id) => { const f = focusStore(() => KEY_FOCUS + '.' + id).load(); f.save = function () { save(this.key(), this.data); if (Students.current && Students.current.id === id) Focus.load(); }; return f; };
 
   /* ---------- one-time migration from the single-student version ---------- */
   (function migrate() {
@@ -254,10 +346,16 @@
     Students.data.current = s.id; Students.save();
   })();
 
+  // The old single Teacher Lock PIN becomes the master account's PIN.
+  if (Settings.data.guardianPin && !Staff.master) { Staff.setMaster('Master', '', Settings.data.guardianPin); }
+  if (Staff.master && Staff.master.pin) Settings.data.guardianPin = Staff.master.pin;   // keep the legacy flag in step
+
   Progress.load(); Focus.load();
 
   window.Settings = Settings;
   window.Students = Students;
+  window.Staff = Staff;
+  window.Sections = Sections;
   window.Progress = Progress;
   window.Focus = Focus;
   window.LEVELS = LEVELS;

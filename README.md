@@ -12,6 +12,9 @@ util.js         level-aware content helpers
 badges.js       award engine (badge → medal → trophy)
 games.js        the 7 games
 print.js        printable lessons, quizzes, tests and assignments (with answer key)
+media.js        dictation (voice to text) and audio recording (IndexedDB)
+drive.js        exports (CSV + JSON), import, Google Drive push/pull
+dashboard.js    teacher dashboard (students × lessons per section)
 app.js          router + pages
 english.js      sample course — copy this to start a new one
 science.js
@@ -79,6 +82,7 @@ The course page lists every unit's lessons. Opening a lesson shows its parts:
 - **Quiz** — 4 / 6 / 8 / 10 questions (by level) drawn only from that lesson's question bank (questions whose `cat` starts with `L<n>`, or the categories a lesson lists in `cats: […]`). Pass mark 70%; best score is kept.
 - **Assignments** — open-response tasks with a levelled prompt, a sentence starter and a "complete answer contains…" box. Work autosaves as a draft; *Hand in* marks it done. Teachers read handed-in work in Teacher Lock → Students → *Assignment work*.
 - **Unit test** — covers every lesson in the unit (5 / 8 / 12 / 15 questions by level).
+- **📁 Work folder** (a room on every unit) — every assignment in the unit with its state (not started / draft saved / handed in), a preview of the writing, any voice recording, and Continue / Open / Print buttons. The student sees their own; an unlocked teacher sees the same page for the signed-in student (and all students' work in Teacher Lock → Students).
 
 Every quiz and test starts with something every student can do (a true/false or short multiple choice) and builds up; questions are served least-seen first so nothing repeats until the whole bank has been used.
 
@@ -207,6 +211,42 @@ LearnHub.colouring['science/cells'].push({ title: 'Animal cell', svg: '<svg view
 ```
 
 Good sources of public-domain line art: openclipart.org, publicdomainvectors.org, Wikimedia Commons (filter by CC0 / public domain). Shapes must be closed paths for tap-to-fill to work; strokes with no fill will not colour.
+
+## Staff accounts, sections and archiving
+
+- **Master account** — created the first time Settings is opened (name, optional e-mail, 6-digit PIN). The master sees every student on the device, adds **teachers** (name + their own 6-digit PIN), creates sections for any teacher, and runs exports.
+- **Teachers** unlock the Teacher Lock with their PIN and see only the students in their own sections — with full control over them: levels, Modified band, accommodations, course list, Focus Plan, written work, recordings, level history.
+- **Sections** (Teacher Lock → Sections) — one class = a course + a teacher + a roster + a term. The dropdown picks the section you are working with; the Students list follows it. New students added while a section is selected are enrolled in it and its course; existing students can be added from a dropdown. **Archive** a section at the end of term; archived sections stay in the dropdown under "Archived" and can be retrieved.
+- **Student archive** — a student can archive a class from its course page (📦 Archive class). It moves to "Archived classes" on their home page and can be brought back; teachers can still assign it.
+
+Accounts are stored on the device (`learnhub.staff`, `learnhub.sections`). To move a roster or a student's work to another device, use the export/import below.
+
+## Level progression (85% rule)
+
+After every lesson quiz on the standard track:
+- **85% or more** → the student is offered a move **up one level** for the next lessons ("Yes, move up / Not now").
+- **Below the level's band** (Level 2 < 60%, Level 3 < 70%, Level 4 < 80%) → offered a move **down one level** for now.
+- Students can **go back** to their previous level at any time (course page banner, or Settings → Me) but can never skip a level; teachers can set any level.
+Every change is logged with who made it, why, the lesson and the score, and the level at which each lesson's quiz was passed is recorded. Teachers see this as **Level history** in the student's row (and in the CSV export) to determine a final grade.
+
+## Modified program (K–2 · Grades 3–5 · Grades 6–8)
+
+For students working on the course without going for credit. In the student's row, under **Modified program**, pick a band per course. The student then gets every lesson rewritten at that band (`mod.k2 / g35 / g68` on slides and terms), band-specific quiz questions (`bands: […]`), one modified assignment per lesson, Level-1 game sizes and no level prompts. HRF3O (30 lessons) and OLC4O (7) carry all three bands.
+
+## Dictation, recording and other accessibility options
+
+- **🎤 Dictate** appears on assignment answers and typed blanks (Chrome, Edge, Safari): speak instead of typing. **🎙️ Record** lets a student record an answer to an assignment or a voice note on the last slide of a lesson; recordings live in the browser (IndexedDB) and teachers play them from the student's row (*Voice recordings*). Both can be turned off per student in Settings → Accessibility.
+- **Colour overlay (Irlen / visual stress)** — cream, pale blue, pale green, rose, yellow, grey, peach, lavender tints, per student.
+- **Read&Write (Texthelp)** — the Chrome extension works on the app as it is (everything is real text). Settings links to the Chrome Web Store.
+
+## Exports and Google Drive
+
+Teacher Lock → **Google Drive & exports** (master only):
+- **Download export** — a CSV summary (per student, course, unit and lesson: slides read, quiz best/attempts, assignments handed in, unit test best, awards, plus one row per level change) and a full JSON export.
+- **Import JSON** — merges students, progress and sections from another device.
+- **Dashboard** (top navigation when unlocked, or Sections → *Open the dashboard*) — one row per student in the selected section, quiz best per lesson (coloured 85%+ / 70–84 / below 70), unit test, assignments handed in, awards; printable. Click a name to open that student in Settings.
+- The Focus Plan and keyword search in Teacher Lock have an **Editing for** picker, so a teacher edits any student's plan without signing in as them.
+- **Push to Google Drive** — uploads both files to a folder called *The Academy exports* in the signed-in Google account (the school administration account). One-time setup: in Google Cloud Console create an **OAuth 2.0 Client ID** (Web application) with the app's address as an *Authorized JavaScript origin*, and paste it into the Client ID box. The app asks only for the `drive.file` scope (files it creates). **Pull latest from Google Drive** on another device fetches the newest export and merges it in (students, progress, sections and teachers with their PINs — the master PIN never leaves a device), so push at the end of class on one device and pull on the next.
 
 ## Printing
 

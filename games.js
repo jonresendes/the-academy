@@ -197,7 +197,7 @@
     const promptHtml = esc(q.prompt).replace(/_{2,}/, '<span class="blank" id="blank">&nbsp;</span>');
     host.innerHTML = '<div class="q-prompt">' + promptHtml + ' ' + speakBtn(q.prompt.replace(/_{2,}/, 'blank')) + '</div>' +
       (q.freeType
-        ? '<input class="text-input" id="fillInput" placeholder="Type the missing word…" autocomplete="off"><div class="btn-row" style="margin-top:0.75rem"><button class="btn" id="fillGo">Check</button></div>'
+        ? '<div class="btn-row"><input class="text-input" id="fillInput" placeholder="Type the missing word…" autocomplete="off" style="flex:1">' + (window.Media ? Media.dictateBtn('#fillInput') : '') + '</div><div class="btn-row" style="margin-top:0.75rem"><button class="btn" id="fillGo">Check</button></div>'
         : '<div class="word-bank">' + q.bank.map(b => '<button class="chip" data-v="' + esc(b) + '">' + esc(b) + '</button>').join('') + '</div>') +
       '<div class="q-feedback"></div>';
     const finish = (val) => {
@@ -407,7 +407,7 @@
       const play = () => {
         const pic = pics[state.pic];
         const lesson = ctx.unit.lessons[state.lesson] || { slides: [] };
-        const cards = window.LH.slidesFor(lesson).map(s => ({ title: L(s.title), body: L(s.body), visual: s.visual || '' }));
+        const cards = window.LH.slidesFor(lesson).map(s => ({ title: L(s.title), body: LH.body(s), visual: s.visual || '' }));
         const facts = cards.map(c => c.title + ': ' + shorten(String(c.body).replace(/[*\n-]+/g, ' ').trim(), 150))
           .concat(termsFor(ctx.unit).map(t => t.term + ' — ' + t.def));
         let colour = PALETTE[0], fills = 0, cardIdx = 0, factIdx = 0;

@@ -13,10 +13,27 @@
   /** Pick the value for the current level. Accepts a plain value or {1:…, 2:…, 3:…, 4:…}.
       Falls back to the nearest lower level, then the nearest higher one
       (so content written at three levels serves Level 4 its Level 3 text). */
+  /* ---------- Modified program (K–2 / 3–5 / 6–8) ----------
+     A student on the Modified track for the active course reads `mod.{band}` text,
+     answers `bands: [...]` questions and gets `bands` assignments. Everything else
+     (game sizes, option counts) behaves like Level 1. */
+  const BANDS = { k2: { name: 'K–2', chain: ['k2', 'g35', 'g68'] }, g35: { name: 'Grades 3–5', chain: ['g35', 'g68', 'k2'] }, g68: { name: 'Grades 6–8', chain: ['g68', 'g35', 'k2'] } };
+  function band() { const t = window.Students && Students.trackFor && Students.trackFor(Settings.activeCourse); return t ? t.band : null; }
+  function bandText(value) {
+    const b = band(); if (!b || !value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+    if (!('k2' in value || 'g35' in value || 'g68' in value)) return undefined;
+    for (const k of BANDS[b].chain) if (value[k] !== undefined) return value[k];
+    return undefined;
+  }
+  /** Slide body / term definition for the current student: Modified band text when on that track, else the level text. */
+  function body(slide) { const m = bandText(slide.mod); return m !== undefined ? m : L(slide.body); }
+  function def(term) { const m = bandText(term.mod); return m !== undefined ? m : L(term.def); }
+
   function L(value, level) {
     level = level || Settings.level;
     if (value === null || value === undefined) return value;
     if (typeof value !== 'object' || Array.isArray(value)) return value;
+    const bt = bandText(value); if (bt !== undefined) return bt;   // band-keyed objects (assignments, titles)
     const keys = Object.keys(value).filter(k => /^[1-4]$/.test(k));
     if (!keys.length) return value;
     for (let l = level; l >= 1; l--) if (value[l] !== undefined) return value[l];
@@ -112,14 +129,15 @@
   function termsFor(unit, level) {
     level = level || Settings.level;
     const f = focusFor(unit);
-    return (unit.terms || []).filter(t => !t.levels || t.levels.includes(level))
-      .map(t => ({ term: L(t.term, level), def: L(t.def, level), key: L(t.term, 2) }))
+    return (unit.terms || []).filter(t => band() || !t.levels || t.levels.includes(level))
+      .map(t => ({ term: L(t.term, level), def: def(t), key: L(t.term, 2) }))
       .filter(t => !f || !f.terms || f.terms.includes(t.key));
   }
 
   /** Slides of a lesson for the level. */
   function slidesFor(lesson, level) {
     level = level || Settings.level;
+    if (band()) return lesson.slides || [];
     return (lesson.slides || []).filter(s => !s.levels || s.levels.includes(level));
   }
 
@@ -163,7 +181,13 @@
   function questionsFor(unit, level, types) {
     level = level || Settings.level;
     const f = focusFor(unit);
-    let qs = (unit.questions || []).filter(q => !q.levels || q.levels.includes(level));
+    const b = band();
+    let qs;
+    if (b) {   // Modified: this band's questions, topped up with Level 1 items when a lesson has few
+      qs = (unit.questions || []).filter(q => q.bands && q.bands.includes(b));
+      const fallback = (unit.questions || []).filter(q => !q.bands && (!q.levels || q.levels.includes(1)));
+      qs = qs.concat(fallback.filter(q => !types || types.includes(q.type)).slice(0, Math.max(0, 6 - qs.length)));
+    } else qs = (unit.questions || []).filter(q => !q.bands && (!q.levels || q.levels.includes(level)));
     if (f && f.cats) qs = qs.filter(q => !q.cat || f.cats.includes(q.cat));   // untagged questions always stay
     if (f && f.terms && !f.cats) qs = qs.filter(q => q.type !== 'match');     // a narrowed vocabulary list drops the big matching question
     if (types) qs = qs.filter(q => types.includes(q.type));
@@ -185,7 +209,7 @@
     const optLevel = a.simplify ? Math.max(1, level - 1) : level;   // choices from one level down
     const r = { type: q.type, prompt: L(q.prompt, level), cat: q.cat || '', _key: qKey(q) };
     if (unit && unit.__courseId) r._unit = { courseId: unit.__courseId, unitId: unit.id };
-    if (q.type === 'mc') { r.answer = L(q.answer, level); r.options = mcOptions(q, optLevel); if (!r.options.includes(r.answer)) r.options = shuffle([r.answer].concat(r.options.slice(0, -1))); }
+    if (q.type === 'mc') { r.answer = L(q.answer, level); r.options = q.bands ? shuffle(q.options.slice()) : mcOptions(q, optLevel); if (!r.options.includes(r.answer)) r.options = shuffle([r.answer].concat(r.options.slice(0, -1))); }
     else if (q.type === 'tf') { r.answer = !!q.answer; r.options = ['True', 'False']; }
     else if (q.type === 'fill') {
       r.answer = L(q.answer, level);
@@ -233,7 +257,9 @@
   /** Assignments of a lesson visible at the level. */
   function assignmentsFor(lesson, level) {
     level = level || Settings.level;
-    return (lesson.assignments || []).map((a, i) => Object.assign({ _idx: i }, a)).filter(a => !a.levels || a.levels.includes(level));
+    const b = band();
+    return (lesson.assignments || []).map((a, i) => Object.assign({ _idx: i }, a))
+      .filter(a => b ? (a.bands && a.bands.includes(b)) : (!a.bands && (!a.levels || a.levels.includes(level))));
   }
 
   /** Any mc/tf question can be asked as MC in games; fill/term questions are converted too. */
@@ -271,7 +297,7 @@
   /** Every term of a unit at the standard level (keys used by the Focus Plan). */
   function allTermKeys(unit) { return (unit.terms || []).map(t => L(t.term, 2)); }
 
-  window.LH = { LEVELS, LEVEL_NAMES, LEVEL_DESC, byLevel, L, shuffle, sample, esc, md, speak, stopSpeaking, speakBtn, termsFor, slidesFor, mcOptions,
+  window.LH = { LEVELS, LEVEL_NAMES, LEVEL_DESC, BANDS, band, body, def, byLevel, L, shuffle, sample, esc, md, speak, stopSpeaking, speakBtn, termsFor, slidesFor, mcOptions,
                 questionsFor, resolveQuestion, termQuestions, choicePool, normalize, findCourse, findUnit, markSeen,
                 focusFor, unitsFor, lessonsFor, catsOf, allTermKeys, accom, assessmentCount, difficulty, assessmentOrder,
                 lessonCats, lessonQuestions, assignmentsFor };

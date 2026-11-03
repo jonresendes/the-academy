@@ -19,13 +19,13 @@
   function slidesHtml(course, unit, les, n) {
     const slides = slidesFor(les);
     return '<section class="p-section"><h2 class="p-h2">Lesson ' + n + ' · ' + esc(les.title) + '</h2>' +
-      slides.map((s, i) => '<div class="p-slide"><h3>' + (s.visual ? s.visual + ' ' : '') + esc(L(s.title)) + '</h3>' + md(L(s.body)) + (s.html ? L(s.html) : '') +
+      slides.map((s, i) => '<div class="p-slide"><h3>' + (s.visual ? s.visual + ' ' : '') + esc(L(s.title)) + '</h3>' + md(LH.body(s)) + (s.html ? L(s.html) : '') +
         (les.media || []).filter(m => m.slide === i && m.src).map(m => m.type === 'image' ? '<figure class="p-fig"><img src="' + esc(m.src) + '" alt="' + esc(m.title) + '"><figcaption>' + esc(m.title) + '</figcaption></figure>' : '<p class="p-media">🎬 ' + esc(m.title) + ' — ' + esc(m.src) + '</p>').join('') + '</div>').join('') +
       '</section>';
   }
   function termsHtml(unit, les) {
     // a lesson's words: the unit terms that appear in its slides
-    const text = slidesFor(les).map(s => String(L(s.body)) + ' ' + String(L(s.title))).join(' ').toLowerCase();
+    const text = slidesFor(les).map(s => String(LH.body(s)) + ' ' + String(L(s.title))).join(' ').toLowerCase();
     const terms = termsFor(unit).filter(t => text.includes(String(t.term).toLowerCase()));
     if (!terms.length) return '';
     return '<div class="p-terms"><h3>Words to know</h3><table class="md-table"><tbody>' + terms.map(t => '<tr><td><strong>' + esc(t.term) + '</strong></td><td>' + esc(t.def) + '</td></tr>').join('') + '</tbody></table></div>';

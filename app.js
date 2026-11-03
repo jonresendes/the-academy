@@ -19,7 +19,8 @@
   const app = document.getElementById('app');
   const allCourses = () => window.LearnHub.courses || [];
   /** Courses the signed-in student is enrolled in (every course when no list is set). */
-  const courses = () => allCourses().filter(c => Students.enrolled(c.id));
+  const courses = () => allCourses().filter(c => Students.enrolled(c.id) && !Students.isArchived(c.id));
+  const archivedCourses = () => allCourses().filter(c => Students.enrolled(c.id) && Students.isArchived(c.id));
 
   /* ---------- helpers ---------- */
   function setCourseColor(course) {
@@ -59,8 +60,33 @@
     if (!(Focus.active(course.id))) return '';
     return '<div class="plan-banner">🎯 <strong>Focus Plan is on.</strong> This course shows only the units, lessons and words chosen for you.</div>';
   }
+  const BAND_MIN = { 1: 50, 2: 60, 3: 70, 4: 80 };
+  /** Small line on the course page: the level the student is working at, with "go back" when a move was made. */
+  function levelBanner(course) {
+    const t = Students.trackFor(course.id);
+    if (t) return '<div class="level-banner">📘 Modified program · ' + ({ k2: 'K–2', g35: 'Grades 3–5', g68: 'Grades 6–8' }[t.band] || t.band) + '</div>';
+    const l = Students.levelFor(course.id), prev = Students.previousLevel(course.id);
+    return '<div class="level-banner">🎚️ Working at <strong>Level ' + l + ' · ' + LEVEL_NAMES[l] + '</strong>' + (prev && prev !== l ? ' <button class="btn ghost sm" id="revertLevel">↩ Go back to Level ' + prev + '</button>' : '') + '</div>';
+  }
+  /** After a quiz: suggest moving up (≥ 85%) or down (below the level's band). Returns HTML for the result card. */
+  function levelPromptHtml(course, lessonIdx, pct) {
+    if (Students.trackFor(course.id)) return '';
+    const l = Students.levelFor(course.id);
+    if (pct >= 85 && l < 4) return '<div class="level-prompt up"><strong>🚀 ' + pct + '% — that\'s mastery at Level ' + l + '.</strong> Want to work at <strong>Level ' + (l + 1) + ' · ' + LEVEL_NAMES[l + 1] + '</strong> for the next lessons? You can always go back.<div class="btn-row" style="margin-top:0.5rem"><button class="btn success sm" data-level-move="' + (l + 1) + '" data-pct="' + pct + '" data-lesson="' + lessonIdx + '">Yes, move up</button><button class="btn ghost sm" data-level-stay>Not now</button></div></div>';
+    if (pct < BAND_MIN[l] && l > 1) return '<div class="level-prompt down"><strong>💡 ' + pct + '% is below the Level ' + l + ' target (' + BAND_MIN[l] + '%).</strong> Would you like to work at <strong>Level ' + (l - 1) + ' · ' + LEVEL_NAMES[l - 1] + '</strong> for now and build back up?<div class="btn-row" style="margin-top:0.5rem"><button class="btn sm" data-level-move="' + (l - 1) + '" data-pct="' + pct + '" data-lesson="' + lessonIdx + '">Yes, for now</button><button class="btn ghost sm" data-level-stay>Keep going at Level ' + l + '</button></div></div>';
+    return '';
+  }
+  function bindLevelPrompt(course) {
+    app.querySelectorAll('[data-level-move]').forEach(b => b.addEventListener('click', () => {
+      const to = +b.dataset.levelMove, from = Students.levelFor(course.id);
+      Students.moveLevel(Students.current.id, course.id, to, 'student', to > from ? 'mastery ≥ 85%' : 'below band', { lesson: +b.dataset.lesson, pct: +b.dataset.pct });
+      const box = b.closest('.level-prompt'); if (box) box.innerHTML = '<strong>✓ You are now working at Level ' + to + ' · ' + LEVEL_NAMES[to] + '.</strong> <span class="muted small">Your teacher can see this change.</span>';
+    }));
+    app.querySelectorAll('[data-level-stay]').forEach(b => b.addEventListener('click', () => { const box = b.closest('.level-prompt'); if (box) box.remove(); }));
+  }
   function setNav(key) {
     document.querySelectorAll('.topnav a').forEach(a => a.classList.toggle('active', a.dataset.nav === key));
+    const d = document.querySelector('[data-nav="dashboard"]'); if (d) d.hidden = Settings.locked || !Staff.master;
   }
   /** The "signed in as" chip in the header. */
   function renderWho() {
@@ -95,7 +121,7 @@
     setCourseColor(null); setNav('home');
     const s = Students.current;
     const mine = courses();
-    const others = allCourses().filter(c => !mine.includes(c));
+    const others = allCourses().filter(c => !mine.includes(c) && !Students.isArchived(c.id));
     app.innerHTML = '<div class="page-head"><div><h1>' + 'Welcome back, ' + esc(s.name) + '!</h1>' +
       '<p class="muted">' + (mine.length ? 'Pick a course. Each unit has lessons with quizzes and assignments, a unit test and a Game Room.' : 'No courses have been added for you yet.') + '</p></div></div>' +
       (Focus.enabled && Object.keys(Focus.data.courses).length ? '<div class="plan-banner">🎯 <strong>Focus Plan is on.</strong> Courses with a plan show only the pieces chosen for you.</div>' : '') +
@@ -107,10 +133,13 @@
           '<div class="btn-row"><span class="tag">' + unitsFor(c).length + ' unit' + (unitsFor(c).length === 1 ? '' : 's') + '</span>' + (Focus.active(c.id) ? '<span class="tag accent">🎯 Focus Plan</span>' : '') +
           '<span class="tag accent">🏅 ' + sm.earned + ' / ' + sm.total + ' awards</span></div></a>';
       }).join('') + '</div>' : (allCourses().length ? '' : '<div class="empty">No courses yet. Add a course file and link it in <code>index.html</code>.</div>')) +
+      (archivedCourses().length ? '<details class="other-courses"><summary>📦 Archived classes (' + archivedCourses().length + ')</summary><div class="grid" style="margin-top:1rem">' + archivedCourses().map(c =>
+        '<div class="card course-card" style="--course:' + esc(c.color || '') + '"><div class="card-icon">' + c.icon + '</div><h2>' + esc(c.title) + '</h2><p class="muted">' + esc(c.subtitle || '') + '</p><div class="btn-row"><a class="btn secondary sm" href="#/course/' + c.id + '">Open</a><button class="btn ghost sm" data-unarchive="' + c.id + '">Bring back</button></div></div>').join('') + '</div></details>' : '') +
       (others.length && !s.coursesLocked ? '<details class="other-courses"><summary>More courses (' + others.length + ')</summary><div class="grid" style="margin-top:1rem">' + others.map(c =>
         '<div class="card course-card" style="--course:' + esc(c.color || '') + '"><div class="card-icon">' + c.icon + '</div><h2>' + esc(c.title) + '</h2><p class="muted">' + esc(c.subtitle || '') + '</p><button class="btn secondary sm" data-join="' + c.id + '">＋ Add to my courses</button></div>').join('') + '</div></details>'
         : (others.length ? '<p class="muted small center" style="margin-top:1.5rem">Your course list is set by your teacher.</p>' : ''));
-    app.querySelectorAll('[data-join]').forEach(b => b.addEventListener('click', () => { Students.setCourses(s.id, mine.map(c => c.id).concat(b.dataset.join)); pageHome(); }));
+    app.querySelectorAll('[data-join]').forEach(b => b.addEventListener('click', () => { Students.setCourses(s.id, mine.map(c => c.id).concat(archivedCourses().map(c => c.id)).concat(b.dataset.join)); pageHome(); }));
+    app.querySelectorAll('[data-unarchive]').forEach(b => b.addEventListener('click', () => { Students.archiveCourse(s.id, b.dataset.unarchive, false); pageHome(); }));
   }
 
   /* ----- Course page: units → lessons ----- */
@@ -148,7 +177,7 @@
     const q = courseSearch.q.trim().toLowerCase();
     app.innerHTML = crumbs([{ label: 'Courses', href: '#/' }, { label: course.title }]) +
       '<div class="page-head"><div><h1>' + course.icon + ' ' + esc(course.title) + '</h1><p class="muted">' + esc(L(course.description) || course.subtitle || '') + '</p></div>' +
-      '<a class="btn secondary" href="#/case/' + course.id + '">🏆 Display Case</a></div>' + planBanner(course) +
+      '<div class="btn-row"><a class="btn secondary" href="#/case/' + course.id + '">🏆 Display Case</a><button class="btn ghost sm" id="archiveCourse" title="Hide this class on your home page (you can bring it back)">📦 Archive class</button></div></div>' + planBanner(course) + levelBanner(course) +
       '<div class="search-row course-search"><input class="text-input" id="courseQ" placeholder="🔍 Find a lesson by keyword (e.g. census, ritual, festival)" value="' + esc(courseSearch.q) + '"><button class="btn secondary" id="courseGo">Search</button>' + (q ? '<button class="btn ghost" id="courseClear">Clear</button>' : '') + '</div>' +
       '<div class="unit-list">' + unitsFor(course).map(unit => {
         const idx = course.units.indexOf(unit);
@@ -167,10 +196,13 @@
           '<div class="rooms">' +
           '<a class="room" href="#/test/' + course.id + '/' + unit.id + '"><span class="room-icon">📝</span><span>Unit test' + (u.testBest ? ' <span class="muted">· best ' + u.testBest + '%</span>' : '') + '</span></a>' +
           '<a class="room" href="#/games/' + course.id + '/' + unit.id + '"><span class="room-icon">🎮</span><span>Game Room</span></a>' +
+          '<a class="room" href="#/work/' + course.id + '/' + unit.id + '"><span class="room-icon">📁</span><span>Work folder' + (function () { const w = u.work || {}; let d = 0, h = 0; Object.values(w).forEach(l => Object.values(l).forEach(x => { if (x && x.text) { if (x.done) h++; else d++; } })); return h || d ? ' <span class="muted">· ' + h + ' in, ' + d + ' draft' + (d === 1 ? '' : 's') + '</span>' : ''; })() + '</span></a>' +
           '<a class="room" href="#/print/' + course.id + '/' + unit.id + '/unit"><span class="room-icon">🖨️</span><span>Print unit</span></a>' +
           '</div></div></div>';
       }).join('') + '</div>' +
       (unitsFor(course).length ? (q && !unitsFor(course).some(un => lessonsFor(un).some(l => matchesKeyword(l, q))) ? '<div class="empty">No lessons mention "' + esc(courseSearch.q) + '".</div>' : '') : '<div class="empty">No units are in this course\'s Focus Plan yet. A teacher can choose some in Settings.</div>');
+    const rv = app.querySelector('#revertLevel'); if (rv) rv.addEventListener('click', () => { const prev = Students.previousLevel(course.id); if (prev) { Students.moveLevel(Students.current.id, course.id, prev, 'student', 'went back'); pageCourse(courseId); } });
+    const ab = app.querySelector('#archiveCourse'); if (ab) ab.addEventListener('click', () => { if (confirm('Archive ' + course.title + '? It moves to "Archived classes" on your home page and you can bring it back any time.')) { Students.archiveCourse(Students.current.id, course.id, true); location.hash = '#/'; } });
     const run = () => { courseSearch.q = app.querySelector('#courseQ').value; pageCourse(courseId); };
     app.querySelector('#courseGo').addEventListener('click', run);
     app.querySelector('#courseQ').addEventListener('keydown', e => { if (e.key === 'Enter') run(); });
@@ -201,6 +233,33 @@
       (pos === lessons.length - 1 ? '<div class="card center" style="margin-top:1.25rem"><h3>Finished every lesson in the unit?</h3><p class="muted small">The unit test covers all ' + lessons.length + ' lessons.</p><a class="btn" href="#/test/' + course.id + '/' + unit.id + '">📝 Take the unit test</a></div>' : '');
   }
 
+  /* ----- Work folder: every assignment in a unit with its draft / handed-in state ----- */
+  function pageWork(courseId, unitId) {
+    const course = findCourse(courseId), unit = findUnit(course, unitId); if (!unit || !Students.enrolled(course.id)) return notFound();
+    setCourseColor(course); setNav('home');
+    const me = Students.current, u = Progress.unit(course.id, unit.id), work = u.work || {};
+    const lessons = lessonsFor(unit);
+    const teacher = !Settings.locked && Staff.master;
+    let counts = { done: 0, draft: 0, todo: 0 };
+    const rows = lessons.map((les, k) => {
+      const as = assignmentsFor(les); if (!as.length) return '';
+      return '<div class="card" style="margin-bottom:1rem"><h3 style="margin-bottom:0.5rem"><span class="tag">Lesson ' + (k + 1) + '</span> ' + esc(les.title) + '</h3>' + as.map((a, n) => {
+        const w = (work[les._idx] || {})[a._idx] || {};
+        const state = w.done ? 'done' : (w.text ? 'draft' : 'todo'); counts[state]++;
+        const words = String(w.text || '').trim().split(/\s+/).filter(Boolean).length;
+        return '<div class="work-row ' + state + '"><div class="work-row-head"><div><strong>✍️ ' + esc(a.title) + '</strong> <span class="muted small">Assignment ' + (n + 1) + (a.expectations ? ' · ' + esc(a.expectations) : '') + '</span></div>' +
+          '<span class="btn-row">' + (state === 'done' ? '<span class="tag ok">✓ Handed in · ' + new Date(w.at).toLocaleDateString() + '</span>' : state === 'draft' ? '<span class="tag accent">Draft · saved ' + new Date(w.at).toLocaleDateString() + '</span>' : '<span class="tag">Not started</span>') +
+          '<a class="btn secondary sm" href="#/assign/' + course.id + '/' + unit.id + '/' + les._idx + '/' + a._idx + '">' + (state === 'todo' ? 'Start' : state === 'draft' ? 'Continue' : 'Open') + '</a>' + Print.button('#/print/' + course.id + '/' + unit.id + '/assign/' + les._idx + '/' + a._idx, 'Print') + '</span></div>' +
+          (w.text ? '<div class="work-preview">' + esc(w.text.length > 400 ? w.text.slice(0, 400) + '…' : w.text) + '</div><div class="muted small">' + words + ' words</div>' : '') +
+          (Settings.get('dictation') !== false ? '<div data-recorder="' + esc(me.id + '/' + course.id + '/' + unit.id + '/' + les._idx + '/a' + a._idx) + '" data-readonly="1" data-label="Recording"></div>' : '') + '</div>';
+      }).join('') + '</div>';
+    }).join('');
+    app.innerHTML = crumbs([{ label: 'Courses', href: '#/' }, { label: course.title, href: '#/course/' + course.id }, { label: unit.title, href: '#/course/' + course.id }, { label: 'Work folder' }]) +
+      '<div class="page-head"><div><h1>📁 Work folder</h1><p class="muted">' + esc(me.name) + '\'s assignments in ' + esc(unit.title) + ' — drafts and handed-in work in one place.' + (teacher ? ' <span class="tag accent">Teacher view</span>' : '') + '</p></div>' +
+      '<div class="case-stats" style="margin:0"><div class="stat"><div class="n">' + counts.done + '</div><div class="l">Handed in</div></div><div class="stat"><div class="n">' + counts.draft + '</div><div class="l">Drafts</div></div><div class="stat"><div class="n">' + counts.todo + '</div><div class="l">To do</div></div></div></div>' +
+      (rows || '<div class="empty">This unit has no assignments.</div>');
+  }
+
   /* ----- Assignment ----- */
   function pageAssign(courseId, unitId, lessonIdx, n) {
     const course = findCourse(courseId), unit = findUnit(course, unitId); if (!unit || !Students.enrolled(course.id)) return notFound();
@@ -215,7 +274,9 @@
       '<div class="slide assignment"><div class="btn-row between"><h2>Your task</h2>' + speakBtn(String(L(a.prompt)).replace(/[*#>-]/g, '')) + '</div><div class="slide-body">' + md(L(a.prompt)) + '</div>' +
       '<div class="success-box"><strong>A complete answer…</strong> ' + esc(L(a.success)) + '</div>' +
       (starter ? '<p class="muted small">Sentence starter: <em>' + esc(starter) + '</em> <button class="btn ghost sm" id="useStarter">Use it</button></p>' : '') +
+      '<div class="work-tools">' + (w.done ? '' : Media.dictateBtn('#workText')) + '<span class="muted small">' + (Media.canDictate && !w.done && Settings.get('dictation') !== false ? 'Tap 🎤 to dictate instead of typing.' : '') + '</span></div>' +
       '<textarea class="text-input work" id="workText" rows="10" placeholder="Write your answer here…"' + (w.done ? ' readonly' : '') + '>' + esc(w.text) + '</textarea>' +
+      (Settings.get('dictation') !== false ? '<div class="plan-section"><div class="plan-label">🎙️ Or record your answer</div><div data-recorder="' + esc(Students.current.id + '/' + course.id + '/' + unit.id + '/' + lessonIdx + '/a' + n) + '" data-label="Record my answer"' + (w.done ? ' data-readonly="1"' : '') + '></div></div>' : '') +
       '<div class="btn-row between" style="margin-top:0.75rem"><span class="muted small" id="workMeta">' + words(w.text) + ' words' + (w.at ? ' · saved ' + new Date(w.at).toLocaleString() : '') + '</span>' +
       '<span class="btn-row">' + (w.done ? '<span class="tag ok">✓ Handed in</span><button class="btn secondary" id="reopen">Edit again</button>' : '<button class="btn secondary" id="saveWork">Save draft</button><button class="btn success" id="handIn">Hand in</button>') + '</span></div></div>' +
       '<p class="center" style="margin-top:1rem"><a class="btn ghost" href="#/lesson/' + course.id + '/' + unit.id + '/' + lessonIdx + '">← Back to the lesson</a></p>';
@@ -247,7 +308,7 @@
         return e ? '<div class="media-video"><iframe src="' + esc(e) + '" title="' + esc(m.title) + '" allowfullscreen loading="lazy"></iframe><div class="small muted">🎬 ' + esc(m.title) + (m.source ? ' · ' + esc(m.source) : '') + '</div></div>'
                  : '<p class="media-link">🎬 <a href="' + esc(m.src) + '" target="_blank" rel="noopener">' + esc(m.title) + '</a>' + (m.source ? ' <span class="muted small">· ' + esc(m.source) + '</span>' : '') + '</p>';
       }
-      if (Settings.locked || !Settings.get('guardianPin')) return '';   // students never see empty slots
+      if (Settings.locked || !Staff.master) return '';   // students never see empty slots
       return '<div class="media-slot"><div><strong>' + (m.type === 'video' ? '🎬 Video slot' : '🖼️ Image slot') + ' (teacher only):</strong> ' + esc(m.title) + '</div><div class="small">' + esc(m.why) + '</div>' +
         '<div class="small">Source: ' + esc(m.source) + (m.url ? ' — <a href="' + esc(m.url) + '" target="_blank" rel="noopener">open</a>' : m.search ? ' — search: "' + esc(m.search) + '"' : '') + (m.minutes ? ' · ~' + m.minutes + ' min' : '') + '</div>' +
         '<div class="small muted">To show it to students, paste the image URL or video link into this slot\'s <code>src</code> in the course file (see the media guide in Settings).</div></div>';
@@ -278,8 +339,9 @@
         '<div class="btn-row">' + Print.button('#/print/' + course.id + '/' + unit.id + '/slides/' + lessonIdx, 'Print slides') + '<a class="btn ghost" href="#/lesson/' + course.id + '/' + unit.id + '/' + lessonIdx + '">✕ Lesson page</a></div></div>' +
         '<div class="lesson-tabs">' + lessons.map(les => '<a href="#/study/' + course.id + '/' + unit.id + '/' + les._idx + '" class="' + (les._idx === lessonIdx ? 'active' : '') + (lessonDone(les._idx) ? ' done' : '') + '">' + esc(les.title) + '</a>').join('') + '</div>' +
         '<div class="slide">' + (s.visual ? '<div class="slide-visual">' + s.visual + '</div>' : '') +
-        '<div class="btn-row between"><h2>' + esc(L(s.title)) + '</h2>' + speakBtn(L(s.title) + '. ' + String(L(s.body)).replace(/[*#-]/g, '')) + '</div>' +
-        '<div class="slide-body">' + md(L(s.body)) + (s.html ? L(s.html) : '') + '</div>' + mediaHtml(lesson, i) +
+        '<div class="btn-row between"><h2>' + esc(L(s.title)) + '</h2>' + speakBtn(L(s.title) + '. ' + String(LH.body(s)).replace(/[*#-]/g, '')) + '</div>' +
+        '<div class="slide-body">' + md(LH.body(s)) + (s.html ? L(s.html) : '') + '</div>' + mediaHtml(lesson, i) +
+        (i === slides.length - 1 && Settings.get('dictation') !== false && Media.canRecord ? '<div class="plan-section"><div class="plan-label">🎙️ Voice note — say what you learned (optional)</div><div data-recorder="' + esc(Students.current.id + '/' + course.id + '/' + unit.id + '/' + lessonIdx + '/note') + '" data-label="Record a voice note"></div></div>' : '') +
         '<div class="slide-foot"><button class="btn secondary" id="prevBtn"' + (i === 0 ? ' disabled' : '') + '>← Back</button>' +
         '<div class="dots">' + slides.map((_, k) => '<span class="' + (k === i ? 'current' : seen().includes(k) ? 'seen' : '') + '"></span>').join('') + '</div>' +
         (i < slides.length - 1 ? '<button class="btn" id="nextBtn">Next →</button>' :
@@ -337,8 +399,10 @@
           '<h2>' + (pct === 100 ? 'Perfect!' : pct >= Badges.PASS_MARK ? 'You passed!' : 'Keep practising') + '</h2>' +
           '<p class="muted">' + score + ' of ' + qs.length + ' correct.' + (pct < Badges.PASS_MARK ? ' Read the lesson again and try once more.' : '') + '</p>' +
           (fresh.length ? '<p>' + fresh.map(a => '<span class="tag accent">' + a.icon + ' ' + esc(a.name) + '</span>').join(' ') + '</p>' : '') +
+          (o.extra ? o.extra(pct) : '') +
           '<div class="btn-row" style="justify-content:center"><button class="btn" id="retry">Try again</button>' + (o.links || '') + '</div></div>';
         app.querySelector('#retry').addEventListener('click', o.retry);
+        if (o.afterRender) o.afterRender();
       }
     }
   }
@@ -384,8 +448,11 @@
       onDone(pct) {
         rec.attempts++; rec.best = Math.max(rec.best, pct); if (pct >= Badges.PASS_MARK) rec.passed = true;
         Progress.save();
+        if (pct >= Badges.PASS_MARK) Students.recordLessonLevel(course.id, lessonIdx, Settings.level, pct);
         return Badges.evaluate(course, unit);
       },
+      extra: (pct) => levelPromptHtml(course, lessonIdx, pct),
+      afterRender: () => bindLevelPrompt(course),
       retry: () => pageQuiz(courseId, unitId, lessonIdx),
       links: '<a class="btn secondary" href="#/lesson/' + course.id + '/' + unit.id + '/' + lessonIdx + '">Back to the lesson</a>' });
   }
@@ -437,38 +504,51 @@
 
   function pageSettings() {
     setCourseColor(null); setNav('settings');
-    const hasPin = !!Settings.get('guardianPin');
     const locked = Settings.locked;
+    const staff = locked ? null : Staff.current;
     const me = Students.current;
     const pref = (k, label, help, options) => seg(k, label, help, options, Settings.get(k));
+    const TINTS = [['none', 'None'], ['cream', 'Cream'], ['blue', 'Pale blue'], ['green', 'Pale green'], ['rose', 'Rose'], ['yellow', 'Yellow'], ['grey', 'Grey'], ['peach', 'Peach'], ['lavender', 'Lavender']];
 
-    const teacherInner = locked ? '' :
+    let lockCard;
+    if (!Staff.master) {
+      lockCard = '<div class="setting-row" style="padding-top:0"><div><h2 style="margin:0">🔒 Teacher Lock · set up the master account</h2><div class="help">The master account (you) controls teachers, sections, levels and exports. Choose a 6-digit PIN you will remember.</div></div></div>' +
+        '<div class="btn-row"><input class="text-input" id="masterName" placeholder="Your name" style="max-width:200px"><input class="text-input" id="masterEmail" placeholder="School e-mail (optional)" style="max-width:260px"><input class="text-input pin-input" id="pinInput" type="password" inputmode="numeric" maxlength="6" placeholder="6-digit PIN"><button class="btn" id="setMaster">Create master account</button></div>';
+    } else if (locked) {
+      lockCard = '<div class="setting-row" style="padding-top:0"><div><h2 style="margin:0">🔒 Teacher Lock</h2><div class="help">Enter your 6-digit PIN (master or teacher) to open the teaching controls.</div></div>' +
+        '<div class="btn-row"><input class="text-input pin-input" id="pinInput" type="password" inputmode="numeric" maxlength="6" placeholder="6-digit PIN"><button class="btn" id="unlockBtn">Unlock</button></div></div>';
+    } else {
+      lockCard = '<div class="setting-row" style="padding-top:0"><div><h2 style="margin:0">🔒 Teacher Lock</h2><div class="help">Signed in as <strong>' + esc(staff ? staff.name : 'Teacher') + '</strong> (' + (Staff.isMaster ? 'master account' : 'teacher') + '). Lock again before handing the device back.</div></div>' +
+        '<div class="btn-row"><button class="btn secondary" id="lockBtn">🔒 Lock now</button>' + (Staff.isMaster ? '<button class="btn ghost" id="changePin">Change master PIN</button>' : '') + '</div></div>';
+    }
+
+    const teacherInner = locked || !Staff.master ? '' :
+      '<div class="teacher-section">' + sectionsHtml() + '</div>' +
       '<div class="teacher-section">' + studentsPanelHtml() + '</div>' +
-      '<div class="teacher-section"><h3>🔍 Find lessons by keyword</h3><p class="muted small">Pick a unit and type a word or phrase. Lessons that mention it are listed in order; apply them and <strong>' + esc(me.name) + '</strong> sees only those lessons for that unit.</p>' + lessonSearchHtml() + '</div>' +
+      (Staff.isMaster ? '<div class="teacher-section">' + teachersHtml() + '</div><div class="teacher-section">' + driveHtml() + '</div>' : '') +
+      '<div class="teacher-section">' + planPickerHtml() + '<h3>🔍 Find lessons by keyword</h3><p class="muted small">Pick a unit and type a word or phrase. Lessons that mention it are listed in order; apply them and <strong>' + esc(planStudent().name) + '</strong> sees only those lessons for that unit.</p>' + lessonSearchHtml() + '</div>' +
       '<div class="teacher-section">' + focusPlanHtml(false) + '</div>' +
+      '<div class="teacher-section">' + mediaChecklistHtml() + '</div>' +
       '<div class="teacher-section"><h3>🎨 Colouring page learning breaks</h3>' +
       seg('colouringEvery', 'Show a learning card every…', 'How many areas the student colours before a lesson card appears. "Student chooses" lets them pick inside the game.', [['student', 'Student chooses'], [1, '1'], [3, '3'], [5, '5'], [10, '10'], [0, 'Off']], Settings.get('colouringEvery')) + '</div>' +
-      '<div class="teacher-section">' + mediaChecklistHtml() + '</div>' +
       '<div class="teacher-section"><h3>🚪 Sign-in screen</h3>' +
       sw('allowSelfSignup', 'Students may add their own name', 'Off: only names added here (Students, above) appear on the sign-in screen.', Settings.get('allowSelfSignup') !== false) + '</div>';
 
     app.innerHTML = '<div class="page-head"><div><h1>⚙️ Settings</h1><p class="muted">Teaching controls live behind the Teacher Lock. Accessibility options are open to everyone.</p></div></div>' +
-      '<div class="card teacher-card" style="margin-bottom:1.25rem"><div class="setting-row" style="padding-top:0"><div><h2 style="margin:0">🔒 Teacher Lock</h2><div class="help">' +
-        (locked ? 'Enter the 6-digit PIN to open the teaching controls.' : hasPin ? 'Unlocked for this session. Lock again before handing the device back.' : 'No PIN yet — choose a 6-digit number you will remember. Students cannot open this section once it is set.') + '</div></div>' +
-      '<div class="btn-row">' + (hasPin
-        ? (locked ? '<input class="text-input pin-input" id="pinInput" type="password" inputmode="numeric" maxlength="6" placeholder="6-digit PIN"><button class="btn" id="unlockBtn">Unlock</button>'
-                  : '<button class="btn secondary" id="lockBtn">🔒 Lock now</button><button class="btn ghost" id="changePin">Change PIN</button><button class="btn ghost" id="removePin">Remove PIN</button>')
-        : '<input class="text-input pin-input" id="pinInput" type="password" inputmode="numeric" maxlength="6" placeholder="Choose 6 digits"><button class="btn" id="setPin">Set PIN</button>') + '</div></div>' +
-      teacherInner + '</div>' +
+      '<div class="card teacher-card" style="margin-bottom:1.25rem">' + lockCard + teacherInner + '</div>' +
       '<div class="card" style="margin-bottom:1.25rem"><h2>Me</h2>' +
       '<div class="setting-row"><div><label>Signed in as</label><div class="help">Progress, awards and these accessibility settings belong to this student.</div></div><div class="btn-row">' + avatarHtml(me) + '<strong>' + esc(me.name) + '</strong><a class="btn secondary sm" href="#/signin">Switch student</a></div></div>' +
-      '<div class="setting-row"><div><label>My picture</label><div class="help">Pick the picture shown on the sign-in screen.</div></div><div class="avatar-grid">' + Students.AVATARS.map(a => '<button class="avatar-pick' + (a === me.avatar ? ' on' : '') + '" data-avatar="' + a + '">' + a + '</button>').join('') + '</div></div></div>' +
+      '<div class="setting-row"><div><label>My picture</label><div class="help">Pick the picture shown on the sign-in screen.</div></div><div class="avatar-grid">' + Students.AVATARS.map(a => '<button class="avatar-pick' + (a === me.avatar ? ' on' : '') + '" data-avatar="' + a + '">' + a + '</button>').join('') + '</div></div>' +
+      '<div class="setting-row"><div><label>My classes</label><div class="help">Where you are working right now. Archived classes are on your home page under "Archived classes".</div></div><div class="small">' + (courses().map(c => { const t = Students.trackFor(c.id); const prev = Students.previousLevel(c.id); return '<div>' + c.icon + ' ' + esc(c.title) + ' — ' + (t ? 'Modified · ' + ({ k2: 'K–2', g35: 'Grades 3–5', g68: 'Grades 6–8' }[t.band]) : 'Level ' + Students.levelFor(c.id) + ' · ' + LEVEL_NAMES[Students.levelFor(c.id)] + (prev && prev !== Students.levelFor(c.id) ? ' <button class="btn ghost sm" data-revert="' + c.id + '">↩ back to Level ' + prev + '</button>' : '')) + '</div>'; }).join('') || '<span class="muted">No classes yet.</span>') + '</div></div></div>' +
       '<div class="card" style="margin-bottom:1.25rem"><h2>Accessibility</h2>' +
       pref('fontScale', 'Text size', 'Make everything larger.', [[1, 'Normal'], [1.15, 'Large'], [1.3, 'Extra large']]) +
       pref('font', 'Reading font', 'Lexend is designed for easier reading.', [['default', 'Standard'], ['lexend', 'Lexend']]) +
       pref('contrast', 'Contrast', 'High contrast: black text and strong borders. Inverted: white text on a black background.', [['normal', 'Normal'], ['high', 'High'], ['inverted', 'Inverted']]) +
+      '<div class="setting-row"><div><label>Colour overlay (Irlen / visual stress)</label><div class="help">Tints the page like a coloured overlay. Try a few — the right colour is personal.</div></div><div class="tint-row">' + TINTS.map(t => '<button class="tint-swatch tint-' + t[0] + (Settings.get('tint') === t[0] ? ' on' : '') + '" data-tint="' + t[0] + '" title="' + t[1] + '" aria-label="' + t[1] + '"></button>').join('') + '<select class="text-input" id="tintSelect" style="max-width:170px">' + TINTS.map(t => '<option value="' + t[0] + '"' + (Settings.get('tint') === t[0] ? ' selected' : '') + '>' + t[1] + '</option>').join('') + '</select></div></div>' +
       pref('motion', 'Animation', 'Reduced motion removes flips, spins and slide effects.', [['normal', 'Normal'], ['reduced', 'Reduced']]) +
-      sw('readAloud', 'Read aloud buttons', 'Show 🔊 buttons that read slides and questions out loud.', Settings.get('readAloud')) + '</div>' +
+      sw('readAloud', 'Read aloud buttons', 'Show 🔊 buttons that read slides and questions out loud.', Settings.get('readAloud')) +
+      sw('dictation', 'Dictation and voice recording', 'Show 🎤 dictate buttons on answers and 🎙️ record buttons on lessons and assignments.' + (Media.canDictate ? '' : ' (Dictation needs Chrome, Edge or Safari.)'), Settings.get('dictation') !== false) +
+      '<div class="setting-row"><div><label>Read&amp;Write (Texthelp)</label><div class="help">The Read&amp;Write for Google Chrome extension works on this app as it is: every slide, question and assignment is real text, so its hover-to-speak, dictionary, picture dictionary, highlighters and prediction all work. Install it from the Chrome Web Store, then open The Academy in Chrome. Tip: turn off the app\'s own read-aloud buttons above to avoid two voices.</div></div><a class="btn secondary sm" href="https://chromewebstore.google.com/search/Read%26Write%20for%20Google%20Chrome" target="_blank" rel="noopener">Chrome Web Store</a></div></div>' +
       '<div class="card" style="margin-bottom:1.25rem" id="appCard"><h2>📱 App</h2><p class="muted small">Checking…</p></div>' +
       '<div class="card"><h2>Progress</h2><p class="muted small">' + esc(me.name) + '\'s progress and awards are saved in this browser.</p><button class="btn ghost" id="resetBtn">Reset ' + esc(me.name) + '\'s progress</button></div>';
     renderAppCard();
@@ -476,16 +556,73 @@
     app.querySelectorAll('[data-seg]').forEach(b => b.addEventListener('click', () => { const v = b.dataset.v; Settings.set(b.dataset.seg, isNaN(v) ? v : +v); pageSettings(); }));
     app.querySelectorAll('[data-switch]').forEach(b => b.addEventListener('click', () => { Settings.set(b.dataset.switch, !(Settings.get(b.dataset.switch) !== false)); pageSettings(); }));
     app.querySelectorAll('[data-avatar]').forEach(b => b.addEventListener('click', () => { Students.update(me.id, { avatar: b.dataset.avatar }); renderWho(); pageSettings(); }));
+    app.querySelectorAll('[data-tint]').forEach(b => b.addEventListener('click', () => { Settings.set('tint', b.dataset.tint); pageSettings(); }));
+    app.querySelectorAll('[data-revert]').forEach(b => b.addEventListener('click', () => { const prev = Students.previousLevel(b.dataset.revert); if (prev) { Students.moveLevel(me.id, b.dataset.revert, prev, 'student', 'went back'); pageSettings(); } }));
+    const ts = app.querySelector('#tintSelect'); if (ts) ts.addEventListener('change', () => { Settings.set('tint', ts.value); pageSettings(); });
     const on = (id, fn) => { const el = app.querySelector(id); if (el) el.addEventListener('click', fn); };
-    const askPin = (label) => { const v = prompt(label + ' (6 digits):') || ''; if (!/^\d{6}$/.test(v.trim())) { if (v) alert('The PIN must be exactly 6 digits.'); return null; } return v.trim(); };
-    on('#setPin', () => { const v = app.querySelector('#pinInput').value.trim(); if (!/^\d{6}$/.test(v)) return alert('The PIN must be exactly 6 digits.'); Settings.set('guardianPin', v); sessionStorage.setItem('learnhub.unlocked', '1'); pageSettings(); });
-    on('#unlockBtn', () => { if (app.querySelector('#pinInput').value === Settings.get('guardianPin')) { sessionStorage.setItem('learnhub.unlocked', '1'); pageSettings(); } else alert('Wrong PIN.'); });
-    const pin = app.querySelector('#pinInput'); if (pin) pin.addEventListener('keydown', e => { if (e.key === 'Enter') { const b = app.querySelector('#unlockBtn, #setPin'); if (b) b.click(); } });
-    on('#lockBtn', () => { sessionStorage.removeItem('learnhub.unlocked'); pageSettings(); });
-    on('#changePin', () => { const v = askPin('New Teacher Lock PIN'); if (v) { Settings.set('guardianPin', v); alert('PIN changed.'); } });
-    on('#removePin', () => { if (confirm('Remove the Teacher Lock PIN? Students will be able to open the teaching controls.')) { Settings.set('guardianPin', ''); sessionStorage.removeItem('learnhub.unlocked'); pageSettings(); } });
+    on('#setMaster', () => { const v = app.querySelector('#pinInput').value.trim(), name = app.querySelector('#masterName').value.trim() || 'Master'; if (!/^\d{6}$/.test(v)) return alert('The PIN must be exactly 6 digits.'); Staff.setMaster(name, app.querySelector('#masterEmail').value.trim(), v); Settings.set('guardianPin', v); Staff.signIn('master'); pageSettings(); });
+    on('#unlockBtn', () => { const id = Staff.unlock(app.querySelector('#pinInput').value.trim()); if (id) { Staff.signIn(id); pageSettings(); } else alert('Wrong PIN.'); });
+    const pin = app.querySelector('#pinInput'); if (pin) pin.addEventListener('keydown', e => { if (e.key === 'Enter') { const b = app.querySelector('#unlockBtn, #setMaster'); if (b) b.click(); } });
+    on('#lockBtn', () => { Staff.signOut(); pageSettings(); });
+    on('#changePin', () => { const v = (prompt('New master PIN (6 digits):') || '').trim(); if (!/^\d{6}$/.test(v)) { if (v) alert('The PIN must be exactly 6 digits.'); return; } Staff.setMaster(Staff.master.name, Staff.master.email, v); Settings.set('guardianPin', v); alert('Master PIN changed.'); });
     on('#resetBtn', () => { if (confirm('Erase all of ' + me.name + '\'s progress and awards on this device?')) { Progress.reset(); pageSettings(); } });
-    if (!locked) { bindStudentsPanel(); bindFocusPlan(false); bindLessonSearch(); }
+    if (!locked && Staff.master) { bindSections(); bindStudentsPanel(); bindTeachers(); bindDrive(); bindFocusPlan(false); bindLessonSearch(); const ps = app.querySelector('#planStudent'); if (ps) ps.addEventListener('change', () => { sessionStorage.setItem('learnhub.planStudent', ps.value); pageSettings(); }); }
+  }
+
+  /* ----- Sections (classes) ----- */
+  function sectionsHtml() {
+    const staff = Staff.current; const sid = staff.id;
+    const mine = Sections.visible(sid, false), archived = Sections.visible(sid, true).filter(x => x.archived);
+    const cur = Sections.currentFor(sid);
+    const open = sessionStorage.getItem('learnhub.sectionsOpen') === '1';
+    const teachers = Staff.teachers;
+    return '<div class="btn-row between"><h3 style="margin:0">🏫 Sections</h3><a class="btn secondary sm" href="#/dashboard">📊 Open the dashboard</a></div><p class="muted small">A section is one class: a course, a teacher and a roster. Pick the section you are working with — the Students list below follows it. Archive a section at the end of term and bring it back any time.</p>' +
+      '<div class="search-row" style="grid-template-columns:1fr auto auto"><select class="text-input" id="sectionSelect"><option value=""' + (!cur ? ' selected' : '') + '>' + (Staff.isMaster ? 'All students on this device' : 'All my students') + '</option>' +
+        mine.map(sec => '<option value="' + sec.id + '"' + (cur && cur.id === sec.id ? ' selected' : '') + '>' + esc(sec.name) + (sec.term ? ' · ' + esc(sec.term) : '') + ' (' + (sec.students || []).length + ')</option>').join('') +
+        (archived.length ? '<optgroup label="Archived">' + archived.map(sec => '<option value="' + sec.id + '"' + (cur && cur.id === sec.id ? ' selected' : '') + '>📦 ' + esc(sec.name) + (sec.term ? ' · ' + esc(sec.term) : '') + '</option>').join('') + '</optgroup>' : '') + '</select>' +
+        (cur ? '<button class="btn ghost sm" data-section-archive="' + cur.id + '">' + (cur.archived ? '📤 Retrieve' : '📦 Archive') + '</button>' : '<span></span>') +
+        '<button class="btn secondary sm" id="sectionsToggle">' + (open ? '▾ Hide' : '＋ New section') + '</button></div>' +
+      (cur ? '<p class="small muted" style="margin:0.4rem 0 0">' + (cur.archived ? '📦 Archived section — ' : '') + 'Course: <strong>' + esc((findCourseAll(cur.courseId) || { title: cur.courseId }).title) + '</strong>' + (cur.teacherId ? ' · Teacher: ' + esc((teachers.find(t => t.id === cur.teacherId) || { name: '?' }).name) : Staff.isMaster ? ' · no teacher assigned' : '') + ' · ' + (cur.students || []).length + ' student' + ((cur.students || []).length === 1 ? '' : 's') + '</p>' : '') +
+      (open ? '<div class="plan-unit" style="margin-top:0.6rem"><div class="plan-label">New section</div><div class="search-row" style="grid-template-columns:1fr 1fr 1fr' + (Staff.isMaster ? ' 1fr' : '') + ' auto"><input class="text-input" id="secName" placeholder="Name, e.g. HRF3O Period 2"><select class="text-input" id="secCourse">' + allCourses().map(c => '<option value="' + c.id + '">' + c.icon + ' ' + esc(c.title) + '</option>').join('') + '</select><input class="text-input" id="secTerm" placeholder="Term, e.g. Fall 2026">' +
+        (Staff.isMaster ? '<select class="text-input" id="secTeacher"><option value="">Teacher: me (master)</option>' + teachers.map(t => '<option value="' + t.id + '">' + esc(t.name) + '</option>').join('') + '</select>' : '') + '<button class="btn" id="secCreate">Create</button></div></div>' : '');
+  }
+  function bindSections() {
+    const sid = Staff.current.id;
+    const sel = app.querySelector('#sectionSelect'); if (sel) sel.addEventListener('change', () => { Sections.setCurrent(sid, sel.value || null); pageSettings(); });
+    const tg = app.querySelector('#sectionsToggle'); if (tg) tg.addEventListener('click', () => { sessionStorage.setItem('learnhub.sectionsOpen', sessionStorage.getItem('learnhub.sectionsOpen') === '1' ? '0' : '1'); pageSettings(); });
+    const cr = app.querySelector('#secCreate'); if (cr) cr.addEventListener('click', () => { const name = app.querySelector('#secName').value.trim(); if (!name) return alert('Give the section a name.'); const tSel = app.querySelector('#secTeacher'); const sec = Sections.add(name, app.querySelector('#secCourse').value, tSel && tSel.value ? tSel.value : (Staff.isMaster ? null : sid), app.querySelector('#secTerm').value.trim()); Sections.setCurrent(sid, sec.id); sessionStorage.setItem('learnhub.sectionsOpen', '0'); pageSettings(); });
+    app.querySelectorAll('[data-section-archive]').forEach(b => b.addEventListener('click', () => { const sec = Sections.byId(b.dataset.sectionArchive); Sections.setArchived(sec.id, !sec.archived); if (sec.archived) Sections.setCurrent(sid, null); pageSettings(); }));
+  }
+
+  /* ----- Teachers (master only) ----- */
+  function teachersHtml() {
+    return '<h3>🧑‍🏫 Teachers</h3><p class="muted small">Each teacher gets a 6-digit PIN. When they unlock with it they see only their own sections and students, and can change levels, view work and run exports for them.</p>' +
+      (Staff.teachers.length ? Staff.teachers.map(t => '<div class="course-line"><label>👤 ' + esc(t.name) + ' <span class="muted small">(' + Sections.visible(t.id, true).length + ' section' + (Sections.visible(t.id, true).length === 1 ? '' : 's') + ')</span></label><span class="btn-row"><button class="btn ghost sm" data-teacher-pin="' + t.id + '">Reset PIN</button><button class="btn ghost sm" data-teacher-remove="' + t.id + '">Remove</button></span></div>').join('') : '<p class="muted small">No teachers yet.</p>') +
+      '<div class="btn-row" style="margin-top:0.6rem"><input class="text-input" id="teacherName" placeholder="Teacher name" style="max-width:220px"><input class="text-input pin-input" id="teacherPin" inputmode="numeric" maxlength="6" placeholder="6-digit PIN"><button class="btn secondary" id="teacherAddBtn">＋ Add teacher</button></div>';
+  }
+  function bindTeachers() {
+    const add = app.querySelector('#teacherAddBtn'); if (add) add.addEventListener('click', () => { const n = app.querySelector('#teacherName').value.trim(), p = app.querySelector('#teacherPin').value.trim(); if (!n) return alert('Enter the teacher\'s name.'); if (!/^\d{6}$/.test(p)) return alert('The PIN must be exactly 6 digits.'); if (Staff.unlock(p)) return alert('That PIN is already in use — choose another.'); Staff.addTeacher(n, p); pageSettings(); });
+    app.querySelectorAll('[data-teacher-pin]').forEach(b => b.addEventListener('click', () => { const p = (prompt('New 6-digit PIN:') || '').trim(); if (!/^\d{6}$/.test(p)) return; if (Staff.unlock(p)) return alert('That PIN is already in use.'); Staff.updateTeacher(b.dataset.teacherPin, { pin: p }); alert('PIN updated.'); }));
+    app.querySelectorAll('[data-teacher-remove]').forEach(b => b.addEventListener('click', () => { const t = Staff.teachers.find(x => x.id === b.dataset.teacherRemove); if (confirm('Remove ' + t.name + '? Their sections stay but have no teacher until you assign one.')) { Staff.removeTeacher(t.id); pageSettings(); } }));
+  }
+
+  /* ----- Google Drive / export (master only) ----- */
+  function driveHtml() {
+    const log = Settings.get('driveLog') || [];
+    return '<h3>☁️ Google Drive &amp; exports</h3><p class="muted small">Push student work and achievement to the school\'s Google Drive (a folder called <strong>' + esc(Drive.FOLDER) + '</strong>): a CSV summary (quiz/test scores, assignments handed in, level changes per lesson) and a full JSON export. <strong>Pull</strong> on another device fetches the newest export and merges it in — push at the end of a class on one device, pull on the next, and rosters, levels and work follow you. One-time setup: create an OAuth Client ID in Google Cloud Console (Web application, with this site\'s address as an authorized JavaScript origin) and paste it here.</p>' +
+      '<div class="btn-row"><input class="text-input" id="gClientId" placeholder="Google OAuth Client ID (….apps.googleusercontent.com)" value="' + esc(Settings.get('googleClientId') || '') + '" style="max-width:420px"><button class="btn secondary sm" id="gSave">Save</button></div>' +
+      '<div class="btn-row" style="margin-top:0.6rem"><button class="btn" id="gPush">☁️ Push to Google Drive now</button><button class="btn secondary" id="gPull">⬇️ Pull latest from Google Drive</button><button class="btn secondary" id="gDownload">⬇️ Download export (CSV + JSON)</button><label class="btn ghost" for="gImport">📥 Import JSON…</label><input type="file" id="gImport" accept="application/json" hidden></div>' +
+      '<p class="small muted" id="gStatus" style="margin:0.5rem 0 0"></p>' +
+      (log.length ? '<div class="small muted">Last pushes: ' + log.slice(0, 3).map(l => new Date(l.at).toLocaleString() + ' (' + l.students + ' students)').join(' · ') + '</div>' : '');
+  }
+  function bindDrive() {
+    const st = (m, bad) => { const el = app.querySelector('#gStatus'); if (el) { el.textContent = m; el.style.color = bad ? 'var(--danger)' : ''; } };
+    const on = (id, fn) => { const el = app.querySelector(id); if (el) el.addEventListener('click', fn); };
+    on('#gSave', () => { Settings.set('googleClientId', app.querySelector('#gClientId').value.trim()); st('Client ID saved.'); });
+    on('#gDownload', () => { const e = Export.download(); st('Downloaded the export for ' + e.students + ' student' + (e.students === 1 ? '' : 's') + '.'); });
+    on('#gPull', async () => { if (!confirm('Pull the latest export from Google Drive and merge it into this device? Students already here keep their names; their progress is replaced by the export.')) return; try { const r = await Drive.pull(st); st('✓ Imported ' + r.students + ' students from ' + r.file + '.'); pageSettings(); } catch (e) { st(e.message, true); } });
+    on('#gPush', async () => { try { const r = await Drive.push(st); st('✓ Uploaded ' + r.files.map(f => f.name).join(' and ') + ' for ' + r.students + ' students to "' + Drive.FOLDER + '".'); pageSettings(); } catch (e) { st(e.message, true); } });
+    const imp = app.querySelector('#gImport'); if (imp) imp.addEventListener('change', async () => { const f = imp.files[0]; if (!f) return; try { const n = Export.importJson(await f.text()); st('Imported ' + n + ' student' + (n === 1 ? '' : 's') + '.'); pageSettings(); } catch (e) { st('Could not import: ' + e.message, true); } });
   }
 
   /* ----- Media checklist (inside Teacher Lock) ----- */
@@ -503,11 +640,21 @@
   }
 
   /* ----- Students panel (inside Teacher Lock) ----- */
+  function studentsInScope() {
+    const staff = Staff.current; if (!staff) return [];
+    const cur = Sections.currentFor(staff.id);
+    if (cur) return Students.list.filter(s => (cur.students || []).includes(s.id));
+    if (Staff.isMaster) return Students.list;
+    const ids = new Set(); Sections.visible(staff.id, true).forEach(sec => (sec.students || []).forEach(id => ids.add(id)));
+    return Students.list.filter(s => ids.has(s.id));
+  }
   function studentsPanelHtml() {
     const open = sessionStorage.getItem('learnhub.studentOpen');
-    const list = Students.list;
+    const list = studentsInScope();
+    const cur = Sections.currentFor(Staff.current.id);
+    const others = cur ? Students.list.filter(s => !(cur.students || []).includes(s.id)) : [];
     const pending = list.filter(s => Object.keys(s.suggestions || {}).length);
-    return '<h3>👥 Students</h3><p class="muted small">Each student has their own progress, awards and Focus Plan. Set the achievement level a student works at (never shown to them), choose which courses they see, and lock that list if you wish.</p>' +
+    return '<h3>👥 Students' + (cur ? ' · ' + esc(cur.name) : '') + '</h3><p class="muted small">Each student has their own progress, awards and Focus Plan. Set the achievement level or Modified band a student works at, choose which courses they see, review level changes and read or listen to their work.</p>' +
       '<div class="level-legend">' + [1, 2, 3, 4].map(l => '<span><strong>Level ' + l + ' · ' + LEVEL_NAMES[l] + '</strong> <span class="muted">' + LEVELS[l].band + ' · ' + LEVELS[l].short + '</span></span>').join('') + '</div>' +
       (pending.length ? '<div class="plan-banner">💡 <strong>Level suggestions waiting:</strong> ' + pending.map(s => esc(s.name)).join(', ') + ' — based on recent test results. Open the student to apply or dismiss.</div>' : '') +
       '<div class="student-list">' + list.map(s => {
@@ -524,15 +671,42 @@
               return '<div class="course-line' + (on ? '' : ' off') + '"><label><input type="checkbox" data-enrol="' + s.id + '" data-c="' + c.id + '"' + (on ? ' checked' : '') + '> ' + c.icon + ' ' + esc(c.title) + '</label>' +
                 (on ? '<div class="seg">' + [['', 'Default'], [1, '1'], [2, '2'], [3, '3'], [4, '4']].map(o => '<button data-course-level="' + s.id + '" data-c="' + c.id + '" data-v="' + o[0] + '" class="' + (String(cl) === String(o[0]) ? 'on' : '') + '">' + o[1] + '</button>').join('') + '</div>' : '') + '</div>'; }).join('') +
             sw('', 'Lock the course list', 'On: the student cannot add courses from the home page.', s.coursesLocked, 'data-lock-courses="' + s.id + '"') + '</div>' +
+            '<div class="plan-section"><div class="plan-label">Modified program (not for credit)</div><p class="muted small" style="margin:0 0 0.4rem">Serves every lesson at a much earlier level, with its own questions and assignments. Standard = the Level 1–4 framework above.</p>' +
+            allCourses().filter(c => Students.enrolled(c.id, s)).map(c => { const t = Students.trackFor(c.id, s); return '<div class="course-line"><label>' + c.icon + ' ' + esc(c.title) + '</label><div class="seg">' + [['', 'Standard'], ['k2', 'K–2'], ['g35', 'Gr 3–5'], ['g68', 'Gr 6–8']].map(o => '<button data-track="' + s.id + '" data-c="' + c.id + '" data-v="' + o[0] + '" class="' + ((t ? t.band : '') === o[0] ? 'on' : '') + '">' + o[1] + '</button>').join('') + '</div></div>'; }).join('') + '</div>' +
+            levelHistoryHtml(s) +
             '<div class="plan-section"><div class="plan-label">Accommodations (quizzes and tests)</div>' +
             sw('', 'Reduction', 'Fewer questions per quiz and test (about 60%).', (s.accommodations || {}).reduce, 'data-accom="reduce" data-s="' + s.id + '"') +
             sw('', 'Complexity', 'Answer choices and word banks from one level down; no typed blanks.', (s.accommodations || {}).simplify, 'data-accom="simplify" data-s="' + s.id + '"') +
             sw('', 'Chunking', 'Matching shown three pairs at a time; word banks of at most three.', (s.accommodations || {}).chunk, 'data-accom="chunk" data-s="' + s.id + '"') + '</div>' +
-            workHtml(s) +
+            workHtml(s) + recordingsHtml(s) +
+            (cur ? '<div class="plan-section"><button class="btn ghost sm" data-unenrol="' + s.id + '" data-sec="' + cur.id + '">Remove from ' + esc(cur.name) + '</button></div>' : '') +
             '<div class="plan-section btn-row"><button class="btn ghost sm" data-rename="' + s.id + '">Rename</button><button class="btn ghost sm" data-reset-student="' + s.id + '">Reset progress</button><button class="btn ghost sm" data-delete="' + s.id + '">Remove student</button></div>' +
           '</div>' : '') + '</div>';
       }).join('') + '</div>' +
-      '<div class="btn-row" style="margin-top:0.75rem"><input class="text-input" id="teacherAddName" maxlength="30" placeholder="Add a student by first name" style="max-width:280px"><button class="btn secondary" id="teacherAdd">＋ Add student</button></div>';
+      '<div class="btn-row" style="margin-top:0.75rem"><input class="text-input" id="teacherAddName" maxlength="30" placeholder="Add a new student by first name" style="max-width:280px"><button class="btn secondary" id="teacherAdd">＋ Add student' + (cur ? ' to ' + esc(cur.name) : '') + '</button>' +
+      (cur && others.length ? '<select class="text-input" id="enrolExisting" style="max-width:260px"><option value="">Add an existing student…</option>' + others.map(o => '<option value="' + o.id + '">' + o.avatar + ' ' + esc(o.name) + '</option>').join('') + '</select>' : '') + '</div>';
+  }
+  function levelHistoryHtml(s) {
+    const rows = [];
+    allCourses().forEach(c => { const log = (s.levelLog || {})[c.id] || []; const ll = (s.lessonLevels || {})[c.id] || {};
+      if (!log.length && !Object.keys(ll).length) return;
+      rows.push('<div class="work-item"><div class="work-head"><strong>' + c.icon + ' ' + esc(c.title) + '</strong> <span class="muted small">now Level ' + Students.levelFor(c.id, s) + '</span></div>' +
+        (Object.keys(ll).length ? '<div class="small">Quizzes passed at: ' + Object.keys(ll).sort((a, b) => a - b).map(k => 'L' + (+k + 1) + ' → Level ' + ll[k].level + ' (' + ll[k].pct + '%)').join(' · ') + '</div>' : '') +
+        (log.length ? '<div class="small muted">' + log.slice(-6).map(e => new Date(e.at).toLocaleDateString() + ': Level ' + e.from + ' → ' + e.to + ' (' + e.by + (e.reason ? ', ' + e.reason : '') + (e.lesson !== undefined ? ', after lesson ' + (e.lesson + 1) : '') + (e.pct !== undefined ? ', ' + e.pct + '%' : '') + ')').join('<br>') + '</div>' : '') + '</div>');
+    });
+    return '<div class="plan-section"><div class="plan-label">📈 Level history (for grading)</div>' + (rows.length ? rows.join('') : '<p class="muted small">No level changes or passed quizzes yet. Students are offered a move up after 85%+ on a quiz, or a move down when they score below their level\'s band; they can go back any time but never skip a level.</p>') + '</div>';
+  }
+  function recordingsHtml(s) {
+    const open = sessionStorage.getItem('learnhub.recOpen') === s.id;
+    return '<div class="plan-section"><button class="btn ghost sm" data-rec-open="' + s.id + '">' + (open ? '▾' : '▸') + ' Voice recordings</button>' + (open ? '<div id="recList-' + s.id + '" class="small muted">Loading…</div>' : '') + '</div>';
+  }
+  async function fillRecordings(s) {
+    const host = app.querySelector('#recList-' + s.id); if (!host) return;
+    let ks = []; try { ks = await Media.keys(s.id + '/'); } catch (e) {}
+    if (!ks.length) { host.textContent = 'No recordings yet.'; return; }
+    host.innerHTML = ks.map(k => { const p = String(k).split('/'); const c = findCourseAll(p[1]); const un = c && c.units.find(u => u.id === p[2]); const les = un && un.lessons[+p[3]];
+      return '<div class="work-item"><div class="work-head"><strong>' + (p[4] === 'note' ? '🎙️ Voice note' : '🎙️ Assignment ' + (parseInt(p[4].slice(1), 10) + 1) + ' answer') + '</strong> <span class="muted small">' + (c ? c.icon + ' ' + esc(c.title) : esc(p[1])) + (les ? ' · ' + esc(les.title) : '') + '</span></div><div data-recorder="' + esc(k) + '" data-readonly="1"></div></div>'; }).join('');
+    Media.mountRecorders(host);
   }
   /** A student's handed-in and draft assignment work (teacher view). */
   function workHtml(s) {
@@ -546,6 +720,11 @@
   }
   function bindStudentsPanel() {
     const on = (sel, ev, fn) => app.querySelectorAll(sel).forEach(el => el.addEventListener(ev, fn));
+    on('[data-track]', 'click', e => { const b = e.currentTarget; Students.setTrack(b.dataset.track, b.dataset.c, b.dataset.v || null); pageSettings(); });
+    on('[data-rec-open]', 'click', e => { const id = e.currentTarget.dataset.recOpen; sessionStorage.setItem('learnhub.recOpen', sessionStorage.getItem('learnhub.recOpen') === id ? '' : id); pageSettings(); });
+    on('[data-unenrol]', 'click', e => { const b = e.currentTarget; Sections.enrol(b.dataset.sec, b.dataset.unenrol, false); pageSettings(); });
+    const ex = app.querySelector('#enrolExisting'); if (ex) ex.addEventListener('change', () => { if (ex.value) { Sections.enrol(Sections.currentFor(Staff.current.id).id, ex.value, true); pageSettings(); } });
+    Students.list.forEach(s => { if (sessionStorage.getItem('learnhub.recOpen') === s.id && app.querySelector('#recList-' + s.id)) fillRecordings(s); });
     on('[data-accom]', 'click', e => { const b = e.currentTarget, s = Students.byId(b.dataset.s); s.accommodations = s.accommodations || {}; s.accommodations[b.dataset.accom] = !s.accommodations[b.dataset.accom]; Students.save(); pageSettings(); });
     on('[data-media-open]', 'click', e => { const id = e.currentTarget.dataset.mediaOpen; sessionStorage.setItem('learnhub.mediaOpen', sessionStorage.getItem('learnhub.mediaOpen') === id ? '' : id); pageSettings(); });
     on('[data-work-open]', 'click', e => { const id = e.currentTarget.dataset.workOpen; sessionStorage.setItem('learnhub.workOpen', sessionStorage.getItem('learnhub.workOpen') === id ? '' : id); pageSettings(); });
@@ -560,7 +739,7 @@
     on('[data-rename]', 'click', e => { const s = Students.byId(e.currentTarget.dataset.rename); const v = prompt('New name for ' + s.name + ':', s.name); if (v && v.trim()) { Students.update(s.id, { name: v.trim().slice(0, 30) }); renderWho(); pageSettings(); } });
     on('[data-reset-student]', 'click', e => { const s = Students.byId(e.currentTarget.dataset.resetStudent); if (confirm('Erase all of ' + s.name + '\'s progress and awards?')) { Progress.resetFor(s.id); pageSettings(); } });
     on('[data-delete]', 'click', e => { const s = Students.byId(e.currentTarget.dataset.delete); if (confirm('Remove ' + s.name + ' and all of their progress? This cannot be undone.')) { const wasMe = Students.current && Students.current.id === s.id; Students.removeStudent(s.id); if (wasMe) { renderWho(); location.hash = '#/signin'; } else pageSettings(); } });
-    const add = () => { const v = (app.querySelector('#teacherAddName').value || '').trim(); if (!v) return; const s = Students.add(v); sessionStorage.setItem('learnhub.studentOpen', s.id); pageSettings(); };
+    const add = () => { const v = (app.querySelector('#teacherAddName').value || '').trim(); if (!v) return; const s = Students.add(v); const cur = Sections.currentFor(Staff.current.id); if (cur) { Students.setCourses(s.id, [cur.courseId]); Sections.enrol(cur.id, s.id, true); } sessionStorage.setItem('learnhub.studentOpen', s.id); pageSettings(); };
     const b = app.querySelector('#teacherAdd'); if (b) b.addEventListener('click', add);
     const i = app.querySelector('#teacherAddName'); if (i) i.addEventListener('keydown', e => { if (e.key === 'Enter') add(); });
   }
@@ -593,6 +772,7 @@
   /* ----- Keyword → lessons search (inside Teacher Lock) ----- */
   const searchState = { course: '', unit: '', q: '' };
   function lessonSearchHtml() {
+    const fp = FP();
     const course = findCourseAll(searchState.course) || allCourses()[0]; if (!course) return '<p class="muted">No courses yet.</p>';
     searchState.course = course.id;
     const unit = course.units.find(u => u.id === searchState.unit) || course.units[0]; if (!unit) return '';
@@ -600,7 +780,7 @@
     const q = searchState.q.trim().toLowerCase();
     const words = q.split(/\s+/).filter(Boolean);
     const hits = q ? unit.lessons.map((les, i) => ({ i, les, text: lessonText(les) })).filter(x => words.every(w => x.text.includes(w))) : [];
-    const f = Focus.unitEntry(course.id, unit.id);
+    const f = fp.unitEntry(course.id, unit.id);
     return '<div class="search-row">' +
       '<select class="text-input" id="searchCourse">' + allCourses().map(c => '<option value="' + c.id + '"' + (c.id === course.id ? ' selected' : '') + '>' + c.icon + ' ' + esc(c.title) + '</option>').join('') + '</select>' +
       '<select class="text-input" id="searchUnit">' + course.units.map(u => '<option value="' + u.id + '"' + (u.id === unit.id ? ' selected' : '') + '>' + esc(u.title) + '</option>').join('') + '</select>' +
@@ -617,6 +797,7 @@
     return (a ? '…' : '') + text.slice(a, b).replace(/\s*\n\s*/g, ' ').replace(/\*\*/g, '') + (b < text.length ? '…' : '');
   }
   function bindLessonSearch() {
+    const fp = FP();
     const g = id => app.querySelector(id);
     if (!g('#searchCourse')) return;
     g('#searchCourse').addEventListener('change', e => { searchState.course = e.target.value; searchState.unit = ''; pageSettings(); });
@@ -629,9 +810,9 @@
       const course = findCourseAll(searchState.course), unit = course.units.find(u => u.id === searchState.unit);
       const words = searchState.q.trim().toLowerCase().split(/\s+/).filter(Boolean);
       const idx = unit.lessons.map((les, i) => ({ i, t: lessonText(les) })).filter(x => words.every(w => x.t.includes(w))).map(x => x.i).sort((a, b) => a - b);
-      Focus.includeUnit(course.id, unit.id, true);
-      Focus.unitEntry(course.id, unit.id).lessons = idx.length === unit.lessons.length ? null : idx;
-      Focus.save(); Focus.setEnabled(true);
+      fp.includeUnit(course.id, unit.id, true);
+      fp.unitEntry(course.id, unit.id).lessons = idx.length === unit.lessons.length ? null : idx;
+      fp.save(); fp.setEnabled(true);
       sessionStorage.setItem('learnhub.planOpen', course.id);
       pageSettings();
     });
@@ -639,15 +820,16 @@
 
   /* ----- Focus Plan editor (inside Settings) ----- */
   function focusPlanHtml(locked) {
+    const fp = FP();
     const dis = locked ? ' disabled' : '';
     const chip = (on, attrs, label) => '<button class="chip' + (on ? ' on' : '') + '" ' + attrs + dis + '>' + esc(label) + '</button>';
     const body = allCourses().map(c => {
-      const entry = Focus.courseEntry(c.id);
+      const entry = fp.courseEntry(c.id);
       const open = sessionStorage.getItem('learnhub.planOpen') === c.id;
       return '<div class="plan-course" style="--course:' + esc(c.color || '') + '"><button class="plan-course-head" data-plan-open="' + c.id + '">' +
         '<span>' + c.icon + ' ' + esc(c.title) + '</span><span class="tag' + (entry ? ' accent' : '') + '">' + (entry ? Object.keys(entry.units).length + ' of ' + c.units.length + ' units' : 'Whole course') + '</span><span class="muted">' + (open ? '▾' : '▸') + '</span></button>' +
         (open ? '<div class="plan-units">' + c.units.map(u => {
-          const f = Focus.unitEntry(c.id, u.id);
+          const f = fp.unitEntry(c.id, u.id);
           const lessons = u.lessons.map((l, i) => ({ i, title: l.title }));
           const terms = allTermKeys(u), cats = catsOf(u);
           const inList = (field, v, all) => !f ? false : (f[field] === null || f[field] === undefined ? field !== 'goals' : f[field].some(x => String(x) === String(v)));
@@ -660,27 +842,36 @@
                : '') + '</div>';
         }).join('') + '</div>' : '') + '</div>';
     }).join('');
-    const me = Students.current;
-    return '<div class="setting-row" style="padding-top:0"><div><h3 style="margin:0">🎯 Focus Plan for ' + esc(me.name) + '</h3><div class="help">For a student working well below grade level: choose exactly which units, lessons, words and question topics they see, and the goals they work toward. Everything else is hidden for them. Sign in as another student to edit their plan.</div></div>' +
-      '<button class="switch ' + (Focus.enabled ? 'on' : '') + '" id="focusSwitch" role="switch" aria-checked="' + Focus.enabled + '"' + dis + '></button></div>' +
+    const me = planStudent();
+    return '<div class="setting-row" style="padding-top:0"><div><h3 style="margin:0">🎯 Focus Plan for ' + esc(me.name) + '</h3><div class="help">For a student working well below grade level: choose exactly which units, lessons, words and question topics they see, and the goals they work toward. Everything else is hidden for them.</div></div>' +
+      '<button class="switch ' + (fp.enabled ? 'on' : '') + '" id="focusSwitch" role="switch" aria-checked="' + fp.enabled + '"' + dis + '></button></div>' +
       '<p class="muted small">Tick a unit to add it to the plan, then narrow it down. Leaving every lesson, word or topic selected means "all of them". A course with no ticked units is shown in full.</p>' +
       body;
   }
   function bindFocusPlan(locked) {
+    const fp = FP();
     const on = (sel, fn) => app.querySelectorAll(sel).forEach(el => el.addEventListener(el.type === 'checkbox' ? 'change' : 'click', fn));
     on('[data-plan-open]', e => { const id = e.currentTarget.dataset.planOpen; sessionStorage.setItem('learnhub.planOpen', sessionStorage.getItem('learnhub.planOpen') === id ? '' : id); pageSettings(); });
     if (locked) return;
-    const fs = app.querySelector('#focusSwitch'); if (fs) fs.addEventListener('click', () => { Focus.setEnabled(!Focus.enabled); pageSettings(); });
-    on('[data-plan-unit]', e => { Focus.includeUnit(e.target.dataset.planUnit, e.target.dataset.u, e.target.checked); pageSettings(); });
+    const fs = app.querySelector('#focusSwitch'); if (fs) fs.addEventListener('click', () => { fp.setEnabled(!fp.enabled); pageSettings(); });
+    on('[data-plan-unit]', e => { fp.includeUnit(e.target.dataset.planUnit, e.target.dataset.u, e.target.checked); pageSettings(); });
     on('[data-plan-toggle]', e => {
       const b = e.currentTarget, course = findCourseAll(b.dataset.c), unit = course.units.find(x => x.id === b.dataset.u);
       const field = b.dataset.planToggle;
       const all = field === 'lessons' ? unit.lessons.map((_, i) => i) : field === 'terms' ? allTermKeys(unit) : field === 'cats' ? catsOf(unit) : Object.keys(GOAL_LABELS);
-      Focus.toggle(course.id, unit.id, field, field === 'lessons' ? +b.dataset.v : b.dataset.v, all);
+      fp.toggle(course.id, unit.id, field, field === 'lessons' ? +b.dataset.v : b.dataset.v, all);
       pageSettings();
     });
   }
   function findCourseAll(id) { return allCourses().find(c => c.id === id); }
+  /** The student whose Focus Plan / lesson search a teacher is editing (defaults to the signed-in student). */
+  function planStudent() { const id = sessionStorage.getItem('learnhub.planStudent'); const s = id && Students.byId(id); return s && studentsInScope().some(x => x.id === s.id) ? s : Students.current; }
+  function FP() { return Focus.forStudent(planStudent().id); }
+  function planPickerHtml() {
+    const me = planStudent(), list = studentsInScope();
+    if (list.length < 2) return '';
+    return '<div class="setting-row" style="padding-top:0"><div><label>Editing for</label><div class="help">The Focus Plan and keyword search below apply to this student.</div></div><select class="text-input" id="planStudent" style="max-width:260px">' + list.map(x => '<option value="' + x.id + '"' + (x.id === me.id ? ' selected' : '') + '>' + x.avatar + ' ' + esc(x.name) + (Students.current && Students.current.id === x.id ? ' (signed in)' : '') + '</option>').join('') + '</select></div>';
+  }
 
   function notFound() { app.innerHTML = '<div class="empty"><h2>Page not found</h2><a class="btn" href="#/">Back to courses</a></div>'; }
 
@@ -690,6 +881,7 @@
     window.scrollTo(0, 0);
     window.LH.stopSpeaking();   // leaving a page stops any reading
     renderWho();
+    const dl = document.querySelector('[data-nav="dashboard"]'); if (dl) { dl.hidden = Settings.locked || !Staff.master; dl.classList.toggle('active', parts[0] === 'dashboard'); }
     if (parts[0] === 'signin' || !Students.current) return pageSignin();   // nobody signed in → sign-in screen, whatever the route
     switch (parts[0]) {
       case '': return pageHome();
@@ -698,8 +890,10 @@
       case 'study': return pageStudy(parts[1], parts[2], parts[3]);
       case 'quiz': return pageQuiz(parts[1], parts[2], parts[3]);
       case 'assign': return pageAssign(parts[1], parts[2], parts[3], parts[4]);
+      case 'work': return pageWork(parts[1], parts[2]);
       case 'test': return pageTest(parts[1], parts[2]);
       case 'print': return Print.page(parts[1], parts[2], parts[3], parts[4], parts[5]);
+      case 'dashboard': return Dashboard.page();
       case 'games': return pageGames(parts[1], parts[2]);
       case 'game': return pageGame(parts[1], parts[2], parts[3]);
       case 'case': return pageCase(parts[1]);
