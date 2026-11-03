@@ -171,30 +171,50 @@
     history.replaceState({ lh: 'base' }, '', current());
     history.pushState({ lh: 'guard' }, '', current());
   }
+  /** Where "back a level" goes when nothing is left in our own history
+      (e.g. the app was opened on a deep link): one step up the hierarchy. */
+  function parentOf(hash) {
+    const p = hash.replace(/^#\/?/, '').split('/');
+    switch (p[0]) {
+      case 'study': case 'quiz': case 'assign': return '#/lesson/' + p[1] + '/' + p[2] + '/' + p[3];
+      case 'lesson': case 'test': case 'games': return '#/course/' + p[1];
+      case 'game': return '#/games/' + p[1] + '/' + p[2];
+      case 'print': return p[3] === 'unit' || p[3] === 'test' ? '#/course/' + p[1] : '#/lesson/' + p[1] + '/' + p[2] + '/' + (p[4] || 0);
+      case 'course': case 'case': case 'settings': case 'signin': return '#/';
+      default: return '#/';
+    }
+  }
+  /** Go back one step: our own history first, then up the hierarchy. Returns false when already home. */
+  function back() {
+    if (dialogOpen) { closeDialog(); return true; }
+    let prev = stack.pop();
+    while (prev && (prev === current() || prev === '#/signin')) prev = stack.pop();
+    if (!prev && current() !== '#/') prev = parentOf(current());
+    if (!prev) return false;
+    history.replaceState({ lh: 'guard' }, '', prev);
+    lastRoute = prev;
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+    return true;
+  }
+  // header button — same behaviour as the phone's back button
+  const backBtn = document.getElementById('backBtn');
+  function refreshBackBtn() { if (backBtn) backBtn.hidden = current() === '#/' || current() === '#/signin' || !(window.Students && Students.current); }
+  if (backBtn) backBtn.addEventListener('click', () => { back(); refreshBackBtn(); });
+  window.addEventListener('hashchange', refreshBackBtn);
+  refreshBackBtn();
+
   window.addEventListener('popstate', e => {
     if (closing) return;
     // Only a real back press lands on our base entry; hash navigations made with
     // location.hash create their own entries and are handled by the browser.
     if (!(e.state && e.state.lh === 'base')) return;
-    if (dialogOpen) { closeDialog(); history.pushState({ lh: 'guard' }, '', current()); return; }
-    const prev = stack.pop();
-    if (prev) {
-      history.pushState({ lh: 'guard' }, '', prev);
-      lastRoute = prev;
-      window.dispatchEvent(new HashChangeEvent('hashchange'));
-      return;
-    }
-    // nothing left in our stack
+    history.pushState({ lh: 'guard' }, '', current());   // re-arm the guard first
+    if (back()) { refreshBackBtn(); return; }
+    // already home: double-press to close
     const now = Date.now();
-    if (current() !== '#/') {
-      history.pushState({ lh: 'guard' }, '', '#/'); lastRoute = '#/';
-      window.dispatchEvent(new HashChangeEvent('hashchange'));
-      return;
-    }
-    history.pushState({ lh: 'guard' }, '', '#/');
     if (now - lastBack < 2000) askClose();
     else { lastBack = now; notice('Press back again to close.'); }
   });
 
-  window.LHNav = { go, stack };
+  window.LHNav = { go, back, stack };
 })();

@@ -84,8 +84,9 @@
         '<p class="muted small" style="margin:0.5rem 0 0">Just a first name — no password needed.</p></div>'
         : '<p class="muted small center">Not on the list? Ask your teacher to add you (Settings → Teacher Lock → Students).</p>') +
       '</div>';
-    app.querySelectorAll('[data-signin]').forEach(b => b.addEventListener('click', () => { Students.setCurrent(b.dataset.signin); renderWho(); location.hash = '#/'; }));
-    const add = () => { const v = (app.querySelector('#newName').value || '').trim(); if (!v) return; const s = Students.add(v); Students.setCurrent(s.id); renderWho(); location.hash = '#/'; };
+    const goHome = () => { if (location.hash === '#/' || location.hash === '') window.dispatchEvent(new HashChangeEvent('hashchange')); else location.hash = '#/'; };
+    app.querySelectorAll('[data-signin]').forEach(b => b.addEventListener('click', () => { Students.setCurrent(b.dataset.signin); renderWho(); goHome(); }));
+    const add = () => { const v = (app.querySelector('#newName').value || '').trim(); if (!v) return; const s = Students.add(v); Students.setCurrent(s.id); renderWho(); goHome(); };
     const addBtn = app.querySelector('#addMe'); if (addBtn) addBtn.addEventListener('click', add);
     const inp = app.querySelector('#newName'); if (inp) { inp.addEventListener('keydown', e => { if (e.key === 'Enter') add(); }); inp.focus(); }
   }
