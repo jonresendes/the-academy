@@ -196,7 +196,7 @@
           '<div class="rooms">' +
           '<a class="room" href="#/test/' + course.id + '/' + unit.id + '"><span class="room-icon">📝</span><span>Unit test' + (u.testBest ? ' <span class="muted">· best ' + u.testBest + '%</span>' : '') + '</span></a>' +
           '<a class="room" href="#/games/' + course.id + '/' + unit.id + '"><span class="room-icon">🎮</span><span>Game Room</span></a>' +
-          '<a class="room" href="#/work/' + course.id + '/' + unit.id + '"><span class="room-icon">📁</span><span>Work folder' + (function () { const w = u.work || {}; let d = 0, h = 0; Object.values(w).forEach(l => Object.values(l).forEach(x => { if (x && x.text) { if (x.done) h++; else d++; } })); return h || d ? ' <span class="muted">· ' + h + ' in, ' + d + ' draft' + (d === 1 ? '' : 's') + '</span>' : ''; })() + '</span></a>' +
+          '<a class="room" href="#/work/' + course.id + '/' + unit.id + '"><span class="room-icon">📁</span><span>Work folder' + (function () { const w = u.work || {}; let d = 0, h = 0; Object.values(w).forEach(l => Object.values(l).forEach(x => { if (x && x.text) { if (x.done) h++; else d++; } })); return h || d ? '</span><span class="room-sub">' + h + ' handed in · ' + d + ' draft' + (d === 1 ? '' : 's') : ''; })() + '</span></a>' +
           '<a class="room" href="#/print/' + course.id + '/' + unit.id + '/unit"><span class="room-icon">🖨️</span><span>Print unit</span></a>' +
           '</div></div></div>';
       }).join('') + '</div>' +
@@ -881,6 +881,7 @@
     window.scrollTo(0, 0);
     window.LH.stopSpeaking();   // leaving a page stops any reading
     renderWho();
+    document.querySelectorAll('.topnav a').forEach(a => a.classList.remove('active'));
     const dl = document.querySelector('[data-nav="dashboard"]'); if (dl) { dl.hidden = Settings.locked || !Staff.master; dl.classList.toggle('active', parts[0] === 'dashboard'); }
     if (parts[0] === 'signin' || !Students.current) return pageSignin();   // nobody signed in → sign-in screen, whatever the route
     switch (parts[0]) {
@@ -893,7 +894,7 @@
       case 'work': return pageWork(parts[1], parts[2]);
       case 'test': return pageTest(parts[1], parts[2]);
       case 'print': return Print.page(parts[1], parts[2], parts[3], parts[4], parts[5]);
-      case 'dashboard': return Dashboard.page();
+      case 'dashboard': try { return Dashboard.page(); } catch (e) { app.innerHTML = '<div class="empty"><h2>The dashboard could not load</h2><p class="muted small">' + esc(e.message) + '</p><a class="btn" href="#/settings">Settings</a></div>'; return; }
       case 'games': return pageGames(parts[1], parts[2]);
       case 'game': return pageGame(parts[1], parts[2], parts[3]);
       case 'case': return pageCase(parts[1]);

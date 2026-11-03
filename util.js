@@ -162,7 +162,7 @@
      Each student's progress keeps a count of how often each question has been
      shown per unit. Question lists are shuffled, then ordered least-seen first,
      so a question only comes round again once the rest have had a turn. */
-  function qKey(q) { return String(L(q.prompt, 2)).slice(0, 80); }
+  function qKey(q) { return String(L(q.prompt, 2)); }
   function seenMap(unit) {
     if (!unit || !unit.__courseId || !window.Progress) return {};
     const u = Progress.unit(unit.__courseId, unit.id);
