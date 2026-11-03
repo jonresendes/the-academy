@@ -55,11 +55,23 @@
     function inline(s) { return esc(s).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/&lt;br&gt;/g, '<br>'); }
   }
 
-  function speak(text) {
+  /* Read aloud: a button starts reading; tapping the same button again stops it;
+     tapping once more restarts from the beginning. A different button switches to its text. */
+  let speaking = null;   // the button currently reading, or null
+  function setSpeaking(btn) {
+    document.querySelectorAll('.speak-btn.on').forEach(b => { b.classList.remove('on'); b.textContent = '🔊'; b.title = b.getAttribute('aria-label') === 'Stop reading' ? 'Read aloud' : b.title; b.setAttribute('aria-label', 'Read aloud'); });
+    speaking = btn || null;
+    if (btn) { btn.classList.add('on'); btn.textContent = '⏹️'; btn.title = 'Stop reading'; btn.setAttribute('aria-label', 'Stop reading'); }
+  }
+  function stopSpeaking() { if ('speechSynthesis' in window) window.speechSynthesis.cancel(); setSpeaking(null); }
+  function speak(text, btn) {
     if (!('speechSynthesis' in window)) return;
+    if (btn && btn === speaking) return stopSpeaking();          // second tap stops
     window.speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(String(text).replace(/\s+/g, ' '));
     u.rate = 0.95;
+    u.onend = u.onerror = () => { if (speaking === btn) setSpeaking(null); };
+    setSpeaking(btn);
     window.speechSynthesis.speak(u);
   }
   function speakBtn(text) {
@@ -69,7 +81,7 @@
   // delegate all speaker buttons
   document.addEventListener('click', e => {
     const b = e.target.closest('[data-speak]');
-    if (b) speak(b.dataset.speak);
+    if (b) speak(b.dataset.speak, b);
   });
 
   /* ---------- Focus Plan helpers ---------- */
@@ -259,7 +271,7 @@
   /** Every term of a unit at the standard level (keys used by the Focus Plan). */
   function allTermKeys(unit) { return (unit.terms || []).map(t => L(t.term, 2)); }
 
-  window.LH = { LEVELS, LEVEL_NAMES, LEVEL_DESC, byLevel, L, shuffle, sample, esc, md, speak, speakBtn, termsFor, slidesFor, mcOptions,
+  window.LH = { LEVELS, LEVEL_NAMES, LEVEL_DESC, byLevel, L, shuffle, sample, esc, md, speak, stopSpeaking, speakBtn, termsFor, slidesFor, mcOptions,
                 questionsFor, resolveQuestion, termQuestions, choicePool, normalize, findCourse, findUnit, markSeen,
                 focusFor, unitsFor, lessonsFor, catsOf, allTermKeys, accom, assessmentCount, difficulty, assessmentOrder,
                 lessonCats, lessonQuestions, assignmentsFor };

@@ -687,7 +687,7 @@
   function route() {
     const parts = location.hash.replace(/^#\/?/, '').split('/').map(decodeURIComponent);
     window.scrollTo(0, 0);
-    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    window.LH.stopSpeaking();   // leaving a page stops any reading
     renderWho();
     if (parts[0] === 'signin' || !Students.current) return pageSignin();   // nobody signed in → sign-in screen, whatever the route
     switch (parts[0]) {

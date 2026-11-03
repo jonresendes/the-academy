@@ -602,3 +602,5 @@ body { overflow-x: hidden; }
 @page { margin: 18mm 16mm; }
 
 .case-group { margin: 1rem 0 0.5rem; font-size: 1rem; color: var(--muted); display: flex; align-items: center; gap: 0.5rem; }
+
+.speak-btn.on { background: var(--danger-soft); outline: 2px solid var(--danger); }
