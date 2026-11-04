@@ -71,10 +71,23 @@
 
   const Students = {
     data: load(KEY_STUDENTS, { list: [], current: null }),
-    save() { save(KEY_STUDENTS, this.data); },
+    save() { const c = this.current; if (c && c.isStaff) this.saveStaff(c); save(KEY_STUDENTS, this.data); },
     get list() { return this.data.list; },
-    get current() { return this.data.list.find(s => s.id === this.data.current) || null; },
-    byId(id) { return this.data.list.find(s => s.id === id) || null; },
+    /** The signed-in profile: a student, or a teacher/master profile (id 'staff:<id>'). */
+    get current() { return this.byId(this.data.current); },
+    _staffCache: {},
+    byId(id) {
+      if (!id) return null;
+      if (String(id).startsWith('staff:')) {
+        const sid = id.slice(6); const rec = sid === 'master' ? Staff.master : Staff.teachers.find(t => t.id === sid);
+        if (!rec) return null;
+        const c = this._staffCache[id] || (this._staffCache[id] = {});
+        return Object.assign(c, { id, staffId: sid, isStaff: true, role: sid === 'master' ? 'master' : 'teacher', name: rec.name, avatar: rec.avatar || '🧑‍🏫', colour: rec.colour || '#1f5f8b',
+          level: 3, courseLevels: {}, courses: null, coursesLocked: false, accommodations: {}, prefs: rec.prefs || (rec.prefs = Object.assign({}, DEFAULT_PREFS)), suggestions: {}, track: {}, archived: rec.archived || [], levelLog: {}, lessonLevels: {} });
+      }
+      return this.data.list.find(s => s.id === id) || null;
+    },
+    get isStaffSession() { const s = this.current; return !!(s && s.isStaff); },
     /** Create a profile. Returns it. */
     add(name, extra) {
       const n = this.data.list.length;
@@ -93,7 +106,9 @@
       this.data.list.push(s); this.save();
       return s;
     },
-    update(id, patch) { const s = this.byId(id); if (!s) return; Object.assign(s, patch); this.save(); if (s === this.current) Settings.apply(); },
+    update(id, patch) { const s = this.byId(id); if (!s) return; Object.assign(s, patch); if (s.isStaff) this.saveStaff(s); this.save(); if (s === this.current) Settings.apply(); },
+    /** Persist name / avatar / prefs / archived of a staff profile back to its record. */
+    saveStaff(s) { const rec = s.staffId === 'master' ? Staff.master : Staff.teachers.find(t => t.id === s.staffId); if (rec) { rec.name = s.name; rec.avatar = s.avatar; rec.colour = s.colour; rec.prefs = s.prefs; rec.archived = s.archived; Staff.save(); } },
     removeStudent(id) {
       this.data.list = this.data.list.filter(s => s.id !== id);
       remove(KEY_PROGRESS + '.' + id); remove(KEY_FOCUS + '.' + id);
@@ -102,17 +117,15 @@
     },
     /** Sign a student in (or out with null). */
     setCurrent(id) {
-      this.data.current = id; this.save();
-      // The old single Teacher Lock PIN becomes the master account's PIN.
-  if (Settings.data.guardianPin && !Staff.master) { Staff.setMaster('Master', '', Settings.data.guardianPin); }
-  if (Staff.master && Staff.master.pin) Settings.data.guardianPin = Staff.master.pin;   // keep the legacy flag in step
-
-  Progress.load(); Focus.load(); Settings.apply();
+      this.data.current = id; save(KEY_STUDENTS, this.data);
+      if (id && String(id).startsWith('staff:')) Staff.signIn(id.slice(6)); else Staff.signOut();
+      Progress.load(); Focus.load(); Settings.apply();
     },
     /** Effective level for a course (per-course override, else the student's default). */
     levelFor(courseId, student) {
       const s = student || this.current;
       if (!s) return Settings.data.level || 2;
+      if (s.isStaff) return 3;
       const l = (courseId && s.courseLevels && s.courseLevels[courseId]) || s.level || 2;
       return Math.min(4, Math.max(1, +l));
     },
@@ -124,7 +137,7 @@
       this.save();
     },
     /** Can this student see the course? (null list = every course) */
-    enrolled(courseId, student) { const s = student || this.current; return !s || !Array.isArray(s.courses) || s.courses.includes(courseId); },
+    enrolled(courseId, student) { const s = student || this.current; return !s || s.isStaff || !Array.isArray(s.courses) || s.courses.includes(courseId); },
     setCourses(id, list, locked) { const s = this.byId(id); if (!s) return; s.courses = list; if (locked !== undefined) s.coursesLocked = !!locked; this.save(); },
     /** Modified program setting for a course: null = standard track. */
     trackFor(courseId, student) { const s = student || this.current; const t = s && s.track && s.track[courseId]; return t && t.mode === 'modified' ? t : null; },
@@ -145,7 +158,7 @@
     /** Remember the level at which a lesson quiz was passed (for end-of-course grading). */
     recordLessonLevel(courseId, lessonIdx, level, pct) { const s = this.current; if (!s) return; s.lessonLevels = s.lessonLevels || {}; const c = s.lessonLevels[courseId] = s.lessonLevels[courseId] || {}; const prev = c[lessonIdx]; if (!prev || pct >= prev.pct || level > prev.level) c[lessonIdx] = { level, pct, at: new Date().toISOString() }; this.save(); },
     /** Student-side archive of a course (hide from the home page; teachers can still assign it). */
-    archiveCourse(id, courseId, on) { const s = this.byId(id); if (!s) return; s.archived = (s.archived || []).filter(x => x !== courseId); if (on) s.archived.push(courseId); this.save(); },
+    archiveCourse(id, courseId, on) { const s = this.byId(id); if (!s) return; s.archived = (s.archived || []).filter(x => x !== courseId); if (on) s.archived.push(courseId); if (s.isStaff) this.saveStaff(s); this.save(); },
     isArchived(courseId, student) { const s = student || this.current; return !!(s && (s.archived || []).includes(courseId)); },
     /** Record a level suggestion after a test (teacher reviews it in Settings). */
     suggest(courseId, unitTitle, pct) {
@@ -169,9 +182,9 @@
     data: load(KEY_STAFF, { master: null, teachers: [] }),
     save() { save(KEY_STAFF, this.data); },
     get master() { return this.data.master; },
-    setMaster(name, email, pin) { this.data.master = { name, email, pin }; this.save(); },
+    setMaster(name, email, pin) { this.data.master = Object.assign({ avatar: '🧑‍🏫', colour: '#1f5f8b' }, this.data.master || {}, { name, email, pin }); this.save(); },
     get teachers() { return this.data.teachers || (this.data.teachers = []); },
-    addTeacher(name, pin) { const t = { id: 't' + Date.now().toString(36), name: String(name).trim().slice(0, 40), pin: String(pin), createdAt: new Date().toISOString() }; this.teachers.push(t); this.save(); return t; },
+    addTeacher(name, pin, extra) { const t = Object.assign({ id: 't' + Date.now().toString(36), name: String(name).trim().slice(0, 40), pin: String(pin), avatar: '🧑‍🏫', colour: '#1f5f8b', createdAt: new Date().toISOString() }, extra || {}); this.teachers.push(t); this.save(); return t; },
     updateTeacher(id, patch) { const t = this.teachers.find(x => x.id === id); if (t) { Object.assign(t, patch); this.save(); } },
     removeTeacher(id) { this.data.teachers = this.teachers.filter(t => t.id !== id); this.save(); Sections.list.forEach(sec => { if (sec.teacherId === id) sec.teacherId = null; }); Sections.save(); },
     /** Try a PIN: returns 'master', a teacher id, or null. */
@@ -237,7 +250,7 @@
     activeCourse: null,
     get level() { const t = Students.trackFor && Students.trackFor(this.activeCourse); return t ? 1 : Students.levelFor(this.activeCourse); },
     /** True when a Teacher Lock exists and this session has not unlocked it. */
-    get locked() { return (!!this.data.guardianPin || !!(Staff.master && Staff.master.pin)) && !sessionStorage.getItem('learnhub.unlocked'); },
+    get locked() { return !Students.isStaffSession; },
     apply() {
       const b = document.body;
       document.documentElement.style.setProperty('--font-scale', this.get('fontScale'));
@@ -349,6 +362,12 @@
   // The old single Teacher Lock PIN becomes the master account's PIN.
   if (Settings.data.guardianPin && !Staff.master) { Staff.setMaster('Master', '', Settings.data.guardianPin); }
   if (Staff.master && Staff.master.pin) Settings.data.guardianPin = Staff.master.pin;   // keep the legacy flag in step
+
+  // The old single Teacher Lock PIN becomes the master account's PIN.
+  if (Settings.data.guardianPin && !Staff.master) { Staff.setMaster('Master', '', Settings.data.guardianPin); }
+  if (Staff.master && Staff.master.pin) Settings.data.guardianPin = Staff.master.pin;   // keep the legacy flag in step
+  // A teacher/master profile stays signed in only for the browser session (students persist across sessions)
+  if (String(Students.data.current || '').startsWith('staff:') && !Staff.currentId) { Students.data.current = null; save(KEY_STUDENTS, Students.data); }
 
   Progress.load(); Focus.load();
 

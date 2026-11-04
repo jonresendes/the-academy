@@ -429,7 +429,7 @@ body { overflow-x: hidden; }
 .card, .question, .game-area, .slide { min-width: 0; max-width: 100%; }
 .unit-row .rooms { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .unit-row .room { padding: 0.6rem 0.5rem; flex-direction: column; gap: 0.15rem; font-size: 0.9rem; text-align: center; }
-@media (min-width: 900px) { .unit-row .room { flex-direction: row; padding: 0.6rem 0.9rem; font-size: 1rem; } }
+
 @media (max-width: 640px) {
   .app { padding-left: max(0.9rem, env(safe-area-inset-left)); padding-right: max(0.9rem, env(safe-area-inset-right)); }
   .topbar { gap: 0.5rem 0.75rem; }
@@ -527,9 +527,10 @@ body { overflow-x: hidden; }
 .unit-foot .goals { flex: 1 1 240px; min-width: 240px; }
 .unit-foot .rooms { flex: 3 1 520px; }
 .unit-foot .rooms { margin: 0; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
-.unit-foot .room { padding: 0.6rem 0.9rem; flex-direction: row; flex-wrap: wrap; }
-.unit-foot .room .room-sub { display: block; width: 100%; text-align: center; font-size: 0.8rem; font-weight: 600; color: var(--muted); }
-.unit-foot .room .room-icon { font-size: 1.3rem; }
+.unit-foot .room { padding: 0.8rem 0.6rem; flex-direction: column; justify-content: center; gap: 0.3rem; min-height: 96px; }
+.unit-foot .room > span { display: block; text-align: center; }
+.unit-foot .room .room-sub { font-size: 0.78rem; font-weight: 600; color: var(--muted); }
+.unit-foot .room .room-icon { font-size: 1.8rem; line-height: 1; }
 .unit-foot .goals { margin-top: 0; }
 .lesson-parts .part { display: flex; flex-direction: column; }
 .lesson-parts .part .tag { align-self: flex-start; margin-top: auto; }
@@ -670,3 +671,37 @@ table.dash .d-name a { color: var(--text); }
 .work-row.done { border-left-color: var(--success); } .work-row.draft { border-left-color: var(--accent); }
 .work-row-head { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
 .work-preview { white-space: pre-wrap; background: var(--surface-2); border-radius: var(--radius-sm); padding: 0.5rem 0.75rem; margin-top: 0.5rem; font-size: 0.95rem; }
+
+/* ---------- unit status colours ---------- */
+.unit-card { position: relative; }
+.unit-card.unit-active { background: #fff6ea; }
+.unit-card.unit-complete { background: #eef9f0; border-color: var(--success); }
+body[data-contrast="inverted"] .unit-card.unit-active { background: #2a1d08; }
+body[data-contrast="inverted"] .unit-card.unit-complete { background: #0f2a18; }
+.unit-flag { position: absolute; top: 0.9rem; right: 1.1rem; font-size: 0.78rem; font-weight: 800; padding: 0.15rem 0.6rem; border-radius: 999px; background: var(--accent-soft); color: var(--accent-text); }
+.unit-complete .unit-flag { background: var(--success-soft); color: var(--success); }
+
+/* ---------- read-aloud highlight ---------- */
+.rw.reading { background: #fff176; color: #111; border-radius: 3px; box-shadow: 0 0 0 2px #fff176; }
+body[data-contrast="inverted"] .rw.reading { background: #ffd600; color: #000; box-shadow: 0 0 0 2px #ffd600; }
+
+/* ---------- settings groups ---------- */
+.sgroup { margin-bottom: 0.9rem; padding: 0; overflow: hidden; }
+.sgroup > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 0.75rem; padding: 1rem 1.25rem; font-weight: 800; font-size: 1.1rem; }
+.sgroup > summary::-webkit-details-marker { display: none; }
+.sgroup > summary::before { content: "▸"; color: var(--muted); font-size: 1rem; width: 1rem; }
+.sgroup[open] > summary::before { content: "▾"; }
+.sgroup > summary .sg-help { font-weight: 600; margin-left: auto; text-align: right; }
+.sgroup .sg-body { padding: 0 1.25rem 1.25rem; border-top: 1px solid var(--line); }
+.sgroup .sg-body > .setting-row:first-child { padding-top: 1rem; }
+.sgroup .teacher-section { border-top: 1px dashed var(--line); margin-top: 1rem; padding-top: 1rem; }
+
+/* ---------- welcome / sign-up ---------- */
+.staff-grid .student-tile { border-style: dashed; }
+.signup { text-align: left; }
+.signup-grid { display: grid; gap: 0.6rem 1rem; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+.signup-grid label { display: flex; flex-direction: column; gap: 0.25rem; font-weight: 700; font-size: 0.9rem; }
+.signup-grid label.chk { flex-direction: row; align-items: center; gap: 0.5rem; }
+.chk input { width: 20px; height: 20px; accent-color: var(--primary); }
+.course-line.chk { cursor: pointer; }
+.dash-h { font-size: 1.2rem; margin: 1.25rem 0 0.75rem; }

@@ -180,7 +180,7 @@
       case 'lesson': case 'test': case 'games': case 'work': return '#/course/' + p[1];
       case 'game': return '#/games/' + p[1] + '/' + p[2];
       case 'print': return p[3] === 'unit' || p[3] === 'test' ? '#/course/' + p[1] : '#/lesson/' + p[1] + '/' + p[2] + '/' + (p[4] || 0);
-      case 'course': case 'case': case 'settings': case 'signin': return '#/';
+      case 'course': case 'case': case 'settings': case 'signin': case 'welcome': case 'dashboard': return '#/';
       default: return '#/';
     }
   }
@@ -188,7 +188,7 @@
   function back() {
     if (dialogOpen) { closeDialog(); return true; }
     let prev = stack.pop();
-    while (prev && (prev === current() || prev === '#/signin')) prev = stack.pop();
+    while (prev && (prev === current() || prev === '#/signin' || prev === '#/welcome')) prev = stack.pop();
     if (!prev && current() !== '#/') prev = parentOf(current());
     if (!prev) return false;
     history.replaceState({ lh: 'guard' }, '', prev);
@@ -198,7 +198,7 @@
   }
   // header button — same behaviour as the phone's back button
   const backBtn = document.getElementById('backBtn');
-  function refreshBackBtn() { if (backBtn) backBtn.hidden = current() === '#/' || current() === '#/signin' || !(window.Students && Students.current); }
+  function refreshBackBtn() { if (backBtn) backBtn.hidden = current() === '#/' || current() === '#/signin' || current() === '#/welcome' || !(window.Students && Students.current); }
   if (backBtn) backBtn.addEventListener('click', () => { back(); refreshBackBtn(); });
   window.addEventListener('hashchange', refreshBackBtn);
   refreshBackBtn();

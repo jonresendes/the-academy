@@ -1,8 +1,8 @@
 /* =========================================================
    app.js — router + pages
    Routes:
-     #/signin                   Student sign-in (shown whenever nobody is signed in)
-     #/                         home (the signed-in student's courses)
+     #/welcome                   Student sign-in (shown whenever nobody is signed in)
+     #/                         Dashboard (student: classes, scores; teacher: sections)
      #/course/:course           units + rooms
      #/lesson/:course/:unit/:i  Lesson hub (slides · quiz · assignments)
      #/study/:course/:unit/:i   Lesson slides
@@ -12,7 +12,7 @@
      #/games/:course/:unit      Game Room (choose a game)
      #/game/:course/:unit/:game play a game
      #/case                     Display Case
-     #/settings                 Settings (accessibility; Teacher Lock on top)
+     #/settings                 Settings (collapsible groups; teacher tools in a teacher session)
    ========================================================= */
 (function () {
   const { L, esc, md, speakBtn, slidesFor, questionsFor, termsFor, findCourse, findUnit, normalize, shuffle, byLevel, LEVELS, LEVEL_NAMES, LEVEL_DESC, unitsFor, lessonsFor, focusFor, catsOf, allTermKeys, markSeen, accom, assessmentCount, assessmentOrder, lessonQuestions, assignmentsFor } = window.LH;
@@ -92,54 +92,135 @@
   function renderWho() {
     const el = document.getElementById('whoChip'); if (!el) return;
     const s = Students.current;
-    el.innerHTML = s ? '<a class="who" href="#/signin" title="Switch student"><span class="who-avatar" style="background:' + esc(s.colour) + '">' + s.avatar + '</span><span class="who-name">' + esc(s.name) + '</span><span class="who-switch">Switch</span></a>' : '';
+    el.innerHTML = s ? '<a class="who" href="#/welcome" title="Switch profile"><span class="who-avatar" style="background:' + esc(s.colour) + '">' + s.avatar + '</span><span class="who-name">' + esc(s.name) + (s.isStaff ? ' <span class="muted small">(' + (s.role === 'master' ? 'master' : 'teacher') + ')</span>' : '') + '</span><span class="who-switch">Switch</span></a>' : '';
   }
   const avatarHtml = (s, cls) => '<span class="' + (cls || 'who-avatar') + '" style="background:' + esc(s.colour) + '">' + s.avatar + '</span>';
 
   /* ---------- pages ---------- */
 
-  /* ----- Sign-in ----- */
-  function pageSignin() {
+  /* ----- Welcome page: pick a profile, or sign up as a student / teacher ----- */
+  const welcomeState = { mode: '', pinFor: '' };
+  function pageWelcome() {
     setCourseColor(null); setNav('');
-    const list = Students.list;
-    const canAdd = Settings.get('allowSelfSignup') !== false || !list.length;
-    app.innerHTML = '<div class="signin"><div class="signin-head"><div class="signin-logo">🎓</div><h1>Who is learning today?</h1>' +
-      '<p class="muted">' + (list.length ? 'Tap your name to sign in.' : 'Add your first name to get started.') + '</p></div>' +
-      (list.length ? '<div class="student-grid">' + list.map(s => '<button class="student-tile" data-signin="' + s.id + '" style="--tile:' + esc(s.colour) + '">' + avatarHtml(s, 'tile-avatar') + '<span class="tile-name">' + esc(s.name) + '</span></button>').join('') + '</div>' : '') +
-      (canAdd ? '<div class="card signin-add"><h3>' + (list.length ? 'New here?' : 'Add a student') + '</h3><div class="btn-row"><input class="text-input" id="newName" maxlength="30" placeholder="First name" style="max-width:260px" autocomplete="off"><button class="btn" id="addMe">Add me</button></div>' +
-        '<p class="muted small" style="margin:0.5rem 0 0">Just a first name — no password needed.</p></div>'
-        : '<p class="muted small center">Not on the list? Ask your teacher to add you (Settings → Teacher Lock → Students).</p>') +
-      '</div>';
-    const goHome = () => { if (location.hash === '#/' || location.hash === '') window.dispatchEvent(new HashChangeEvent('hashchange')); else location.hash = '#/'; };
-    app.querySelectorAll('[data-signin]').forEach(b => b.addEventListener('click', () => { Students.setCurrent(b.dataset.signin); renderWho(); goHome(); }));
-    const add = () => { const v = (app.querySelector('#newName').value || '').trim(); if (!v) return; const s = Students.add(v); Students.setCurrent(s.id); renderWho(); goHome(); };
-    const addBtn = app.querySelector('#addMe'); if (addBtn) addBtn.addEventListener('click', add);
-    const inp = app.querySelector('#newName'); if (inp) { inp.addEventListener('keydown', e => { if (e.key === 'Enter') add(); }); inp.focus(); }
+    if (Students.isStaffSession) { Students.setCurrent(null); renderWho(); }   // a teacher who returns here is signed out
+    const students = Students.list;
+    const staffTiles = (Staff.master ? [{ id: 'staff:master', name: Staff.master.name, avatar: Staff.master.avatar || '🧑‍🏫', colour: Staff.master.colour || '#1f5f8b', role: 'Master' }] : [])
+      .concat(Staff.teachers.map(t => ({ id: 'staff:' + t.id, name: t.name, avatar: t.avatar || '🧑‍🏫', colour: t.colour || '#1f5f8b', role: 'Teacher' })));
+    const canAdd = Settings.get('allowSelfSignup') !== false || !students.length;
+    const tile = (p, extra) => '<button class="student-tile" data-welcome="' + p.id + '" style="--tile:' + esc(p.colour) + '">' + avatarHtml(p, 'tile-avatar') + '<span class="tile-name">Welcome, ' + esc(p.name) + '</span>' + (extra ? '<span class="tag">' + extra + '</span>' : '') + '</button>';
+    let form = '';
+    if (welcomeState.pinFor) {
+      const p = staffTiles.find(x => x.id === welcomeState.pinFor);
+      form = '<div class="card signin-add"><h3>' + (p ? p.avatar + ' ' + esc(p.name) : 'Teacher') + '</h3><p class="muted small">Enter your 6-digit PIN.</p><div class="btn-row"><input class="text-input pin-input" id="staffPin" type="password" inputmode="numeric" maxlength="6" placeholder="PIN" autocomplete="off"><button class="btn" id="staffGo">Sign in</button><button class="btn ghost" id="welcomeCancel">Cancel</button></div></div>';
+    } else if (welcomeState.mode === 'student') {
+      const TINTS = [['none', 'None'], ['cream', 'Cream'], ['blue', 'Pale blue'], ['green', 'Pale green'], ['rose', 'Rose'], ['yellow', 'Yellow'], ['grey', 'Grey'], ['peach', 'Peach'], ['lavender', 'Lavender']];
+      form = '<div class="card signup"><div class="btn-row between"><h3>New student</h3><button class="btn ghost sm" id="welcomeCancel">✕</button></div>' +
+        '<div class="plan-section"><div class="plan-label">Your first name</div><input class="text-input" id="suName" maxlength="30" placeholder="First name" style="max-width:300px" autocomplete="off"></div>' +
+        '<div class="plan-section"><div class="plan-label">Your picture</div><div class="avatar-grid">' + Students.AVATARS.map((a, i) => '<button type="button" class="avatar-pick' + (i === 0 ? ' on' : '') + '" data-su-avatar="' + a + '">' + a + '</button>').join('') + '</div></div>' +
+        '<div class="plan-section"><div class="plan-label">Reading and viewing</div><div class="signup-grid">' +
+        '<label>Text size <select class="text-input" id="suFont"><option value="1">Normal</option><option value="1.15">Large</option><option value="1.3">Extra large</option></select></label>' +
+        '<label>Reading font <select class="text-input" id="suFace"><option value="default">Standard</option><option value="lexend">Lexend (easier reading)</option></select></label>' +
+        '<label>Contrast <select class="text-input" id="suContrast"><option value="normal">Normal</option><option value="high">High contrast</option><option value="inverted">Inverted (white on black)</option></select></label>' +
+        '<label>Colour overlay <select class="text-input" id="suTint">' + TINTS.map(t => '<option value="' + t[0] + '">' + t[1] + '</option>').join('') + '</select></label>' +
+        '<label class="chk"><input type="checkbox" id="suRead" checked> Read-aloud buttons</label><label class="chk"><input type="checkbox" id="suDictate" checked> Dictation and voice recording</label></div></div>' +
+        '<div class="plan-section"><div class="plan-label">Level of learning</div><p class="muted small" style="margin:0 0 0.4rem">Where you will start. You can move up or down later as you go.</p><div class="level-cards compact">' + [1, 2, 3, 4].map(l => '<button type="button" class="level-card' + (l === 2 ? ' on' : '') + '" data-su-level="' + l + '"><h3>Level ' + l + ' · ' + LEVEL_NAMES[l] + '</h3><p>' + LEVEL_DESC[l] + '</p></button>').join('') + '</div></div>' +
+        '<div class="plan-section"><div class="plan-label">Your classes</div>' + allCourses().map(c => '<label class="chk course-line"><span><input type="checkbox" data-su-course="' + c.id + '" checked> ' + c.icon + ' ' + esc(c.title) + '</span><span class="muted small">' + esc(c.subtitle || '') + '</span></label>').join('') + '</div>' +
+        '<div class="btn-row" style="margin-top:1rem"><button class="btn lg" id="suCreate">Create my profile</button></div></div>';
+    } else if (welcomeState.mode === 'teacher') {
+      form = '<div class="card signup"><div class="btn-row between"><h3>New teacher</h3><button class="btn ghost sm" id="welcomeCancel">✕</button></div>' +
+        (Staff.master ? '<p class="muted small">Teacher profiles are created with the master account\'s PIN (ask ' + esc(Staff.master.name) + ').</p>' : '<p class="muted small">You are the first teacher here, so this profile becomes the <strong>master account</strong> for this device: it can add other teachers, create sections and run exports.</p>') +
+        '<div class="signup-grid"><label>Name <input class="text-input" id="tName" maxlength="40" placeholder="e.g. Ms Patel"></label>' +
+        '<label>Your 6-digit PIN <input class="text-input pin-input" id="tPin" type="password" inputmode="numeric" maxlength="6" placeholder="PIN"></label>' +
+        (Staff.master ? '<label>Master PIN <input class="text-input pin-input" id="tMaster" type="password" inputmode="numeric" maxlength="6" placeholder="Master PIN"></label>' : '<label>School e-mail (optional) <input class="text-input" id="tEmail" placeholder="name@school.ca"></label>') + '</div>' +
+        '<div class="plan-section"><div class="plan-label">Your picture</div><div class="avatar-grid">' + ['🧑‍🏫', '👩‍🏫', '👨‍🏫', '🦉', '📚', '🍎', '🌟', '🧭'].map((a, i) => '<button type="button" class="avatar-pick' + (i === 0 ? ' on' : '') + '" data-su-avatar="' + a + '">' + a + '</button>').join('') + '</div></div>' +
+        '<div class="btn-row" style="margin-top:1rem"><button class="btn lg" id="tCreate">Create teacher profile</button></div></div>';
+    }
+    app.innerHTML = '<div class="signin"><div class="signin-head"><div class="signin-logo">🎓</div><h1>Welcome to The Academy</h1><p class="muted">' + (students.length || staffTiles.length ? 'Tap your name to sign in.' : 'Create the first profile to get started.') + '</p></div>' +
+      (!welcomeState.mode && !welcomeState.pinFor ? ((students.length ? '<div class="student-grid">' + students.map(p => tile(p)).join('') + '</div>' : '') +
+        (staffTiles.length ? '<div class="student-grid staff-grid">' + staffTiles.map(p => tile(p, p.role)).join('') + '</div>' : '') +
+        '<div class="card signin-add"><h3>New here?</h3><div class="btn-row">' + (canAdd ? '<button class="btn" data-mode="student">🎒 I\'m a student</button>' : '') + '<button class="btn secondary" data-mode="teacher">🧑‍🏫 I\'m a teacher</button></div>' + (canAdd ? '' : '<p class="muted small" style="margin:0.5rem 0 0">Students are added by their teacher on this device.</p>') + '</div>') : form) + '</div>';
+    // bindings
+    app.querySelectorAll('[data-welcome]').forEach(b => b.addEventListener('click', () => {
+      const id = b.dataset.welcome;
+      if (id.startsWith('staff:')) { welcomeState.pinFor = id; pageWelcome(); return; }
+      Students.setCurrent(id); renderWho(); goHome();
+    }));
+    app.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => { welcomeState.mode = b.dataset.mode; pageWelcome(); }));
+    const on = (id, fn) => { const el = app.querySelector(id); if (el) el.addEventListener('click', fn); };
+    on('#welcomeCancel', () => { welcomeState.mode = ''; welcomeState.pinFor = ''; pageWelcome(); });
+    const staffGo = () => { const pin = (app.querySelector('#staffPin').value || '').trim(); const sid = welcomeState.pinFor.slice(6); const ok = Staff.unlock(pin); if (ok && (ok === sid)) { welcomeState.pinFor = ''; Students.setCurrent('staff:' + sid); renderWho(); goHome(); } else alert('Wrong PIN.'); };
+    on('#staffGo', staffGo); const sp = app.querySelector('#staffPin'); if (sp) { sp.focus(); sp.addEventListener('keydown', e => { if (e.key === 'Enter') staffGo(); }); }
+    let avatar = null;
+    app.querySelectorAll('[data-su-avatar]').forEach(b => b.addEventListener('click', () => { app.querySelectorAll('[data-su-avatar]').forEach(x => x.classList.toggle('on', x === b)); avatar = b.dataset.suAvatar; }));
+    let level = 2;
+    app.querySelectorAll('[data-su-level]').forEach(b => b.addEventListener('click', () => { app.querySelectorAll('[data-su-level]').forEach(x => x.classList.toggle('on', x === b)); level = +b.dataset.suLevel; }));
+    on('#suCreate', () => {
+      const name = (app.querySelector('#suName').value || '').trim(); if (!name) return alert('Please type your first name.');
+      const g = id => app.querySelector(id).value;
+      const courses = [...app.querySelectorAll('[data-su-course]:checked')].map(x => x.dataset.suCourse);
+      const st = Students.add(name, { level, courses: courses.length === allCourses().length ? null : courses,
+        prefs: { fontScale: +g('#suFont'), font: g('#suFace'), contrast: g('#suContrast'), tint: g('#suTint'), motion: 'normal', readAloud: app.querySelector('#suRead').checked, dictation: app.querySelector('#suDictate').checked } });
+      if (avatar) Students.update(st.id, { avatar });
+      welcomeState.mode = ''; Students.setCurrent(st.id); renderWho(); goHome();
+    });
+    on('#tCreate', () => {
+      const name = (app.querySelector('#tName').value || '').trim(), pin = (app.querySelector('#tPin').value || '').trim();
+      if (!name) return alert('Please type your name.'); if (!/^\d{6}$/.test(pin)) return alert('The PIN must be exactly 6 digits.');
+      if (Staff.master) {
+        const mp = (app.querySelector('#tMaster').value || '').trim(); if (Staff.unlock(mp) !== 'master') return alert('The master PIN is not right.');
+        if (Staff.unlock(pin)) return alert('That PIN is already in use — choose another.');
+        const t = Staff.addTeacher(name, pin, { avatar: avatar || '🧑‍🏫' }); welcomeState.mode = ''; Students.setCurrent('staff:' + t.id);
+      } else {
+        Staff.setMaster(name, (app.querySelector('#tEmail').value || '').trim(), pin); Settings.set('guardianPin', pin); if (avatar) { Staff.master.avatar = avatar; Staff.save(); }
+        welcomeState.mode = ''; Students.setCurrent('staff:master');
+      }
+      renderWho(); goHome();
+    });
+    const nm = app.querySelector('#suName, #tName'); if (nm) nm.focus();
   }
+  function goHome() { if (location.hash === '#/' || location.hash === '') window.dispatchEvent(new HashChangeEvent('hashchange')); else location.hash = '#/'; }
 
   function pageHome() {
     setCourseColor(null); setNav('home');
     const s = Students.current;
+    if (s.isStaff) return pageTeacherHome();
     const mine = courses();
     const others = allCourses().filter(c => !mine.includes(c) && !Students.isArchived(c.id));
-    app.innerHTML = '<div class="page-head"><div><h1>' + 'Welcome back, ' + esc(s.name) + '!</h1>' +
-      '<p class="muted">' + (mine.length ? 'Pick a course. Each unit has lessons with quizzes and assignments, a unit test and a Game Room.' : 'No courses have been added for you yet.') + '</p></div></div>' +
+    const arch = archivedCourses();
+    // totals across my classes
+    let awards = 0, total = 0, bestTests = [];
+    mine.forEach(c => { const sm = Badges.summary(c); awards += sm.earned; total += sm.total; unitsFor(c).forEach(un => { const u = Progress.unit(c.id, un.id); if (u.testBest) bestTests.push(u.testBest); }); });
+    const avg = bestTests.length ? Math.round(bestTests.reduce((a, b) => a + b, 0) / bestTests.length) : null;
+    const courseCard = (c, resume) => { const sm = Badges.summary(c); const t = Students.trackFor(c.id); const pct = courseProgress(c);
+      return '<a class="card link course-card" href="#/course/' + c.id + '" style="--course:' + esc(c.color || '') + '"><div class="card-icon">' + c.icon + '</div><h2>' + esc(c.title) + '</h2><p class="muted">' + esc(c.subtitle || '') + '</p>' +
+        '<div class="progress"><span style="width:' + pct + '%"></span></div>' +
+        '<div class="btn-row"><span class="tag">' + (t ? 'Modified · ' + ({ k2: 'K–2', g35: 'Gr 3–5', g68: 'Gr 6–8' }[t.band]) : 'Level ' + Students.levelFor(c.id)) + '</span>' + (Focus.active(c.id) ? '<span class="tag accent">🎯 Focus Plan</span>' : '') + '<span class="tag accent">🏅 ' + sm.earned + ' / ' + sm.total + '</span>' + (resume ? '<span class="tag ok">' + (pct ? 'Resume · ' + pct + '%' : 'Start') + '</span>' : '') + '</div></a>'; };
+    app.innerHTML = '<div class="page-head"><div><h1>Welcome back, ' + esc(s.name) + '!</h1><p class="muted">Your dashboard: resume a class, join a new one, and see how you are doing.</p></div>' +
+      '<div class="btn-row"><a class="btn secondary" href="#/case">🏆 Display Case</a><a class="btn ghost" href="#/settings">⚙️ Settings</a></div></div>' +
       (Focus.enabled && Object.keys(Focus.data.courses).length ? '<div class="plan-banner">🎯 <strong>Focus Plan is on.</strong> Courses with a plan show only the pieces chosen for you.</div>' : '') +
-      (mine.length ? '<div class="grid">' + mine.map(c => {
-        const sm = Badges.summary(c);
-        return '<a class="card link course-card" href="#/course/' + c.id + '" style="--course:' + esc(c.color || '') + '">' +
-          '<div class="card-icon">' + c.icon + '</div><h2>' + esc(c.title) + '</h2><p class="muted">' + esc(c.subtitle || '') + '</p>' +
-          '<div class="progress"><span style="width:' + courseProgress(c) + '%"></span></div>' +
-          '<div class="btn-row"><span class="tag">' + unitsFor(c).length + ' unit' + (unitsFor(c).length === 1 ? '' : 's') + '</span>' + (Focus.active(c.id) ? '<span class="tag accent">🎯 Focus Plan</span>' : '') +
-          '<span class="tag accent">🏅 ' + sm.earned + ' / ' + sm.total + ' awards</span></div></a>';
-      }).join('') + '</div>' : (allCourses().length ? '' : '<div class="empty">No courses yet. Add a course file and link it in <code>index.html</code>.</div>')) +
-      (archivedCourses().length ? '<details class="other-courses"><summary>📦 Archived classes (' + archivedCourses().length + ')</summary><div class="grid" style="margin-top:1rem">' + archivedCourses().map(c =>
+      '<div class="case-stats"><div class="stat"><div class="n">' + mine.length + '</div><div class="l">Active class' + (mine.length === 1 ? '' : 'es') + '</div></div><div class="stat"><div class="n">🏅 ' + awards + ' / ' + total + '</div><div class="l">Awards</div></div><div class="stat"><div class="n">' + (avg === null ? '–' : avg + '%') + '</div><div class="l">Average best test</div></div><div class="stat"><div class="n">' + arch.length + '</div><div class="l">Archived</div></div></div>' +
+      '<h2 class="dash-h">▶️ Resume a class</h2>' + (mine.length ? '<div class="grid">' + mine.map(c => courseCard(c, true)).join('') + '</div>' : '<p class="muted">No active classes. ' + (others.length ? 'Join one below.' : '') + '</p>') +
+      (others.length && !s.coursesLocked ? '<details class="other-courses"><summary>➕ Join a new class (' + others.length + ')</summary><div class="grid" style="margin-top:1rem">' + others.map(c =>
+        '<div class="card course-card" style="--course:' + esc(c.color || '') + '"><div class="card-icon">' + c.icon + '</div><h2>' + esc(c.title) + '</h2><p class="muted">' + esc(c.subtitle || '') + '</p><button class="btn secondary sm" data-join="' + c.id + '">＋ Join this class</button></div>').join('') + '</div></details>'
+        : (others.length ? '<p class="muted small" style="margin-top:1.5rem">Your class list is set by your teacher.</p>' : '')) +
+      (arch.length ? '<details class="other-courses"><summary>📦 Archived classes (' + arch.length + ')</summary><div class="grid" style="margin-top:1rem">' + arch.map(c =>
         '<div class="card course-card" style="--course:' + esc(c.color || '') + '"><div class="card-icon">' + c.icon + '</div><h2>' + esc(c.title) + '</h2><p class="muted">' + esc(c.subtitle || '') + '</p><div class="btn-row"><a class="btn secondary sm" href="#/course/' + c.id + '">Open</a><button class="btn ghost sm" data-unarchive="' + c.id + '">Bring back</button></div></div>').join('') + '</div></details>' : '') +
-      (others.length && !s.coursesLocked ? '<details class="other-courses"><summary>More courses (' + others.length + ')</summary><div class="grid" style="margin-top:1rem">' + others.map(c =>
-        '<div class="card course-card" style="--course:' + esc(c.color || '') + '"><div class="card-icon">' + c.icon + '</div><h2>' + esc(c.title) + '</h2><p class="muted">' + esc(c.subtitle || '') + '</p><button class="btn secondary sm" data-join="' + c.id + '">＋ Add to my courses</button></div>').join('') + '</div></details>'
-        : (others.length ? '<p class="muted small center" style="margin-top:1.5rem">Your course list is set by your teacher.</p>' : ''));
-    app.querySelectorAll('[data-join]').forEach(b => b.addEventListener('click', () => { Students.setCourses(s.id, mine.map(c => c.id).concat(archivedCourses().map(c => c.id)).concat(b.dataset.join)); pageHome(); }));
+      '<details class="other-courses"><summary>🏆 Scores, accolades and awards</summary><div style="margin-top:1rem">' + (mine.length ? mine.map(c => { const sm = Badges.summary(c); return '<div class="card" style="margin-bottom:0.75rem"><div class="btn-row between"><strong>' + c.icon + ' ' + esc(c.title) + '</strong><span class="btn-row"><span class="tag">🎖️ ' + sm.badges + ' badges</span><span class="tag">🏅 ' + sm.medals + ' medals</span><span class="tag">🏆 ' + sm.trophies + ' trophies</span><a class="btn ghost sm" href="#/case/' + c.id + '">Display Case</a></span></div>' +
+        '<div class="small muted" style="margin-top:0.4rem">' + unitsFor(c).map(un => { const u = Progress.unit(c.id, un.id); const q = Object.values(u.quiz || {}); const passed = q.filter(x => x.passed).length; return esc(un.title) + ': ' + (u.testBest ? 'test ' + u.testBest + '%' : 'test –') + ' · quizzes ' + passed + '/' + lessonsFor(un).length; }).join('<br>') + '</div></div>'; }).join('') : '<p class="muted">Nothing yet.</p>') + '</div></details>';
+    app.querySelectorAll('[data-join]').forEach(b => b.addEventListener('click', () => { Students.setCourses(s.id, mine.map(c => c.id).concat(arch.map(c => c.id)).concat(b.dataset.join)); pageHome(); }));
     app.querySelectorAll('[data-unarchive]').forEach(b => b.addEventListener('click', () => { Students.archiveCourse(s.id, b.dataset.unarchive, false); pageHome(); }));
+  }
+  /** Teacher / master dashboard: sections, students and the course grid. */
+  function pageTeacherHome() {
+    const s = Students.current;
+    const secs = Sections.visible(s.staffId, false), archived = Sections.visible(s.staffId, true).filter(x => x.archived);
+    const scope = studentsInScope();
+    app.innerHTML = '<div class="page-head"><div><h1>Welcome, ' + esc(s.name) + '</h1><p class="muted">' + (s.role === 'master' ? 'Master account' : 'Teacher') + ' · ' + secs.length + ' active section' + (secs.length === 1 ? '' : 's') + ' · ' + scope.length + ' student' + (scope.length === 1 ? '' : 's') + '</p></div>' +
+      '<div class="btn-row"><a class="btn" href="#/dashboard">📊 Class dashboard</a><a class="btn secondary" href="#/settings">⚙️ Settings &amp; students</a></div></div>' +
+      '<h2 class="dash-h">🏫 My sections</h2>' + (secs.length ? '<div class="grid">' + secs.map(sec => { const c = findCourseAll(sec.courseId); return '<a class="card link" href="#/dashboard" data-section="' + sec.id + '"><div class="card-icon">' + (c ? c.icon : '🏫') + '</div><h3>' + esc(sec.name) + '</h3><p class="muted small">' + (c ? esc(c.title) : '') + (sec.term ? ' · ' + esc(sec.term) : '') + '</p><span class="tag">' + (sec.students || []).length + ' students</span></a>'; }).join('') + '</div>' : '<p class="muted">No sections yet — create one in Settings → Sections.</p>') +
+      (archived.length ? '<details class="other-courses"><summary>📦 Archived sections (' + archived.length + ')</summary><div class="grid" style="margin-top:1rem">' + archived.map(sec => '<a class="card link" href="#/dashboard" data-section="' + sec.id + '"><h3>' + esc(sec.name) + '</h3><p class="muted small">' + esc(sec.term || '') + '</p></a>').join('') + '</div></details>' : '') +
+      '<h2 class="dash-h" style="margin-top:1.5rem">📚 Courses (teacher preview)</h2><div class="grid">' + allCourses().map(c => '<a class="card link course-card" href="#/course/' + c.id + '" style="--course:' + esc(c.color || '') + '"><div class="card-icon">' + c.icon + '</div><h2>' + esc(c.title) + '</h2><p class="muted">' + esc(c.subtitle || '') + '</p><span class="tag">' + c.units.length + ' units · ' + c.units.reduce((n, u) => n + u.lessons.length, 0) + ' lessons</span></a>').join('') + '</div>';
+    app.querySelectorAll('[data-section]').forEach(a => a.addEventListener('click', () => Sections.setCurrent(s.staffId, a.dataset.section)));
   }
 
   /* ----- Course page: units → lessons ----- */
@@ -175,7 +256,7 @@
     const course = findCourse(courseId); if (!course || !Students.enrolled(course.id)) return notFound();
     setCourseColor(course); setNav('home');
     const q = courseSearch.q.trim().toLowerCase();
-    app.innerHTML = crumbs([{ label: 'Courses', href: '#/' }, { label: course.title }]) +
+    app.innerHTML = crumbs([{ label: 'Dashboard', href: '#/' }, { label: course.title }]) +
       '<div class="page-head"><div><h1>' + course.icon + ' ' + esc(course.title) + '</h1><p class="muted">' + esc(L(course.description) || course.subtitle || '') + '</p></div>' +
       '<div class="btn-row"><a class="btn secondary" href="#/case/' + course.id + '">🏆 Display Case</a><button class="btn ghost sm" id="archiveCourse" title="Hide this class on your home page (you can bring it back)">📦 Archive class</button></div></div>' + planBanner(course) + levelBanner(course) +
       '<div class="search-row course-search"><input class="text-input" id="courseQ" placeholder="🔍 Find a lesson by keyword (e.g. census, ritual, festival)" value="' + esc(courseSearch.q) + '"><button class="btn secondary" id="courseGo">Search</button>' + (q ? '<button class="btn ghost" id="courseClear">Clear</button>' : '') + '</div>' +
@@ -187,7 +268,10 @@
         const hits = q ? lessons.filter(l => matchesKeyword(l, q)) : lessons;
         if (q && !hits.length) return '';
         const u = Progress.unit(course.id, unit.id);
-        return '<div class="card unit-card"><div class="unit-head"><div><span class="tag">Unit ' + (idx + 1) + '</span><h2 style="margin-top:0.4rem">' + esc(unit.title) + '</h2>' +
+        const facts = Badges.unitFacts(course, unit);
+        const touched = Object.keys(u.slides || {}).length || u.testAttempts || Object.keys(u.quiz || {}).length || Object.keys(u.work || {}).length;
+        const status = facts.allRead && facts.allQuizzes !== false && (facts.allQuizzes || !facts.lessons.some(l => l.hasQuiz)) && u.testPassed ? 'complete' : touched ? 'active' : 'new';
+        return '<div class="card unit-card unit-' + status + '">' + (status === 'complete' ? '<span class="unit-flag">✓ Unit complete</span>' : status === 'active' ? '<span class="unit-flag">In progress</span>' : '') + '<div class="unit-head"><div><span class="tag">Unit ' + (idx + 1) + '</span><h2 style="margin-top:0.4rem">' + esc(unit.title) + '</h2>' +
           '<p class="muted small">' + esc(L(unit.description) || '') + '</p></div>' +
           '<div class="unit-side"><div class="progress"><span style="width:' + pct + '%"></span></div>' +
           '<div class="unit-badges">' + awards.map(a => '<span class="' + (a.earnedAt ? '' : 'locked') + '" title="' + esc(a.name) + '">' + a.icon + '</span>').join('') + '</div></div></div>' +
@@ -220,7 +304,7 @@
     const as = assignmentsFor(les);
     const quizN = assessmentCount(byLevel(Settings.level, [4, 6, 8, 10]));
     const base = '/' + course.id + '/' + unit.id + '/' + les._idx;
-    app.innerHTML = crumbs([{ label: 'Courses', href: '#/' }, { label: course.title, href: '#/course/' + course.id }, { label: unit.title, href: '#/course/' + course.id }, { label: 'Lesson ' + (pos + 1) }]) +
+    app.innerHTML = crumbs([{ label: 'Dashboard', href: '#/' }, { label: course.title, href: '#/course/' + course.id }, { label: unit.title, href: '#/course/' + course.id }, { label: 'Lesson ' + (pos + 1) }]) +
       '<div class="page-head"><div><span class="tag">Lesson ' + (pos + 1) + ' of ' + lessons.length + '</span><h1 style="margin-top:0.4rem">' + esc(les.title) + '</h1><p class="muted">' + esc(unit.title) + '</p></div>' +
       '<div class="btn-row">' + Print.button('#/print/' + course.id + '/' + unit.id + '/lesson/' + les._idx, 'Print lesson') + (pos > 0 ? '<a class="btn ghost" href="#/lesson/' + course.id + '/' + unit.id + '/' + lessons[pos - 1]._idx + '">← Lesson ' + pos + '</a>' : '') +
       (pos < lessons.length - 1 ? '<a class="btn ghost" href="#/lesson/' + course.id + '/' + unit.id + '/' + lessons[pos + 1]._idx + '">Lesson ' + (pos + 2) + ' →</a>' : '') + '</div></div>' +
@@ -254,7 +338,7 @@
           (Settings.get('dictation') !== false ? '<div data-recorder="' + esc(me.id + '/' + course.id + '/' + unit.id + '/' + les._idx + '/a' + a._idx) + '" data-readonly="1" data-label="Recording"></div>' : '') + '</div>';
       }).join('') + '</div>';
     }).join('');
-    app.innerHTML = crumbs([{ label: 'Courses', href: '#/' }, { label: course.title, href: '#/course/' + course.id }, { label: unit.title, href: '#/course/' + course.id }, { label: 'Work folder' }]) +
+    app.innerHTML = crumbs([{ label: 'Dashboard', href: '#/' }, { label: course.title, href: '#/course/' + course.id }, { label: unit.title, href: '#/course/' + course.id }, { label: 'Work folder' }]) +
       '<div class="page-head"><div><h1>📁 Work folder</h1><p class="muted">' + esc(me.name) + '\'s assignments in ' + esc(unit.title) + ' — drafts and handed-in work in one place.' + (teacher ? ' <span class="tag accent">Teacher view</span>' : '') + '</p></div>' +
       '<div class="case-stats" style="margin:0"><div class="stat"><div class="n">' + counts.done + '</div><div class="l">Handed in</div></div><div class="stat"><div class="n">' + counts.draft + '</div><div class="l">Drafts</div></div><div class="stat"><div class="n">' + counts.todo + '</div><div class="l">To do</div></div></div></div>' +
       (rows || '<div class="empty">This unit has no assignments.</div>');
@@ -269,9 +353,9 @@
     const u = Progress.unit(course.id, unit.id); u.work = u.work || {}; const wl = u.work[lessonIdx] = u.work[lessonIdx] || {}; const w = wl[n] = wl[n] || { text: '', done: false };
     const starter = L(a.starter) || '';
     const words = t => String(t || '').trim().split(/\s+/).filter(Boolean).length;
-    app.innerHTML = crumbs([{ label: 'Courses', href: '#/' }, { label: course.title, href: '#/course/' + course.id }, { label: les.title, href: '#/lesson/' + course.id + '/' + unit.id + '/' + lessonIdx }, { label: 'Assignment' }]) +
+    app.innerHTML = crumbs([{ label: 'Dashboard', href: '#/' }, { label: course.title, href: '#/course/' + course.id }, { label: les.title, href: '#/lesson/' + course.id + '/' + unit.id + '/' + lessonIdx }, { label: 'Assignment' }]) +
       '<div class="page-head"><div><span class="tag">✍️ Assignment</span><h1 style="margin-top:0.4rem">' + esc(a.title) + '</h1><p class="muted">' + esc(les.title) + (a.expectations ? ' · <span class="small">' + esc(a.expectations) + '</span>' : '') + '</p></div>' + Print.button('#/print/' + course.id + '/' + unit.id + '/assign/' + lessonIdx + '/' + n, 'Print') + '</div>' +
-      '<div class="slide assignment"><div class="btn-row between"><h2>Your task</h2>' + speakBtn(String(L(a.prompt)).replace(/[*#>-]/g, '')) + '</div><div class="slide-body">' + md(L(a.prompt)) + '</div>' +
+      '<div class="slide assignment"><div class="slide-read"><div class="btn-row between"><h2>Your task</h2>' + speakBtn(String(L(a.prompt)).replace(/[*#>-]/g, ''), '.slide-read') + '</div><div class="slide-body">' + md(L(a.prompt)) + '</div></div>' +
       '<div class="success-box"><strong>A complete answer…</strong> ' + esc(L(a.success)) + '</div>' +
       (starter ? '<p class="muted small">Sentence starter: <em>' + esc(starter) + '</em> <button class="btn ghost sm" id="useStarter">Use it</button></p>' : '') +
       '<div class="work-tools">' + (w.done ? '' : Media.dictateBtn('#workText')) + '<span class="muted small">' + (Media.canDictate && !w.done && Settings.get('dictation') !== false ? 'Tap 🎤 to dictate instead of typing.' : '') + '</span></div>' +
@@ -334,13 +418,13 @@
     const draw = () => {
       Progress.markSlide(course.id, unit.id, lessonIdx, i);
       const s = slides[i];
-      app.innerHTML = crumbs([{ label: 'Courses', href: '#/' }, { label: course.title, href: '#/course/' + course.id }, { label: unit.title, href: '#/course/' + course.id }, { label: 'Lesson ' + (pos + 1), href: '#/lesson/' + course.id + '/' + unit.id + '/' + lessonIdx }, { label: 'Slides' }]) +
+      app.innerHTML = crumbs([{ label: 'Dashboard', href: '#/' }, { label: course.title, href: '#/course/' + course.id }, { label: unit.title, href: '#/course/' + course.id }, { label: 'Lesson ' + (pos + 1), href: '#/lesson/' + course.id + '/' + unit.id + '/' + lessonIdx }, { label: 'Slides' }]) +
         '<div class="page-head"><div><span class="tag">Lesson ' + (pos + 1) + ' of ' + lessons.length + '</span><h1 style="margin-top:0.4rem">📖 ' + esc(lesson.title) + '</h1><p class="muted">' + esc(unit.title) + '</p></div>' +
         '<div class="btn-row">' + Print.button('#/print/' + course.id + '/' + unit.id + '/slides/' + lessonIdx, 'Print slides') + '<a class="btn ghost" href="#/lesson/' + course.id + '/' + unit.id + '/' + lessonIdx + '">✕ Lesson page</a></div></div>' +
         '<div class="lesson-tabs">' + lessons.map(les => '<a href="#/study/' + course.id + '/' + unit.id + '/' + les._idx + '" class="' + (les._idx === lessonIdx ? 'active' : '') + (lessonDone(les._idx) ? ' done' : '') + '">' + esc(les.title) + '</a>').join('') + '</div>' +
         '<div class="slide">' + (s.visual ? '<div class="slide-visual">' + s.visual + '</div>' : '') +
-        '<div class="btn-row between"><h2>' + esc(L(s.title)) + '</h2>' + speakBtn(L(s.title) + '. ' + String(LH.body(s)).replace(/[*#-]/g, '')) + '</div>' +
-        '<div class="slide-body">' + md(LH.body(s)) + (s.html ? L(s.html) : '') + '</div>' + mediaHtml(lesson, i) +
+        '<div class="slide-read"><div class="btn-row between"><h2>' + esc(L(s.title)) + '</h2>' + speakBtn(L(s.title) + '. ' + String(LH.body(s)).replace(/[*#-]/g, ''), '.slide-read') + '</div>' +
+        '<div class="slide-body">' + md(LH.body(s)) + (s.html ? L(s.html) : '') + '</div></div>' + mediaHtml(lesson, i) +
         (i === slides.length - 1 && Settings.get('dictation') !== false && Media.canRecord ? '<div class="plan-section"><div class="plan-label">🎙️ Voice note — say what you learned (optional)</div><div data-recorder="' + esc(Students.current.id + '/' + course.id + '/' + unit.id + '/' + lessonIdx + '/note') + '" data-label="Record a voice note"></div></div>' : '') +
         '<div class="slide-foot"><button class="btn secondary" id="prevBtn"' + (i === 0 ? ' disabled' : '') + '>← Back</button>' +
         '<div class="dots">' + slides.map((_, k) => '<span class="' + (k === i ? 'current' : seen().includes(k) ? 'seen' : '') + '"></span>').join('') + '</div>' +
@@ -411,7 +495,7 @@
     const course = findCourse(courseId), unit = findUnit(course, unitId); if (!unit || !Students.enrolled(course.id)) return notFound();
     setCourseColor(course); setNav('home');
     const u = Progress.unit(course.id, unit.id);
-    const head = crumbs([{ label: 'Courses', href: '#/' }, { label: course.title, href: '#/course/' + course.id }, { label: unit.title, href: '#/course/' + course.id }, { label: 'Unit test' }]) +
+    const head = crumbs([{ label: 'Dashboard', href: '#/' }, { label: course.title, href: '#/course/' + course.id }, { label: unit.title, href: '#/course/' + course.id }, { label: 'Unit test' }]) +
       '<div class="page-head"><div><h1>📝 Unit test</h1><p class="muted">' + esc(unit.title) + ' · covers every lesson in the unit</p></div></div>';
     const level = Settings.level;
     const count = assessmentCount(byLevel(level, [5, 8, 12, 15]));
@@ -438,7 +522,7 @@
     lessonIdx = +lessonIdx || 0; const les = unit.lessons[lessonIdx]; if (!les) return notFound();
     const u = Progress.unit(course.id, unit.id); u.quiz = u.quiz || {};
     const rec = u.quiz[lessonIdx] || (u.quiz[lessonIdx] = { best: 0, attempts: 0, passed: false });
-    const head = crumbs([{ label: 'Courses', href: '#/' }, { label: course.title, href: '#/course/' + course.id }, { label: les.title, href: '#/lesson/' + course.id + '/' + unit.id + '/' + lessonIdx }, { label: 'Quiz' }]) +
+    const head = crumbs([{ label: 'Dashboard', href: '#/' }, { label: course.title, href: '#/course/' + course.id }, { label: les.title, href: '#/lesson/' + course.id + '/' + unit.id + '/' + lessonIdx }, { label: 'Quiz' }]) +
       '<div class="page-head"><div><h1>❓ Quiz</h1><p class="muted">' + esc(les.title) + '</p></div></div>';
     const level = Settings.level;
     const count = assessmentCount(byLevel(level, [4, 6, 8, 10]));
@@ -464,7 +548,7 @@
     const u = Progress.unit(course.id, unit.id);
     let games = Games.available(course, unit);
     if (Settings.level === 1) games = games.filter(g => g.gentle).concat(games.filter(g => !g.gentle)); // gentle games first
-    app.innerHTML = crumbs([{ label: 'Courses', href: '#/' }, { label: course.title, href: '#/course/' + course.id }, { label: unit.title }, { label: 'Game Room' }]) +
+    app.innerHTML = crumbs([{ label: 'Dashboard', href: '#/' }, { label: course.title, href: '#/course/' + course.id }, { label: unit.title }, { label: 'Game Room' }]) +
       '<div class="page-head"><div><h1>🎮 Game Room</h1><p class="muted">' + esc(unit.title) + ' · finish 3 games for a badge, all of them for a medal</p></div></div>' +
       '<div class="grid">' + games.map(g => '<a class="card link" href="#/game/' + course.id + '/' + unit.id + '/' + g.id + '"><div class="card-icon">' + g.icon + '</div><h3>' + esc(g.name) + '</h3><p class="muted small">' + esc(g.desc) + '</p>' +
         (u.games[g.id] ? '<span class="tag ok">✓ Completed' + (u.gameScores[g.id] !== undefined ? ' · best ' + u.gameScores[g.id] : '') + '</span>' : (g.gentle ? '<span class="tag">Gentle</span>' : '<span class="tag accent">Challenge</span>')) + '</a>').join('') + '</div>';
@@ -474,7 +558,7 @@
     const course = findCourse(courseId), unit = findUnit(course, unitId); if (!unit || !Students.enrolled(course.id)) return notFound();
     setCourseColor(course); setNav('home');
     const game = Games.ALL.find(g => g.id === gameId);
-    app.innerHTML = crumbs([{ label: 'Courses', href: '#/' }, { label: course.title, href: '#/course/' + course.id }, { label: unit.title, href: '#/games/' + course.id + '/' + unit.id }, { label: game ? game.name : 'Game' }]) +
+    app.innerHTML = crumbs([{ label: 'Dashboard', href: '#/' }, { label: course.title, href: '#/course/' + course.id }, { label: unit.title, href: '#/games/' + course.id + '/' + unit.id }, { label: game ? game.name : 'Game' }]) +
       '<div class="page-head"><div><h1>' + (game ? game.icon + ' ' + esc(game.name) : 'Game') + '</h1><p class="muted">' + esc(unit.title) + '</p></div>' +
       '<a class="btn ghost" href="#/games/' + course.id + '/' + unit.id + '">✕ Exit</a></div><div class="game-area" id="gameHost"></div>';
     Games.play(gameId, course, unit, app.querySelector('#gameHost'));
@@ -502,71 +586,71 @@
   const sw = (key, label, help, val, attrs) => '<div class="setting-row"><div><label>' + label + '</label><div class="help">' + help + '</div></div><button class="switch ' + (val ? 'on' : '') + '" ' + (attrs || 'data-switch="' + key + '"') + ' role="switch" aria-checked="' + !!val + '"></button></div>';
   const seg = (key, label, help, options, val, attr) => '<div class="setting-row"><div><label>' + label + '</label><div class="help">' + help + '</div></div><div class="seg">' + options.map(o => '<button ' + (attr || 'data-seg="' + key + '"') + ' data-v="' + esc(o[0]) + '" class="' + (String(val) === String(o[0]) ? 'on' : '') + '">' + o[1] + '</button>').join('') + '</div></div>';
 
+  const TINTS = [['none', 'None'], ['cream', 'Cream'], ['blue', 'Pale blue'], ['green', 'Pale green'], ['rose', 'Rose'], ['yellow', 'Yellow'], ['grey', 'Grey'], ['peach', 'Peach'], ['lavender', 'Lavender']];
+  /** A collapsible settings group; open state is remembered for the session. */
+  function group(key, title, help, inner, openDefault) {
+    const st = sessionStorage.getItem('learnhub.sg.' + key); const open = st === null ? !!openDefault : st === '1';
+    return '<details class="sgroup card" data-sgroup="' + key + '"' + (open ? ' open' : '') + '><summary><span class="sg-title">' + title + '</span>' + (help ? '<span class="sg-help muted small">' + help + '</span>' : '') + '</summary><div class="sg-body">' + inner + '</div></details>';
+  }
   function pageSettings() {
     setCourseColor(null); setNav('settings');
-    const locked = Settings.locked;
-    const staff = locked ? null : Staff.current;
-    const me = Students.current;
+    const me = Students.current, staff = me.isStaff;
     const pref = (k, label, help, options) => seg(k, label, help, options, Settings.get(k));
-    const TINTS = [['none', 'None'], ['cream', 'Cream'], ['blue', 'Pale blue'], ['green', 'Pale green'], ['rose', 'Rose'], ['yellow', 'Yellow'], ['grey', 'Grey'], ['peach', 'Peach'], ['lavender', 'Lavender']];
-
-    let lockCard;
-    if (!Staff.master) {
-      lockCard = '<div class="setting-row" style="padding-top:0"><div><h2 style="margin:0">🔒 Teacher Lock · set up the master account</h2><div class="help">The master account (you) controls teachers, sections, levels and exports. Choose a 6-digit PIN you will remember.</div></div></div>' +
-        '<div class="btn-row"><input class="text-input" id="masterName" placeholder="Your name" style="max-width:200px"><input class="text-input" id="masterEmail" placeholder="School e-mail (optional)" style="max-width:260px"><input class="text-input pin-input" id="pinInput" type="password" inputmode="numeric" maxlength="6" placeholder="6-digit PIN"><button class="btn" id="setMaster">Create master account</button></div>';
-    } else if (locked) {
-      lockCard = '<div class="setting-row" style="padding-top:0"><div><h2 style="margin:0">🔒 Teacher Lock</h2><div class="help">Enter your 6-digit PIN (master or teacher) to open the teaching controls.</div></div>' +
-        '<div class="btn-row"><input class="text-input pin-input" id="pinInput" type="password" inputmode="numeric" maxlength="6" placeholder="6-digit PIN"><button class="btn" id="unlockBtn">Unlock</button></div></div>';
-    } else {
-      lockCard = '<div class="setting-row" style="padding-top:0"><div><h2 style="margin:0">🔒 Teacher Lock</h2><div class="help">Signed in as <strong>' + esc(staff ? staff.name : 'Teacher') + '</strong> (' + (Staff.isMaster ? 'master account' : 'teacher') + '). Lock again before handing the device back.</div></div>' +
-        '<div class="btn-row"><button class="btn secondary" id="lockBtn">🔒 Lock now</button>' + (Staff.isMaster ? '<button class="btn ghost" id="changePin">Change master PIN</button>' : '') + '</div></div>';
-    }
-
-    const teacherInner = locked || !Staff.master ? '' :
-      '<div class="teacher-section">' + sectionsHtml() + '</div>' +
-      '<div class="teacher-section">' + studentsPanelHtml() + '</div>' +
-      (Staff.isMaster ? '<div class="teacher-section">' + teachersHtml() + '</div><div class="teacher-section">' + driveHtml() + '</div>' : '') +
-      '<div class="teacher-section">' + planPickerHtml() + '<h3>🔍 Find lessons by keyword</h3><p class="muted small">Pick a unit and type a word or phrase. Lessons that mention it are listed in order; apply them and <strong>' + esc(planStudent().name) + '</strong> sees only those lessons for that unit.</p>' + lessonSearchHtml() + '</div>' +
-      '<div class="teacher-section">' + focusPlanHtml(false) + '</div>' +
-      '<div class="teacher-section">' + mediaChecklistHtml() + '</div>' +
-      '<div class="teacher-section"><h3>🎨 Colouring page learning breaks</h3>' +
-      seg('colouringEvery', 'Show a learning card every…', 'How many areas the student colours before a lesson card appears. "Student chooses" lets them pick inside the game.', [['student', 'Student chooses'], [1, '1'], [3, '3'], [5, '5'], [10, '10'], [0, 'Off']], Settings.get('colouringEvery')) + '</div>' +
-      '<div class="teacher-section"><h3>🚪 Sign-in screen</h3>' +
-      sw('allowSelfSignup', 'Students may add their own name', 'Off: only names added here (Students, above) appear on the sign-in screen.', Settings.get('allowSelfSignup') !== false) + '</div>';
-
-    app.innerHTML = '<div class="page-head"><div><h1>⚙️ Settings</h1><p class="muted">Teaching controls live behind the Teacher Lock. Accessibility options are open to everyone.</p></div></div>' +
-      '<div class="card teacher-card" style="margin-bottom:1.25rem">' + lockCard + teacherInner + '</div>' +
-      '<div class="card" style="margin-bottom:1.25rem"><h2>Me</h2>' +
-      '<div class="setting-row"><div><label>Signed in as</label><div class="help">Progress, awards and these accessibility settings belong to this student.</div></div><div class="btn-row">' + avatarHtml(me) + '<strong>' + esc(me.name) + '</strong><a class="btn secondary sm" href="#/signin">Switch student</a></div></div>' +
-      '<div class="setting-row"><div><label>My picture</label><div class="help">Pick the picture shown on the sign-in screen.</div></div><div class="avatar-grid">' + Students.AVATARS.map(a => '<button class="avatar-pick' + (a === me.avatar ? ' on' : '') + '" data-avatar="' + a + '">' + a + '</button>').join('') + '</div></div>' +
-      '<div class="setting-row"><div><label>My classes</label><div class="help">Where you are working right now. Archived classes are on your home page under "Archived classes".</div></div><div class="small">' + (courses().map(c => { const t = Students.trackFor(c.id); const prev = Students.previousLevel(c.id); return '<div>' + c.icon + ' ' + esc(c.title) + ' — ' + (t ? 'Modified · ' + ({ k2: 'K–2', g35: 'Grades 3–5', g68: 'Grades 6–8' }[t.band]) : 'Level ' + Students.levelFor(c.id) + ' · ' + LEVEL_NAMES[Students.levelFor(c.id)] + (prev && prev !== Students.levelFor(c.id) ? ' <button class="btn ghost sm" data-revert="' + c.id + '">↩ back to Level ' + prev + '</button>' : '')) + '</div>'; }).join('') || '<span class="muted">No classes yet.</span>') + '</div></div></div>' +
-      '<div class="card" style="margin-bottom:1.25rem"><h2>Accessibility</h2>' +
+    const accessibility =
       pref('fontScale', 'Text size', 'Make everything larger.', [[1, 'Normal'], [1.15, 'Large'], [1.3, 'Extra large']]) +
       pref('font', 'Reading font', 'Lexend is designed for easier reading.', [['default', 'Standard'], ['lexend', 'Lexend']]) +
       pref('contrast', 'Contrast', 'High contrast: black text and strong borders. Inverted: white text on a black background.', [['normal', 'Normal'], ['high', 'High'], ['inverted', 'Inverted']]) +
       '<div class="setting-row"><div><label>Colour overlay (Irlen / visual stress)</label><div class="help">Tints the page like a coloured overlay. Try a few — the right colour is personal.</div></div><div class="tint-row">' + TINTS.map(t => '<button class="tint-swatch tint-' + t[0] + (Settings.get('tint') === t[0] ? ' on' : '') + '" data-tint="' + t[0] + '" title="' + t[1] + '" aria-label="' + t[1] + '"></button>').join('') + '<select class="text-input" id="tintSelect" style="max-width:170px">' + TINTS.map(t => '<option value="' + t[0] + '"' + (Settings.get('tint') === t[0] ? ' selected' : '') + '>' + t[1] + '</option>').join('') + '</select></div></div>' +
       pref('motion', 'Animation', 'Reduced motion removes flips, spins and slide effects.', [['normal', 'Normal'], ['reduced', 'Reduced']]) +
-      sw('readAloud', 'Read aloud buttons', 'Show 🔊 buttons that read slides and questions out loud.', Settings.get('readAloud')) +
+      sw('readAloud', 'Read aloud buttons', 'Show 🔊 buttons that read slides and questions out loud and highlight each word as it is read.', Settings.get('readAloud')) +
       sw('dictation', 'Dictation and voice recording', 'Show 🎤 dictate buttons on answers and 🎙️ record buttons on lessons and assignments.' + (Media.canDictate ? '' : ' (Dictation needs Chrome, Edge or Safari.)'), Settings.get('dictation') !== false) +
-      '<div class="setting-row"><div><label>Read&amp;Write (Texthelp)</label><div class="help">The Read&amp;Write for Google Chrome extension works on this app as it is: every slide, question and assignment is real text, so its hover-to-speak, dictionary, picture dictionary, highlighters and prediction all work. Install it from the Chrome Web Store, then open The Academy in Chrome. Tip: turn off the app\'s own read-aloud buttons above to avoid two voices.</div></div><a class="btn secondary sm" href="https://chromewebstore.google.com/search/Read%26Write%20for%20Google%20Chrome" target="_blank" rel="noopener">Chrome Web Store</a></div></div>' +
-      '<div class="card" style="margin-bottom:1.25rem" id="appCard"><h2>📱 App</h2><p class="muted small">Checking…</p></div>' +
-      '<div class="card"><h2>Progress</h2><p class="muted small">' + esc(me.name) + '\'s progress and awards are saved in this browser.</p><button class="btn ghost" id="resetBtn">Reset ' + esc(me.name) + '\'s progress</button></div>';
+      '<div class="setting-row"><div><label>Read&amp;Write (Texthelp)</label><div class="help">The Read&amp;Write for Google Chrome extension works on this app as it is: every slide, question and assignment is real text, so hover-to-speak, dictionary, picture dictionary, highlighters and prediction all work. Tip: turn off the read-aloud buttons above to avoid two voices.</div></div><a class="btn secondary sm" href="https://chromewebstore.google.com/search/Read%26Write%20for%20Google%20Chrome" target="_blank" rel="noopener">Chrome Web Store</a></div>';
+    const profile =
+      '<div class="setting-row"><div><label>Name</label><div class="help">Shown on the welcome screen and in the header.</div></div><div class="btn-row"><input class="text-input" id="meName" value="' + esc(me.name) + '" maxlength="30" style="max-width:220px"><button class="btn secondary sm" id="meNameSave">Save</button></div></div>' +
+      '<div class="setting-row"><div><label>My picture</label></div><div class="avatar-grid">' + (staff ? ['🧑‍🏫', '👩‍🏫', '👨‍🏫', '🦉', '📚', '🍎', '🌟', '🧭'] : Students.AVATARS).map(a => '<button class="avatar-pick' + (a === me.avatar ? ' on' : '') + '" data-avatar="' + a + '">' + a + '</button>').join('') + '</div></div>' +
+      (staff ? '<div class="setting-row"><div><label>Security</label><div class="help">Your 6-digit PIN signs you in from the welcome screen.</div></div><div class="btn-row"><button class="btn secondary sm" id="changePin">Change my PIN</button><a class="btn ghost sm" href="#/welcome">Sign out</a></div></div>'
+             : '<div class="setting-row"><div><label>Switch profile</label><div class="help">Go back to the welcome screen.</div></div><a class="btn secondary sm" href="#/welcome">Welcome screen</a></div>');
+    let html = '<div class="page-head"><div><h1>⚙️ Settings</h1><p class="muted">' + (staff ? 'Your profile, your sections and your students.' : 'Your profile, how the app looks and reads, and your classes.') + '</p></div></div>';
+    if (!staff) {
+      const classes = '<p class="muted small">Where you are working right now, and the level you start each class at. Archived classes are on your dashboard.</p>' +
+        (courses().map(c => { const t = Students.trackFor(c.id); const prev = Students.previousLevel(c.id); const lv = Students.levelFor(c.id);
+          return '<div class="course-line"><label>' + c.icon + ' ' + esc(c.title) + '</label>' + (t ? '<span class="tag">Modified · ' + ({ k2: 'K–2', g35: 'Grades 3–5', g68: 'Grades 6–8' }[t.band]) + ' (set by your teacher)</span>' :
+            '<span class="btn-row"><span class="tag">Level ' + lv + ' · ' + LEVEL_NAMES[lv] + '</span>' + (prev && prev !== lv ? '<button class="btn ghost sm" data-revert="' + c.id + '">↩ back to Level ' + prev + '</button>' : '') + '</span>') + '</div>'; }).join('') || '<p class="muted">No classes yet.</p>') +
+        '<div class="plan-section"><div class="plan-label">Level of learning (default for new classes)</div><div class="level-cards compact">' + [1, 2, 3, 4].map(l => '<button class="level-card ' + (me.level === l ? 'on' : '') + '" data-me-level="' + l + '"><h3>Level ' + l + ' · ' + LEVEL_NAMES[l] + '</h3><p>' + LEVEL_DESC[l] + '</p></button>').join('') + '</div><p class="muted small" style="margin:0.4rem 0 0">Within a class you move up one level after 85%+ on a quiz, or back down when a quiz lands below your level\'s band.</p></div>' +
+        '<div class="plan-section"><div class="plan-label">Accommodations' + (me.accommodations && (me.accommodations.reduce || me.accommodations.simplify || me.accommodations.chunk) ? '' : ' (none)') + '</div><p class="muted small" style="margin:0">' + [['reduce', 'Reduction — fewer questions'], ['simplify', 'Complexity — simpler answer choices'], ['chunk', 'Chunking — matching in small parts']].filter(x => me.accommodations && me.accommodations[x[0]]).map(x => '✓ ' + x[1]).join(' · ') + (me.accommodations && (me.accommodations.reduce || me.accommodations.simplify || me.accommodations.chunk) ? '' : 'Your teacher can turn these on for quizzes and tests.') + '</p></div>';
+      html += group('profile', '👤 My profile', esc(me.name), profile, true) +
+        group('classes', '🎚️ My classes, level, accommodations &amp; modifications', courses().length + ' active', classes) +
+        group('access', '♿ Accessibility', 'text, contrast, overlay, read-aloud, dictation', accessibility) +
+        group('app', '📱 App', 'install and offline', '<div id="appCard"><p class="muted small">Checking…</p></div>') +
+        group('progress', '🗑️ Progress', '', '<p class="muted small">' + esc(me.name) + '\'s progress and awards are saved in this browser.</p><button class="btn ghost" id="resetBtn">Reset ' + esc(me.name) + '\'s progress</button>');
+    } else {
+      html += group('profile', '👤 My profile', esc(me.name) + ' · ' + (me.role === 'master' ? 'master account' : 'teacher'), profile) +
+        group('sections', '🏫 Sections', Sections.visible(me.staffId, false).length + ' active', sectionsHtml(), true) +
+        group('students', '👥 Students', 'levels · accommodations &amp; modifications · courses · work', studentsPanelHtml(), true) +
+        group('focus', '🎯 Focus Plan &amp; keyword search', 'for one student at a time', planPickerHtml() + '<h3>🔍 Find lessons by keyword</h3><p class="muted small">Pick a unit and type a word or phrase. Lessons that mention it are listed in order; apply them and <strong>' + esc(planStudent().name) + '</strong> sees only those lessons for that unit.</p>' + lessonSearchHtml() + '<div class="teacher-section">' + focusPlanHtml(false) + '</div>') +
+        (me.role === 'master' ? group('teachers', '🧑‍🏫 Teachers', Staff.teachers.length + ' teacher' + (Staff.teachers.length === 1 ? '' : 's'), teachersHtml()) + group('drive', '☁️ Google Drive &amp; exports', '', driveHtml()) : '') +
+        group('media', '🖼️ Media checklist', 'images and videos to add', mediaChecklistHtml()) +
+        group('options', '🎛️ Class options', 'colouring breaks · welcome screen', '<h3>🎨 Colouring page learning breaks</h3>' +
+          seg('colouringEvery', 'Show a learning card every…', 'How many areas the student colours before a lesson card appears. "Student chooses" lets them pick inside the game.', [['student', 'Student chooses'], [1, '1'], [3, '3'], [5, '5'], [10, '10'], [0, 'Off']], Settings.get('colouringEvery')) +
+          '<h3 style="margin-top:1rem">🚪 Welcome screen</h3>' + sw('allowSelfSignup', 'Students may create their own profile', 'Off: only students added here appear on the welcome screen.', Settings.get('allowSelfSignup') !== false)) +
+        group('access', '♿ My accessibility', '', accessibility) +
+        group('app', '📱 App', 'install and offline', '<div id="appCard"><p class="muted small">Checking…</p></div>');
+    }
+    app.innerHTML = html;
     renderAppCard();
-
+    app.querySelectorAll('details.sgroup').forEach(d => d.addEventListener('toggle', () => sessionStorage.setItem('learnhub.sg.' + d.dataset.sgroup, d.open ? '1' : '0')));
     app.querySelectorAll('[data-seg]').forEach(b => b.addEventListener('click', () => { const v = b.dataset.v; Settings.set(b.dataset.seg, isNaN(v) ? v : +v); pageSettings(); }));
     app.querySelectorAll('[data-switch]').forEach(b => b.addEventListener('click', () => { Settings.set(b.dataset.switch, !(Settings.get(b.dataset.switch) !== false)); pageSettings(); }));
     app.querySelectorAll('[data-avatar]').forEach(b => b.addEventListener('click', () => { Students.update(me.id, { avatar: b.dataset.avatar }); renderWho(); pageSettings(); }));
     app.querySelectorAll('[data-tint]').forEach(b => b.addEventListener('click', () => { Settings.set('tint', b.dataset.tint); pageSettings(); }));
     app.querySelectorAll('[data-revert]').forEach(b => b.addEventListener('click', () => { const prev = Students.previousLevel(b.dataset.revert); if (prev) { Students.moveLevel(me.id, b.dataset.revert, prev, 'student', 'went back'); pageSettings(); } }));
+    app.querySelectorAll('[data-me-level]').forEach(b => b.addEventListener('click', () => { Students.update(me.id, { level: +b.dataset.meLevel }); pageSettings(); }));
     const ts = app.querySelector('#tintSelect'); if (ts) ts.addEventListener('change', () => { Settings.set('tint', ts.value); pageSettings(); });
     const on = (id, fn) => { const el = app.querySelector(id); if (el) el.addEventListener('click', fn); };
-    on('#setMaster', () => { const v = app.querySelector('#pinInput').value.trim(), name = app.querySelector('#masterName').value.trim() || 'Master'; if (!/^\d{6}$/.test(v)) return alert('The PIN must be exactly 6 digits.'); Staff.setMaster(name, app.querySelector('#masterEmail').value.trim(), v); Settings.set('guardianPin', v); Staff.signIn('master'); pageSettings(); });
-    on('#unlockBtn', () => { const id = Staff.unlock(app.querySelector('#pinInput').value.trim()); if (id) { Staff.signIn(id); pageSettings(); } else alert('Wrong PIN.'); });
-    const pin = app.querySelector('#pinInput'); if (pin) pin.addEventListener('keydown', e => { if (e.key === 'Enter') { const b = app.querySelector('#unlockBtn, #setMaster'); if (b) b.click(); } });
-    on('#lockBtn', () => { Staff.signOut(); pageSettings(); });
-    on('#changePin', () => { const v = (prompt('New master PIN (6 digits):') || '').trim(); if (!/^\d{6}$/.test(v)) { if (v) alert('The PIN must be exactly 6 digits.'); return; } Staff.setMaster(Staff.master.name, Staff.master.email, v); Settings.set('guardianPin', v); alert('Master PIN changed.'); });
+    on('#meNameSave', () => { const v = (app.querySelector('#meName').value || '').trim(); if (v) { Students.update(me.id, { name: v.slice(0, 30) }); renderWho(); pageSettings(); } });
+    on('#changePin', () => { const v = (prompt('New 6-digit PIN:') || '').trim(); if (!/^\d{6}$/.test(v)) { if (v) alert('The PIN must be exactly 6 digits.'); return; } if (Staff.unlock(v)) return alert('That PIN is already in use.'); if (me.role === 'master') { Staff.setMaster(Staff.master.name, Staff.master.email, v); Settings.set('guardianPin', v); } else Staff.updateTeacher(me.staffId, { pin: v }); alert('PIN changed.'); });
     on('#resetBtn', () => { if (confirm('Erase all of ' + me.name + '\'s progress and awards on this device?')) { Progress.reset(); pageSettings(); } });
-    if (!locked && Staff.master) { bindSections(); bindStudentsPanel(); bindTeachers(); bindDrive(); bindFocusPlan(false); bindLessonSearch(); const ps = app.querySelector('#planStudent'); if (ps) ps.addEventListener('change', () => { sessionStorage.setItem('learnhub.planStudent', ps.value); pageSettings(); }); }
+    if (staff) { bindSections(); bindStudentsPanel(); bindTeachers(); bindDrive(); bindFocusPlan(false); bindLessonSearch(); const ps = app.querySelector('#planStudent'); if (ps) ps.addEventListener('change', () => { sessionStorage.setItem('learnhub.planStudent', ps.value); pageSettings(); }); }
   }
 
   /* ----- Sections (classes) ----- */
@@ -654,7 +738,7 @@
     const cur = Sections.currentFor(Staff.current.id);
     const others = cur ? Students.list.filter(s => !(cur.students || []).includes(s.id)) : [];
     const pending = list.filter(s => Object.keys(s.suggestions || {}).length);
-    return '<h3>👥 Students' + (cur ? ' · ' + esc(cur.name) : '') + '</h3><p class="muted small">Each student has their own progress, awards and Focus Plan. Set the achievement level or Modified band a student works at, choose which courses they see, review level changes and read or listen to their work.</p>' +
+    return '<h3>👥 Students' + (cur ? ' · ' + esc(cur.name) : '') + '</h3><p class="muted small">Each student has their own progress, awards and Focus Plan. Set the achievement level, accommodations or Modified band a student works at, choose which courses they see, review level changes and read or listen to their work.</p>' +
       '<div class="level-legend">' + [1, 2, 3, 4].map(l => '<span><strong>Level ' + l + ' · ' + LEVEL_NAMES[l] + '</strong> <span class="muted">' + LEVELS[l].band + ' · ' + LEVELS[l].short + '</span></span>').join('') + '</div>' +
       (pending.length ? '<div class="plan-banner">💡 <strong>Level suggestions waiting:</strong> ' + pending.map(s => esc(s.name)).join(', ') + ' — based on recent test results. Open the student to apply or dismiss.</div>' : '') +
       '<div class="student-list">' + list.map(s => {
@@ -738,7 +822,7 @@
     on('[data-sugg-dismiss]', 'click', e => { const b = e.currentTarget, s = Students.byId(b.dataset.suggDismiss); delete s.suggestions[b.dataset.c]; Students.save(); pageSettings(); });
     on('[data-rename]', 'click', e => { const s = Students.byId(e.currentTarget.dataset.rename); const v = prompt('New name for ' + s.name + ':', s.name); if (v && v.trim()) { Students.update(s.id, { name: v.trim().slice(0, 30) }); renderWho(); pageSettings(); } });
     on('[data-reset-student]', 'click', e => { const s = Students.byId(e.currentTarget.dataset.resetStudent); if (confirm('Erase all of ' + s.name + '\'s progress and awards?')) { Progress.resetFor(s.id); pageSettings(); } });
-    on('[data-delete]', 'click', e => { const s = Students.byId(e.currentTarget.dataset.delete); if (confirm('Remove ' + s.name + ' and all of their progress? This cannot be undone.')) { const wasMe = Students.current && Students.current.id === s.id; Students.removeStudent(s.id); if (wasMe) { renderWho(); location.hash = '#/signin'; } else pageSettings(); } });
+    on('[data-delete]', 'click', e => { const s = Students.byId(e.currentTarget.dataset.delete); if (confirm('Remove ' + s.name + ' and all of their progress? This cannot be undone.')) { const wasMe = Students.current && Students.current.id === s.id; Students.removeStudent(s.id); if (wasMe) { renderWho(); location.hash = '#/welcome'; } else pageSettings(); } });
     const add = () => { const v = (app.querySelector('#teacherAddName').value || '').trim(); if (!v) return; const s = Students.add(v); const cur = Sections.currentFor(Staff.current.id); if (cur) { Students.setCourses(s.id, [cur.courseId]); Sections.enrol(cur.id, s.id, true); } sessionStorage.setItem('learnhub.studentOpen', s.id); pageSettings(); };
     const b = app.querySelector('#teacherAdd'); if (b) b.addEventListener('click', add);
     const i = app.querySelector('#teacherAddName'); if (i) i.addEventListener('keydown', e => { if (e.key === 'Enter') add(); });
@@ -756,8 +840,7 @@
       '<div class="small" style="display:grid;gap:0.3rem;text-align:right">' +
       '<div>HTTPS ' + ok(d.https) + '</div><div>manifest.json ' + ok(d.manifest) + '</div><div>icon-192.png ' + ok(d.icon192) + '</div><div>icon-512.png ' + ok(d.icon512) + '</div><div>sw.js (offline) ' + ok(d.sw) + '</div>' +
       Object.keys(d).filter(k => k.startsWith('file:') && !d[k]).map(k => '<div>' + esc(k.slice(5)) + ' ' + ok(false) + '</div>').join('') + '</div></div>';
-    card.innerHTML = '<h2>📱 App</h2>' +
-      '<div class="setting-row" style="padding-top:0"><div><label>Status</label><div class="help">' + (d.standalone ? 'You are using the installed app.' : d.installed ? 'LearnHub is installed on this device. Open it from your home screen or app list.' : 'LearnHub is not installed on this device yet. Installing adds an icon and lets it work offline.') + '</div></div>' +
+    card.innerHTML = '<div class="setting-row" style="padding-top:0"><div><label>Status</label><div class="help">' + (d.standalone ? 'You are using the installed app.' : d.installed ? 'LearnHub is installed on this device. Open it from your home screen or app list.' : 'LearnHub is not installed on this device yet. Installing adds an icon and lets it work offline.') + '</div></div>' +
       (d.installed ? '<span class="tag ok">Installed</span>' : '<span class="tag">Not installed</span>') + '</div>' + rows +
       '<div class="btn-row" style="margin-top:0.75rem">' +
       (d.installed ? '<button class="btn secondary" id="appUninstall">Uninstall…</button><button class="btn ghost" id="appForget">Not installed here? Reset</button>'
@@ -882,8 +965,7 @@
     window.LH.stopSpeaking();   // leaving a page stops any reading
     renderWho();
     document.querySelectorAll('.topnav a').forEach(a => a.classList.remove('active'));
-    const dl = document.querySelector('[data-nav="dashboard"]'); if (dl) { dl.hidden = Settings.locked || !Staff.master; dl.classList.toggle('active', parts[0] === 'dashboard'); }
-    if (parts[0] === 'signin' || !Students.current) return pageSignin();   // nobody signed in → sign-in screen, whatever the route
+    if (parts[0] === 'signin' || parts[0] === 'welcome' || !Students.current) return pageWelcome();   // nobody signed in → welcome screen, whatever the route
     switch (parts[0]) {
       case '': return pageHome();
       case 'course': return pageCourse(parts[1]);
@@ -894,7 +976,7 @@
       case 'work': return pageWork(parts[1], parts[2]);
       case 'test': return pageTest(parts[1], parts[2]);
       case 'print': return Print.page(parts[1], parts[2], parts[3], parts[4], parts[5]);
-      case 'dashboard': try { return Dashboard.page(); } catch (e) { app.innerHTML = '<div class="empty"><h2>The dashboard could not load</h2><p class="muted small">' + esc(e.message) + '</p><a class="btn" href="#/settings">Settings</a></div>'; return; }
+      case 'dashboard': if (!Students.isStaffSession) return pageHome(); try { return Dashboard.page(); } catch (e) { app.innerHTML = '<div class="empty"><h2>The dashboard could not load</h2><p class="muted small">' + esc(e.message) + '</p><a class="btn" href="#/settings">Settings</a></div>'; return; }
       case 'games': return pageGames(parts[1], parts[2]);
       case 'game': return pageGame(parts[1], parts[2], parts[3]);
       case 'case': return pageCase(parts[1]);

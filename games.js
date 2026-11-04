@@ -15,7 +15,7 @@
     markSeen(q);
     const big = Settings.level === 1 || q.options.length <= 2;
     host.innerHTML =
-      '<div class="q-prompt">' + esc(q.prompt) + ' ' + speakBtn(q.prompt) + '</div>' +
+      '<div class="q-prompt">' + esc(q.prompt) + ' ' + speakBtn(q.prompt, '.q-prompt') + '</div>' +
       '<div class="options' + (q.options.length > 2 && !big ? '' : '') + '">' +
       q.options.map(o => '<button class="option' + (big ? ' big' : '') + '" data-v="' + esc(o) + '">' + esc(o) + '</button>').join('') +
       '</div><div class="q-feedback"></div>';
@@ -195,7 +195,7 @@
   function renderFill(host, q, done) {
     markSeen(q);
     const promptHtml = esc(q.prompt).replace(/_{2,}/, '<span class="blank" id="blank">&nbsp;</span>');
-    host.innerHTML = '<div class="q-prompt">' + promptHtml + ' ' + speakBtn(q.prompt.replace(/_{2,}/, 'blank')) + '</div>' +
+    host.innerHTML = '<div class="q-prompt">' + promptHtml + ' ' + speakBtn(q.prompt.replace(/_{2,}/, 'blank'), '.q-prompt') + '</div>' +
       (q.freeType
         ? '<div class="btn-row"><input class="text-input" id="fillInput" placeholder="Type the missing word…" autocomplete="off" style="flex:1">' + (window.Media ? Media.dictateBtn('#fillInput') : '') + '</div><div class="btn-row" style="margin-top:0.75rem"><button class="btn" id="fillGo">Check</button></div>'
         : '<div class="word-bank">' + q.bank.map(b => '<button class="chip" data-v="' + esc(b) + '">' + esc(b) + '</button>').join('') + '</div>') +
@@ -439,7 +439,7 @@
           const c = cards[cardIdx % cards.length]; cardIdx++;
           const host = ctx.host.querySelector('.learn-card-host');
           host.innerHTML = '<div class="learn-overlay"><div class="learn-card">' + (c.visual ? '<div class="slide-visual">' + c.visual + '</div>' : '') +
-            '<div class="btn-row between"><h2>' + esc(c.title) + '</h2>' + speakBtn(c.title + '. ' + String(c.body).replace(/[*#-]/g, '')) + '</div>' +
+            '<div class="btn-row between"><h2>' + esc(c.title) + '</h2>' + speakBtn(c.title + '. ' + String(c.body).replace(/[*#-]/g, ''), '.learn-card') + '</div>' +
             '<div class="slide-body">' + window.LH.md(c.body) + '</div>' +
             '<div class="btn-row" style="justify-content:flex-end;margin-top:1rem"><button class="btn success" id="learnOk">Got it — keep colouring 🎨</button></div></div></div>';
           host.querySelector('#learnOk').addEventListener('click', () => { host.innerHTML = ''; then(); });

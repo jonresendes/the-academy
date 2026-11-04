@@ -73,33 +73,73 @@
   }
 
   /* Read aloud: a button starts reading; tapping the same button again stops it;
-     tapping once more restarts from the beginning. A different button switches to its text. */
-  let speaking = null;   // the button currently reading, or null
+     tapping once more restarts from the beginning. A different button switches to its text.
+     When the button names a target element (data-target), the words of that element are
+     wrapped in spans and the word being spoken is highlighted in yellow. */
+  let speaking = null, hl = null;   // the active button; the highlight state { el, html, spans }
+  function clearHighlight() { if (hl) { try { hl.el.innerHTML = hl.html; } catch (e) {} hl = null; } }
   function setSpeaking(btn) {
-    document.querySelectorAll('.speak-btn.on').forEach(b => { b.classList.remove('on'); b.textContent = '🔊'; b.title = b.getAttribute('aria-label') === 'Stop reading' ? 'Read aloud' : b.title; b.setAttribute('aria-label', 'Read aloud'); });
+    document.querySelectorAll('.speak-btn.on').forEach(b => { b.classList.remove('on'); b.textContent = '🔊'; b.title = 'Read aloud'; b.setAttribute('aria-label', 'Read aloud'); });
     speaking = btn || null;
     if (btn) { btn.classList.add('on'); btn.textContent = '⏹️'; btn.title = 'Stop reading'; btn.setAttribute('aria-label', 'Stop reading'); }
   }
-  function stopSpeaking() { if ('speechSynthesis' in window) window.speechSynthesis.cancel(); setSpeaking(null); }
-  function speak(text, btn) {
+  function stopSpeaking() { if ('speechSynthesis' in window) window.speechSynthesis.cancel(); clearHighlight(); setSpeaking(null); }
+  /** Wrap every word of el in a span; returns the text to speak and the spans with their character offsets. */
+  function prepareHighlight(el) {
+    const html = el.innerHTML;
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    const nodes = []; while (walker.nextNode()) { const n = walker.currentNode; if (!n.parentNode.closest('.speak-btn, button, script, style')) nodes.push(n); }
+    let text = ''; const spans = [];
+    nodes.forEach(n => {
+      const str = n.nodeValue; if (!str.trim()) { text += ' '; return; }
+      const frag = document.createDocumentFragment(); const re = /\S+|\s+/g; let m;
+      while ((m = re.exec(str))) {
+        if (/\S/.test(m[0])) { const sp = document.createElement('span'); sp.className = 'rw'; sp.textContent = m[0]; spans.push({ s: text.length, e: text.length + m[0].length, el: sp }); frag.appendChild(sp); }
+        else frag.appendChild(document.createTextNode(m[0]));
+        text += m[0];
+      }
+      n.parentNode.replaceChild(frag, n);
+      if (!/\s$/.test(text)) text += ' ';   // a pause between blocks so words never run together
+    });
+    return { el, html, spans, text: text.replace(/[*#>|]/g, ' ') };   // same length: offsets stay valid
+  }
+  function speak(text, btn, target) {
     if (!('speechSynthesis' in window)) return;
-    if (btn && btn === speaking) return stopSpeaking();          // second tap stops
-    window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(String(text).replace(/\s+/g, ' '));
+    if (btn && btn === speaking) return stopDictationSafe(), stopSpeaking();          // second tap stops
+    window.speechSynthesis.cancel(); clearHighlight();
+    let utterText = String(text);
+    if (target) { hl = prepareHighlight(target); utterText = hl.text; }
+    const u = new SpeechSynthesisUtterance(hl ? utterText : utterText.replace(/\s+/g, ' ').trim());   // highlighted text keeps its exact offsets
     u.rate = 0.95;
-    u.onend = u.onerror = () => { if (speaking === btn) setSpeaking(null); };
+    const spans = hl ? hl.spans : [];
+    let last = null;
+    u.onboundary = e => {
+      if (e.name !== 'word' || !spans.length) return;
+      const ci = e.charIndex;
+      const sp = spans.find(x => ci >= x.s && ci < x.e) || spans.find(x => x.s >= ci);
+      if (sp && sp !== last) { if (last) last.el.classList.remove('reading'); sp.el.classList.add('reading'); last = sp; }
+    };
+    u.onend = u.onerror = () => { if (speaking === btn) { clearHighlight(); setSpeaking(null); } };
     setSpeaking(btn);
     window.speechSynthesis.speak(u);
   }
-  function speakBtn(text) {
+  function stopDictationSafe() { if (window.Media && Media.stopDictation) Media.stopDictation(); }
+  /** Button HTML. `target` is a CSS selector for the element whose words should light up while read
+      (resolved relative to the button first, then the page). */
+  function speakBtn(text, target) {
     if (!Settings.get('readAloud')) return '';
-    return '<button class="speak-btn" type="button" title="Read aloud" aria-label="Read aloud" data-speak="' + esc(text) + '">🔊</button>';
+    return '<button class="speak-btn" type="button" title="Read aloud" aria-label="Read aloud" data-speak="' + esc(text) + '"' + (target ? ' data-target="' + esc(target) + '"' : '') + '>🔊</button>';
   }
   // delegate all speaker buttons
   document.addEventListener('click', e => {
     const b = e.target.closest('[data-speak]');
-    if (b) speak(b.dataset.speak, b);
+    if (!b) return;
+    let target = null;
+    if (b.dataset.target) { target = b.closest(b.dataset.target) || (b.parentElement && b.parentElement.querySelector(b.dataset.target)) || document.querySelector(b.dataset.target); }
+    speak(b.dataset.speak, b, target);
   });
+  // leaving the page restores any highlighted element
+  new MutationObserver(() => { if (hl && !document.body.contains(hl.el)) { hl = null; } }).observe(document.body, { childList: true, subtree: true });
 
   /* ---------- Focus Plan helpers ---------- */
 

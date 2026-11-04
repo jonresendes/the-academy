@@ -47,15 +47,19 @@ The app is a Progressive Web App. On Android Chrome and desktop Chrome/Edge an *
 
 **Phone back button.** The app keeps its own history, so the phone's back button steps back through the pages you visited. On the home page, one press shows "Press back again to close"; a second press within two seconds asks *Close LearnHub?* with Keep learning / Close app.
 
-## Students and sign-in
+## Welcome page, profiles and sign-in
 
-The app opens on a **sign-in screen**: each student taps their first name (no password). Progress, awards, Focus Plan and accessibility preferences are kept **per student** on the device. Students can add their own name unless the teacher turns that off (Teacher Lock → Sign-in screen); teachers can also add, rename, reset or remove students in **Teacher Lock → Students**. The header shows who is signed in with a *Switch* link.
+The app opens on a **Welcome page**: one tile per profile — *Welcome, ‹student›* (tap to sign in) and *Welcome, ‹teacher›* (asks for the teacher's 6-digit PIN) — plus **New here? → I'm a student / I'm a teacher**.
 
-For each student the teacher sets:
-- **Achievement level** (default, plus a per-course override) — see below.
-- **Courses** — tick the courses the student sees, and **lock the course list** so they cannot add more from the home page. With no list set, a student sees every course.
+- **Student sign-up** asks for a first name, a picture, reading/viewing preferences (text size, Lexend, contrast, colour overlay, read-aloud, dictation), a **Level of learning** (1–4, the starting level) and which classes to join. Everything can be changed later in Settings → *My profile* / *My classes*.
+- **Teacher sign-up** asks for a name and a 6-digit PIN. The first teacher on a device becomes the **master account**; later teachers need the master PIN to be created (or the master adds them in Settings → Teachers). Teacher profiles stay signed in only for the browser session; opening the Welcome page signs a teacher out.
+- After signing in everyone lands on their **Dashboard**: students see *Resume a class*, *Join a new class*, *Archived classes* and *Scores, accolades and awards*; teachers see their sections, the class dashboard and a course preview.
 
-Data from the single-student version is migrated automatically into a first profile the first time the new version loads.
+Settings is organised into **collapsible groups**. Students: *My profile* · *My classes, level, accommodations & modifications* · *Accessibility* · *App* · *Progress*. Teachers: *My profile* · *Sections* · *Students* (levels, accommodations and modifications together, courses, work, recordings, level history) · *Focus Plan & keyword search* · *Teachers* and *Google Drive* (master only) · *Media checklist* · *Class options* · *My accessibility* · *App*. Teacher tools are only visible in a teacher session — there is no PIN box inside a student's settings any more.
+
+Course pages colour each unit by status: **white** = not started, **light orange** = in progress, **light green** = complete (every slide read, every quiz passed, unit test passed).
+
+Students, sections and teachers are stored on the device (`learnhub.students`, `learnhub.sections`, `learnhub.staff`). To move them to another device, use the export/import or Google Drive push/pull below.
 
 ## Achievement levels (1–4)
 
@@ -73,7 +77,7 @@ Levels follow the Ontario achievement chart and are set per student inside **Set
 
 Every test starts with a question every student can get (a true/false or short multiple choice) and questions are served **least-seen first**, so no question repeats until the student has seen every question in the unit.
 
-Accessibility settings (per student): text size, Lexend reading font, contrast (normal / high / **inverted** — white text on black), reduced motion, read-aloud buttons (browser speech).
+Accessibility settings (per student): text size, Lexend reading font, contrast (normal / high / **inverted** — white text on black), colour overlays, reduced motion, read-aloud buttons (browser speech) that **highlight each word in yellow as it is spoken**, dictation and recording.
 
 ## Lessons, quizzes, assignments and tests
 
