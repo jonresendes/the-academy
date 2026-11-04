@@ -1,0 +1,5 @@
+{
+ "version": "26",
+ "date": "2026-11-04",
+ "notes": "Fix Google Drive 401 on folder creation and upload"
+}
