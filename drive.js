@@ -100,7 +100,9 @@
     });
   }
   async function api(tok, url, opts) {
-    const r = await fetch(url, Object.assign({ headers: Object.assign({ Authorization: 'Bearer ' + tok }, (opts && opts.headers) || {}) }, opts || {}));
+    opts = Object.assign({}, opts || {});
+    opts.headers = Object.assign({ Authorization: 'Bearer ' + tok }, opts.headers || {});   // keep the token when a call adds its own headers
+    const r = await fetch(url, opts);
     if (!r.ok) throw new Error('Google Drive said ' + r.status + ': ' + (await r.text()).slice(0, 200));
     return r.json();
   }
