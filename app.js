@@ -117,7 +117,7 @@
       form = '<div class="card signup"><div class="btn-row between"><h3>New student</h3><button class="btn ghost sm" id="welcomeCancel">✕</button></div>' +
         '<div class="plan-section"><div class="plan-label">Your first name</div><input class="text-input" id="suName" maxlength="30" placeholder="First name" style="max-width:300px" autocomplete="off"></div>' +
         '<div class="plan-section"><div class="plan-label">Your picture</div><div class="avatar-grid">' + Students.AVATARS.map((a, i) => '<button type="button" class="avatar-pick' + (i === 0 ? ' on' : '') + '" data-su-avatar="' + a + '">' + a + '</button>').join('') + '</div></div>' +
-        '<div class="plan-section"><div class="plan-label">Reading and viewing</div><div class="signup-grid">' +
+        '<div class="plan-section"><div class="plan-label">Reading and viewing</div><p class="muted small" style="margin:0 0 0.5rem">Try them — the page changes as you choose, so you can see what you like.</p><div class="signup-grid">' +
         '<label>Text size <select class="text-input" id="suFont"><option value="1">Normal</option><option value="1.15">Large</option><option value="1.3">Extra large</option></select></label>' +
         '<label>Reading font <select class="text-input" id="suFace"><option value="default">Standard</option><option value="lexend">Lexend (easier reading)</option></select></label>' +
         '<label>Contrast <select class="text-input" id="suContrast"><option value="normal">Normal</option><option value="high">High contrast</option><option value="inverted">Inverted (white on black)</option></select></label>' +
@@ -177,6 +177,13 @@
       renderWho(); goHome();
     });
     const nm = app.querySelector('#suName, #tName'); if (nm) nm.focus();
+    // live preview: the sign-up form applies text size / font / contrast / overlay to the page as they are chosen,
+    // so the student sees the effect before deciding. Cancelling restores the previous look.
+    const preview = () => { const g = id => { const el = app.querySelector(id); return el ? el.value : null; };
+      const d = document.documentElement, body = document.body;
+      if (g('#suFont') !== null) { d.style.setProperty('--font-scale', g('#suFont')); body.dataset.font = g('#suFace'); body.dataset.contrast = g('#suContrast'); body.dataset.tint = g('#suTint'); } };
+    ['#suFont', '#suFace', '#suContrast', '#suTint'].forEach(id => { const el = app.querySelector(id); if (el) el.addEventListener('change', preview); });
+    if (app.querySelector('#suFont')) { preview(); const c = app.querySelector('#welcomeCancel'); if (c) c.addEventListener('click', () => Settings.apply()); }
   }
   function goHome() { if (location.hash === '#/' || location.hash === '') window.dispatchEvent(new HashChangeEvent('hashchange')); else location.hash = '#/'; }
 
