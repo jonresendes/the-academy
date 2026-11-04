@@ -705,3 +705,8 @@ body[data-contrast="inverted"] .rw.reading { background: #ffd600; color: #000; b
 .chk input { width: 20px; height: 20px; accent-color: var(--primary); }
 .course-line.chk { cursor: pointer; }
 .dash-h { font-size: 1.2rem; margin: 1.25rem 0 0.75rem; }
+.continue-tile { width: 100%; display: flex; align-items: center; gap: 1rem; padding: 1rem 1.25rem; margin-bottom: 1.25rem; background: var(--surface); border: 3px solid var(--tile, var(--primary)); border-radius: var(--radius); cursor: pointer; text-align: left; color: var(--text); font-size: 1.15rem; }
+.continue-tile .tile-avatar { width: 56px; height: 56px; font-size: 1.8rem; }
+.continue-tile > span { display: flex; flex-direction: column; }
+.continue-tile .continue-arrow { margin-left: auto; font-weight: 800; font-size: 1.5rem; color: var(--primary); }
+.continue-tile:hover { background: var(--primary-soft); }

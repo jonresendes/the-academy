@@ -102,7 +102,9 @@
   const welcomeState = { mode: '', pinFor: '' };
   function pageWelcome() {
     setCourseColor(null); setNav('');
-    if (Students.isStaffSession) { Students.setCurrent(null); renderWho(); }   // a teacher who returns here is signed out
+    if (Students.isStaffSession && sessionStorage.getItem('learnhub.entered')) { Students.setCurrent(null); renderWho(); }   // a teacher who returns here is signed out
+    const cont = Students.current && !Students.current.isStaff ? Students.current : null;   // profile left signed in on this device
+    const bb = document.getElementById('backBtn'); if (bb) bb.hidden = true;
     const students = Students.list;
     const staffTiles = (Staff.master ? [{ id: 'staff:master', name: Staff.master.name, avatar: Staff.master.avatar || '🧑‍🏫', colour: Staff.master.colour || '#1f5f8b', role: 'Master' }] : [])
       .concat(Staff.teachers.map(t => ({ id: 'staff:' + t.id, name: t.name, avatar: t.avatar || '🧑‍🏫', colour: t.colour || '#1f5f8b', role: 'Teacher' })));
@@ -135,20 +137,20 @@
         '<div class="plan-section"><div class="plan-label">Your picture</div><div class="avatar-grid">' + ['🧑‍🏫', '👩‍🏫', '👨‍🏫', '🦉', '📚', '🍎', '🌟', '🧭'].map((a, i) => '<button type="button" class="avatar-pick' + (i === 0 ? ' on' : '') + '" data-su-avatar="' + a + '">' + a + '</button>').join('') + '</div></div>' +
         '<div class="btn-row" style="margin-top:1rem"><button class="btn lg" id="tCreate">Create teacher profile</button></div></div>';
     }
-    app.innerHTML = '<div class="signin"><div class="signin-head"><div class="signin-logo">🎓</div><h1>Welcome to The Academy</h1><p class="muted">' + (students.length || staffTiles.length ? 'Tap your name to sign in.' : 'Create the first profile to get started.') + '</p></div>' +
-      (!welcomeState.mode && !welcomeState.pinFor ? ((students.length ? '<div class="student-grid">' + students.map(p => tile(p)).join('') + '</div>' : '') +
+    app.innerHTML = '<div class="signin"><div class="signin-head"><div class="signin-logo">🎓</div><h1>Welcome to The Academy</h1><p class="muted">' + (cont ? 'Welcome back! Continue, or pick another name.' : students.length || staffTiles.length ? 'Tap your name to sign in.' : 'Create the first profile to get started.') + '</p></div>' +
+      (!welcomeState.mode && !welcomeState.pinFor ? ((cont ? '<button class="continue-tile" data-welcome="' + cont.id + '" style="--tile:' + esc(cont.colour) + '">' + avatarHtml(cont, 'tile-avatar') + '<span><span class="tile-name">Continue as ' + esc(cont.name) + '</span><span class="muted small">Pick up where you left off</span></span><span class="continue-arrow">→</span></button>' : '') +(students.length ? '<div class="student-grid">' + students.map(p => tile(p)).join('') + '</div>' : '') +
         (staffTiles.length ? '<div class="student-grid staff-grid">' + staffTiles.map(p => tile(p, p.role)).join('') + '</div>' : '') +
         '<div class="card signin-add"><h3>New here?</h3><div class="btn-row">' + (canAdd ? '<button class="btn" data-mode="student">🎒 I\'m a student</button>' : '') + '<button class="btn secondary" data-mode="teacher">🧑‍🏫 I\'m a teacher</button></div>' + (canAdd ? '' : '<p class="muted small" style="margin:0.5rem 0 0">Students are added by their teacher on this device.</p>') + '</div>') : form) + '</div>';
     // bindings
     app.querySelectorAll('[data-welcome]').forEach(b => b.addEventListener('click', () => {
       const id = b.dataset.welcome;
       if (id.startsWith('staff:')) { welcomeState.pinFor = id; pageWelcome(); return; }
-      Students.setCurrent(id); renderWho(); goHome();
+      Students.setCurrent(id); sessionStorage.setItem('learnhub.entered', '1'); renderWho(); goHome();
     }));
     app.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => { welcomeState.mode = b.dataset.mode; pageWelcome(); }));
     const on = (id, fn) => { const el = app.querySelector(id); if (el) el.addEventListener('click', fn); };
     on('#welcomeCancel', () => { welcomeState.mode = ''; welcomeState.pinFor = ''; pageWelcome(); });
-    const staffGo = () => { const pin = (app.querySelector('#staffPin').value || '').trim(); const sid = welcomeState.pinFor.slice(6); const ok = Staff.unlock(pin); if (ok && (ok === sid)) { welcomeState.pinFor = ''; Students.setCurrent('staff:' + sid); renderWho(); goHome(); } else alert('Wrong PIN.'); };
+    const staffGo = () => { const pin = (app.querySelector('#staffPin').value || '').trim(); const sid = welcomeState.pinFor.slice(6); const ok = Staff.unlock(pin); if (ok && (ok === sid)) { welcomeState.pinFor = ''; Students.setCurrent('staff:' + sid); sessionStorage.setItem('learnhub.entered', '1'); renderWho(); goHome(); } else alert('Wrong PIN.'); };
     on('#staffGo', staffGo); const sp = app.querySelector('#staffPin'); if (sp) { sp.focus(); sp.addEventListener('keydown', e => { if (e.key === 'Enter') staffGo(); }); }
     let avatar = null;
     app.querySelectorAll('[data-su-avatar]').forEach(b => b.addEventListener('click', () => { app.querySelectorAll('[data-su-avatar]').forEach(x => x.classList.toggle('on', x === b)); avatar = b.dataset.suAvatar; }));
@@ -161,7 +163,7 @@
       const st = Students.add(name, { level, courses: courses.length === allCourses().length ? null : courses,
         prefs: { fontScale: +g('#suFont'), font: g('#suFace'), contrast: g('#suContrast'), tint: g('#suTint'), motion: 'normal', readAloud: app.querySelector('#suRead').checked, dictation: app.querySelector('#suDictate').checked } });
       if (avatar) Students.update(st.id, { avatar });
-      welcomeState.mode = ''; Students.setCurrent(st.id); renderWho(); goHome();
+      welcomeState.mode = ''; Students.setCurrent(st.id); sessionStorage.setItem('learnhub.entered', '1'); renderWho(); goHome();
     });
     on('#tCreate', () => {
       const name = (app.querySelector('#tName').value || '').trim(), pin = (app.querySelector('#tPin').value || '').trim();
@@ -174,7 +176,7 @@
         Staff.setMaster(name, (app.querySelector('#tEmail').value || '').trim(), pin); Settings.set('guardianPin', pin); if (avatar) { Staff.master.avatar = avatar; Staff.save(); }
         welcomeState.mode = ''; Students.setCurrent('staff:master');
       }
-      renderWho(); goHome();
+      sessionStorage.setItem('learnhub.entered', '1'); renderWho(); goHome();
     });
     const nm = app.querySelector('#suName, #tName'); if (nm) nm.focus();
     // live preview: the sign-up form applies text size / font / contrast / overlay to the page as they are chosen,
@@ -990,7 +992,9 @@
     window.LH.stopSpeaking();   // leaving a page stops any reading
     renderWho();
     document.querySelectorAll('.topnav a').forEach(a => a.classList.remove('active'));
-    if (parts[0] === 'signin' || parts[0] === 'welcome' || !Students.current) return pageWelcome();   // nobody signed in → welcome screen, whatever the route
+    // A fresh open of the app always starts on the welcome screen; "Continue as …" is offered when a
+    // profile was left signed in on this device. Once a tile is tapped the session proceeds normally.
+    if (parts[0] === 'signin' || parts[0] === 'welcome' || !Students.current || !sessionStorage.getItem('learnhub.entered')) return pageWelcome();
     switch (parts[0]) {
       case '': return pageHome();
       case 'course': return pageCourse(parts[1]);

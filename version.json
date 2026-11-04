@@ -1,1 +1,5 @@
-{ "version": "23", "date": "2026-11-03", "notes": "Live preview of accessibility choices on sign-up; Updates group in Settings." }
+{
+ "version": "24",
+ "date": "2026-11-04",
+ "notes": "Welcome screen on every open, with Continue as … for the last profile"
+}
