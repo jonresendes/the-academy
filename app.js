@@ -629,7 +629,8 @@
         group('classes', '🎚️ My classes, level, accommodations &amp; modifications', courses().length + ' active', classes) +
         group('access', '♿ Accessibility', 'text, contrast, overlay, read-aloud, dictation', accessibility) +
         group('app', '📱 App', 'install and offline', '<div id="appCard"><p class="muted small">Checking…</p></div>') +
-        group('progress', '🗑️ Progress', '', '<p class="muted small">' + esc(me.name) + '\'s progress and awards are saved in this browser.</p><button class="btn ghost" id="resetBtn">Reset ' + esc(me.name) + '\'s progress</button>');
+        group('progress', '🗑️ Progress', '', '<p class="muted small">' + esc(me.name) + '\'s progress and awards are saved in this browser.</p><button class="btn ghost" id="resetBtn">Reset ' + esc(me.name) + '\'s progress</button>') +
+        group('updates', '🔄 Updates', 'version ' + (window.PWA ? PWA.APP_VERSION : '?'), '<div id="updatesCard"><p class="muted small">Checking…</p></div>');
     } else {
       html += group('profile', '👤 My profile', esc(me.name) + ' · ' + (me.role === 'master' ? 'master account' : 'teacher'), profile) +
         group('sections', '🏫 Sections', Sections.visible(me.staffId, false).length + ' active', sectionsHtml(), true) +
@@ -641,10 +642,11 @@
           seg('colouringEvery', 'Show a learning card every…', 'How many areas the student colours before a lesson card appears. "Student chooses" lets them pick inside the game.', [['student', 'Student chooses'], [1, '1'], [3, '3'], [5, '5'], [10, '10'], [0, 'Off']], Settings.get('colouringEvery')) +
           '<h3 style="margin-top:1rem">🚪 Welcome screen</h3>' + sw('allowSelfSignup', 'Students may create their own profile', 'Off: only students added here appear on the welcome screen.', Settings.get('allowSelfSignup') !== false)) +
         group('access', '♿ My accessibility', '', accessibility) +
-        group('app', '📱 App', 'install and offline', '<div id="appCard"><p class="muted small">Checking…</p></div>');
+        group('app', '📱 App', 'install and offline', '<div id="appCard"><p class="muted small">Checking…</p></div>') +
+        group('updates', '🔄 Updates', 'version ' + (window.PWA ? PWA.APP_VERSION : '?'), '<div id="updatesCard"><p class="muted small">Checking…</p></div>');
     }
     app.innerHTML = html;
-    renderAppCard();
+    renderAppCard(); renderUpdatesCard();
     app.querySelectorAll('details.sgroup').forEach(d => d.addEventListener('toggle', () => sessionStorage.setItem('learnhub.sg.' + d.dataset.sgroup, d.open ? '1' : '0')));
     app.querySelectorAll('[data-seg]').forEach(b => b.addEventListener('click', () => { const v = b.dataset.v; Settings.set(b.dataset.seg, isNaN(v) ? v : +v); pageSettings(); }));
     app.querySelectorAll('[data-switch]').forEach(b => b.addEventListener('click', () => { Settings.set(b.dataset.switch, !(Settings.get(b.dataset.switch) !== false)); pageSettings(); }));
@@ -833,6 +835,22 @@
     const add = () => { const v = (app.querySelector('#teacherAddName').value || '').trim(); if (!v) return; const s = Students.add(v); const cur = Sections.currentFor(Staff.current.id); if (cur) { Students.setCourses(s.id, [cur.courseId]); Sections.enrol(cur.id, s.id, true); } sessionStorage.setItem('learnhub.studentOpen', s.id); pageSettings(); };
     const b = app.querySelector('#teacherAdd'); if (b) b.addEventListener('click', add);
     const i = app.querySelector('#teacherAddName'); if (i) i.addEventListener('keydown', e => { if (e.key === 'Enter') add(); });
+  }
+
+  /* ----- Updates card ----- */
+  async function renderUpdatesCard() {
+    const card = app.querySelector('#updatesCard'); if (!card) return;
+    if (!window.PWA) { setTimeout(renderUpdatesCard, 100); return; }
+    const draw = (latest, checking) => {
+      if (!app.querySelector('#updatesCard')) return;
+      const help = card.closest('details') && card.closest('details').querySelector('.sg-help'); if (help) help.textContent = 'version ' + PWA.APP_VERSION + (latest ? ' · update available' : '');
+      card.innerHTML = '<div class="setting-row" style="padding-top:1rem"><div><label>This device</label><div class="help">Version ' + esc(PWA.APP_VERSION) + (latest ? ' — <strong>version ' + esc(latest.version) + ' is available</strong>' + (latest.date ? ' (' + esc(latest.date) + ')' : '') + (latest.notes ? ': ' + esc(latest.notes) : '') : checking ? ' — checking…' : ' — up to date') + '</div></div>' +
+        '<div class="btn-row">' + (latest ? '<button class="btn success" id="updNow">⬆️ Update now</button>' : '') + '<button class="btn secondary sm" id="updCheck"' + (checking ? ' disabled' : '') + '>Check for updates</button></div></div>' +
+        '<p class="muted small" style="margin:0.5rem 0 0">Updating fetches the newest files from the site and reloads. Your progress and profiles stay on the device.</p>';
+      const n = card.querySelector('#updNow'); if (n) n.addEventListener('click', () => PWA.applyUpdate());
+      const c = card.querySelector('#updCheck'); if (c) c.addEventListener('click', async () => { draw(null, true); draw(await PWA.checkForUpdate(), false); });
+    };
+    draw(PWA.latest, true); draw(await PWA.checkForUpdate(), false);
   }
 
   /* ----- App card (install / uninstall / diagnostics) ----- */

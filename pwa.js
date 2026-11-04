@@ -82,7 +82,32 @@
     return out;
   }
 
-  window.PWA = { isInstalled, install, installHelp, uninstallHelp, diagnostics, forget: () => { flag.set(false); refreshButton(); }, standalone };
+  /* ---------- version & updates ----------
+     APP_VERSION is baked into this file; version.json on the site says what is published.
+     Settings → Updates compares the two and offers a one-tap update (new service worker +
+     cache clear + reload). The check also runs on load and hourly. */
+  const APP_VERSION = '23';
+  let latest = null;   // { version, date, notes } from the site, when newer
+  async function checkForUpdate() {
+    try {
+      const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' }); if (!r.ok) return null;
+      const v = await r.json();
+      latest = (parseInt(v.version, 10) > parseInt(APP_VERSION, 10)) ? v : null;
+      if (latest && !sessionStorage.getItem('learnhub.updateNoticed')) { sessionStorage.setItem('learnhub.updateNoticed', '1'); notice('Version ' + latest.version + ' is available.', 'Update now', applyUpdate); }
+      return latest;
+    } catch (e) { return null; }
+  }
+  async function applyUpdate() {
+    try {
+      if ('serviceWorker' in navigator) { const reg = await navigator.serviceWorker.getRegistration(); if (reg) { await reg.update(); if (reg.waiting) reg.waiting.postMessage('SKIP_WAITING'); } }
+      if ('caches' in window) { const keys = await caches.keys(); for (const k of keys) await caches.delete(k); }
+    } catch (e) {}
+    setTimeout(() => location.reload(), 300);
+  }
+  if (/^https?:/.test(location.protocol)) { window.addEventListener('load', () => { checkForUpdate(); setInterval(checkForUpdate, 60 * 60 * 1000); }); }
+
+  window.PWA = { isInstalled, install, installHelp, uninstallHelp, diagnostics, forget: () => { flag.set(false); refreshButton(); }, standalone,
+                 APP_VERSION, get latest() { return latest; }, checkForUpdate, applyUpdate };
 
   /* ---------- update notice ---------- */
   function notice(text, btnLabel, onClick) {

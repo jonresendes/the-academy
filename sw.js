@@ -1,7 +1,7 @@
 /* LearnHub service worker — offline cache + update detection.
    BUMP THE VERSION every time you deploy changed files; that is what
    makes installed copies show the "Update available" notice. */
-const VERSION = 'learnhub-v22';
+const VERSION = 'learnhub-v23';
 const FILES = [
   './', './index.html', './styles.css', './manifest.json', './icon-192.png', './icon-512.png', './logo.png',
   './storage.js', './util.js', './badges.js', './games.js', './print.js', './media.js', './drive.js', './dashboard.js', './app.js', './pwa.js', './colouring.js',
@@ -25,6 +25,7 @@ self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
   const url = new URL(e.request.url);
   if (url.origin !== location.origin) return;           // fonts etc. go straight to the network
+  if (/version\.json$/.test(url.pathname)) return;       // the version check always hits the network
   e.respondWith(
     fetch(e.request).then(res => {
       const copy = res.clone();
