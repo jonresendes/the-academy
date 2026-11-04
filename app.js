@@ -492,7 +492,7 @@
           '<h2>' + (pct === 100 ? 'Perfect!' : pct >= Badges.PASS_MARK ? 'You passed!' : 'Keep practising') + '</h2>' +
           '<p class="muted">' + score + ' of ' + qs.length + ' correct.' + (pct < Badges.PASS_MARK ? ' Read the lesson again and try once more.' : '') + '</p>' +
           (fresh.length ? '<p>' + fresh.map(a => '<span class="tag accent">' + a.icon + ' ' + esc(a.name) + '</span>').join(' ') + '</p>' : '') +
-          (o.extra ? o.extra(pct) : '') +
+          (o.extra ? o.extra(pct) : '') + (o.note ? o.note(pct) : '') +
           '<div class="btn-row" style="justify-content:center"><button class="btn" id="retry">Try again</button>' + (o.links || '') + '</div></div>';
         app.querySelector('#retry').addEventListener('click', o.retry);
         if (o.afterRender) o.afterRender();
@@ -522,7 +522,8 @@
         return fresh;
       },
       retry: () => pageTest(courseId, unitId),
-      links: '<a class="btn secondary" href="#/course/' + course.id + '">Lessons</a><a class="btn secondary" href="#/games/' + course.id + '/' + unit.id + '">Game Room</a>' });
+      links: '<a class="btn secondary" href="#/course/' + course.id + '">Back to the course</a><a class="btn secondary" href="#/games/' + course.id + '/' + unit.id + '">Game Room</a>',
+      note: (pct) => '<p class="muted small">Level changes are offered after lesson quizzes (85%+ to move up). Unit tests count toward awards and your teacher\'s level suggestions.</p>' });
   }
 
   function pageQuiz(courseId, unitId, lessonIdx) {
@@ -545,9 +546,12 @@
         return Badges.evaluate(course, unit);
       },
       extra: (pct) => levelPromptHtml(course, lessonIdx, pct),
+      note: (pct) => { if (Students.trackFor(course.id)) return ''; const l = Settings.level; if (pct >= 85 && l < 4) return ''; if (pct < BAND_MIN[l] && l > 1) return '';
+        return '<p class="muted small">Level ' + l + ' · ' + LEVEL_NAMES[l] + (l < 4 ? ' — score 85% or more on a quiz to be offered Level ' + (l + 1) + '.' : ' — the top level.') + (l > 1 && pct >= BAND_MIN[l] ? ' You are above the Level ' + l + ' band (' + BAND_MIN[l] + '%+).' : '') + '</p>'; },
       afterRender: () => bindLevelPrompt(course),
       retry: () => pageQuiz(courseId, unitId, lessonIdx),
-      links: '<a class="btn secondary" href="#/lesson/' + course.id + '/' + unit.id + '/' + lessonIdx + '">Back to the lesson</a>' });
+      links: (function () { const ls = lessonsFor(unit); const pos = ls.findIndex(l => l._idx === lessonIdx); const next = pos >= 0 && pos < ls.length - 1 ? ls[pos + 1] : null;
+        return '<a class="btn secondary" href="#/lesson/' + course.id + '/' + unit.id + '/' + lessonIdx + '">Back to the lesson</a>' + (next ? '<a class="btn success" href="#/lesson/' + course.id + '/' + unit.id + '/' + next._idx + '">Next lesson →</a>' : '<a class="btn success" href="#/test/' + course.id + '/' + unit.id + '">Unit test →</a>') + '<a class="btn ghost" href="#/course/' + course.id + '">Back to the course</a>'; })() });
   }
 
   /* ----- Game Room ----- */
