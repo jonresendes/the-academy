@@ -11,7 +11,7 @@
    Paper copies use the signed-in student's level and accommodations, like the screen.
    ========================================================= */
 (function () {
-  const { L, esc, md, slidesFor, questionsFor, lessonQuestions, assignmentsFor, lessonsFor, findCourse, findUnit, byLevel, assessmentCount, assessmentOrder, termsFor } = window.LH;
+  const { L, esc, md, slidesFor, questionsFor, lessonQuestions, assignmentsFor, lessonsFor, findCourse, findUnit, byLevel, assessmentCount, assessmentOrder, termsFor, lessonAt } = window.LH;
   const app = document.getElementById('app');
   const keyOn = () => !Settings.locked && sessionStorage.getItem('learnhub.printKey') === '1';
 
@@ -20,7 +20,7 @@
     const slides = slidesFor(les);
     return '<section class="p-section"><h2 class="p-h2">Lesson ' + n + ' · ' + esc(les.title) + '</h2>' +
       slides.map((s, i) => '<div class="p-slide"><h3>' + (s.visual ? s.visual + ' ' : '') + esc(L(s.title)) + '</h3>' + md(LH.body(s)) + (s.html ? L(s.html) : '') +
-        (les.media || []).filter(m => m.slide === i && m.src).map(m => m.type === 'image' ? '<figure class="p-fig"><img src="' + esc(m.src) + '" alt="' + esc(m.title) + '"><figcaption>' + esc(m.title) + '</figcaption></figure>' : '<p class="p-media">🎬 ' + esc(m.title) + ' — ' + esc(m.src) + '</p>').join('') + '</div>').join('') +
+        (les.media || []).filter(m => String(m.slide) === String(s._added !== undefined ? 'a' + s._added : s._i) && m.src && !/^idb:/.test(m.src)).map(m => m.type === 'image' ? '<figure class="p-fig"><img src="' + esc(m.src) + '" alt="' + esc(m.title) + '"><figcaption>' + esc(m.title) + '</figcaption></figure>' : '<p class="p-media">🎬 ' + esc(m.title) + ' — ' + esc(m.src) + '</p>').join('') + '</div>').join('') +
       '</section>';
   }
   function termsHtml(unit, les) {
@@ -75,7 +75,7 @@
     document.documentElement.style.setProperty('--course', course.color || 'var(--primary)');
     Settings.activeCourse = course.id;
     const lessons = lessonsFor(unit); i = +i || 0; n = +n || 0;
-    const les = unit.lessons[i]; const pos = lessons.findIndex(l => l._idx === i) + 1;
+    const les = LH.lessonAt(unit, i); const pos = lessons.findIndex(l => l._idx === i) + 1;
     const me = Students.current;
     let title = '', parts = [], keys = [];
     const addQuiz = (les, i, pos) => { const qs = quizSet(unit, i); if (qs.length) { parts.push(questionsHtml(qs, 'Quiz · Lesson ' + pos + ' · ' + les.title, unit.title + ' · ' + qs.length + ' questions')); keys.push(keyHtml(qs, 'Lesson ' + pos + ' quiz')); } };

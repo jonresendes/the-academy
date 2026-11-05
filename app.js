@@ -15,7 +15,7 @@
      #/settings                 Settings (collapsible groups; teacher tools in a teacher session)
    ========================================================= */
 (function () {
-  const { L, esc, md, speakBtn, slidesFor, questionsFor, termsFor, findCourse, findUnit, normalize, shuffle, byLevel, LEVELS, LEVEL_NAMES, LEVEL_DESC, unitsFor, lessonsFor, focusFor, catsOf, allTermKeys, markSeen, accom, assessmentCount, assessmentOrder, lessonQuestions, assignmentsFor } = window.LH;
+  const { L, esc, md, speakBtn, slidesFor, questionsFor, termsFor, findCourse, findUnit, normalize, shuffle, byLevel, LEVELS, LEVEL_NAMES, LEVEL_DESC, unitsFor, lessonsFor, focusFor, catsOf, allTermKeys, markSeen, accom, assessmentCount, assessmentOrder, lessonQuestions, assignmentsFor, lessonAt } = window.LH;
   const app = document.getElementById('app');
   const allCourses = () => window.LearnHub.courses || [];
   /** Courses the signed-in student is enrolled in (every course when no list is set). */
@@ -267,7 +267,7 @@
     const q = courseSearch.q.trim().toLowerCase();
     app.innerHTML = crumbs([{ label: 'Dashboard', href: '#/' }, { label: course.title }]) +
       '<div class="page-head"><div><h1>' + course.icon + ' ' + esc(course.title) + '</h1><p class="muted">' + esc(L(course.description) || course.subtitle || '') + '</p></div>' +
-      '<div class="btn-row"><a class="btn secondary" href="#/case/' + course.id + '">🏆 Display Case</a><button class="btn ghost sm" id="archiveCourse" title="Hide this class on your home page (you can bring it back)">📦 Archive class</button></div></div>' + planBanner(course) + levelBanner(course) +
+      '<div class="btn-row"><a class="btn secondary" href="#/case/' + course.id + '">🏆 Display Case</a>' + (Students.current.isStaff ? '' : '<button class="btn ghost sm" id="archiveCourse" title="Hide this class on your home page (you can bring it back)">📦 Archive class</button>') + '</div></div>' + Overlay.bar(course) + planBanner(course) + (Students.current.isStaff ? '' : levelBanner(course)) +
       '<div class="search-row course-search"><input class="text-input" id="courseQ" placeholder="🔍 Find a lesson by keyword (e.g. census, ritual, festival)" value="' + esc(courseSearch.q) + '"><button class="btn secondary" id="courseGo">Search</button>' + (q ? '<button class="btn ghost" id="courseClear">Clear</button>' : '') + '</div>' +
       '<div class="unit-list">' + unitsFor(course).map(unit => {
         const idx = course.units.indexOf(unit);
@@ -284,7 +284,7 @@
           '<p class="muted small">' + esc(L(unit.description) || '') + '</p></div>' +
           '<div class="unit-side"><div class="progress"><span style="width:' + pct + '%"></span></div>' +
           '<div class="unit-badges">' + awards.map(a => '<span class="' + (a.earnedAt ? '' : 'locked') + '" title="' + esc(a.name) + '">' + a.icon + '</span>').join('') + '</div></div></div>' +
-          '<div class="lesson-list">' + (q ? hits : lessons).map((les, k) => lessonRow(course, unit, les, lessons.indexOf(les) + 1, q && hits.includes(les))).join('') + '</div>' +
+          '<div class="lesson-list">' + (q ? hits : lessons).map((les, k) => lessonRow(course, unit, les, lessons.indexOf(les) + 1, q && hits.includes(les)) + Overlay.lessonTools(course, unit, les)).join('') + '</div>' + Overlay.unitTools(course, unit) +
           '<div class="unit-foot">' + goalsHtml(course, unit) +
           '<div class="rooms">' +
           '<a class="room" href="#/test/' + course.id + '/' + unit.id + '"><span class="room-icon">📝</span><span>Unit test' + (u.testBest ? ' <span class="muted">· best ' + u.testBest + '%</span>' : '') + '</span></a>' +
@@ -300,6 +300,7 @@
     app.querySelector('#courseGo').addEventListener('click', run);
     app.querySelector('#courseQ').addEventListener('keydown', e => { if (e.key === 'Enter') run(); });
     const cl = app.querySelector('#courseClear'); if (cl) cl.addEventListener('click', () => { courseSearch.q = ''; pageCourse(courseId); });
+    Overlay.bindCourse(course, () => pageCourse(courseId));
   }
 
   /* ----- Lesson hub ----- */
@@ -313,7 +314,7 @@
     const as = assignmentsFor(les);
     const quizN = assessmentCount(byLevel(Settings.level, [4, 6, 8, 10]));
     const base = '/' + course.id + '/' + unit.id + '/' + les._idx;
-    app.innerHTML = crumbs([{ label: 'Dashboard', href: '#/' }, { label: course.title, href: '#/course/' + course.id }, { label: unit.title, href: '#/course/' + course.id }, { label: 'Lesson ' + (pos + 1) }]) +
+    app.innerHTML = crumbs([{ label: 'Dashboard', href: '#/' }, { label: course.title, href: '#/course/' + course.id }, { label: unit.title, href: '#/course/' + course.id }, { label: 'Lesson ' + (pos + 1) }]) + Overlay.bar(course) +
       '<div class="page-head"><div><span class="tag">Lesson ' + (pos + 1) + ' of ' + lessons.length + '</span><h1 style="margin-top:0.4rem">' + esc(les.title) + '</h1><p class="muted">' + esc(unit.title) + '</p></div>' +
       '<div class="btn-row">' + Print.button('#/print/' + course.id + '/' + unit.id + '/lesson/' + les._idx, 'Print lesson') + (pos > 0 ? '<a class="btn ghost" href="#/lesson/' + course.id + '/' + unit.id + '/' + lessons[pos - 1]._idx + '">← Lesson ' + pos + '</a>' : '') +
       (pos < lessons.length - 1 ? '<a class="btn ghost" href="#/lesson/' + course.id + '/' + unit.id + '/' + lessons[pos + 1]._idx + '">Lesson ' + (pos + 2) + ' →</a>' : '') + '</div></div>' +
@@ -323,7 +324,9 @@
                  : '<div class="card part muted"><div class="card-icon">❓</div><h3>Quiz</h3><p class="small">No quiz for this lesson.</p></div>') +
       (as.length ? as.map((a, k) => { const w = work[a._idx] || {}; return '<a class="card link part" href="#/assign' + base + '/' + a._idx + '"><div class="card-icon">✍️</div><h3>Assignment ' + (k + 1) + '</h3><p class="muted small">' + esc(a.title) + '</p>' + (w.done ? '<span class="tag ok">✓ Handed in</span>' : w.text ? '<span class="tag accent">Draft saved</span>' : '<span class="tag">To do</span>') + '</a>'; }).join('')
                  : '') + '</div>' +
-      (pos === lessons.length - 1 ? '<div class="card center" style="margin-top:1.25rem"><h3>Finished every lesson in the unit?</h3><p class="muted small">The unit test covers all ' + lessons.length + ' lessons.</p><a class="btn" href="#/test/' + course.id + '/' + unit.id + '">📝 Take the unit test</a></div>' : '');
+      (pos === lessons.length - 1 ? '<div class="card center" style="margin-top:1.25rem"><h3>Finished every lesson in the unit?</h3><p class="muted small">The unit test covers all ' + lessons.length + ' lessons.</p><a class="btn" href="#/test/' + course.id + '/' + unit.id + '">📝 Take the unit test</a></div>' : '') +
+      Overlay.lessonEditor(course, unit, les);
+    Overlay.bindLessonEditor(course, unit, les, () => pageLesson(courseId, unitId, lessonIdx));
   }
 
   /* ----- Work folder: every assignment in a unit with its draft / handed-in state ----- */
@@ -358,7 +361,7 @@
     const course = findCourse(courseId), unit = findUnit(course, unitId); if (!unit || !Students.enrolled(course.id)) return notFound();
     setCourseColor(course); setNav('home');
     lessonIdx = +lessonIdx || 0; n = +n || 0;
-    const les = unit.lessons[lessonIdx]; const a = (les && assignmentsFor(les).find(x => x._idx === n)); if (!a) return notFound();
+    const les = lessonAt(unit, lessonIdx); const a = (les && assignmentsFor(les).find(x => x._idx === n)); if (!a) return notFound();
     const u = Progress.unit(course.id, unit.id); u.work = u.work || {}; const wl = u.work[lessonIdx] = u.work[lessonIdx] || {}; const w = wl[n] = wl[n] || { text: '', done: false };
     const starter = L(a.starter) || '';
     const words = t => String(t || '').trim().split(/\s+/).filter(Boolean).length;
@@ -392,11 +395,19 @@
     return m ? 'https://www.youtube-nocookie.com/embed/' + m[1] : null;
   }
   function mediaHtml(lesson, slideIdx) {
-    const slots = (lesson.media || []).filter(m => m.slide === slideIdx);
+    const key = slideIdx && slideIdx._added !== undefined ? 'a' + slideIdx._added : (slideIdx && slideIdx._i !== undefined ? slideIdx._i : slideIdx);
+    const slots = (lesson.media || []).filter(m => String(m.slide) === String(key));
     if (!slots.length) return '';
     return slots.map(m => {
       if (m.src) {
-        if (m.type === 'image') return '<figure class="media-fig"><img src="' + esc(m.src) + '" alt="' + esc(m.title) + '" loading="lazy"><figcaption>' + esc(m.title) + (m.source ? ' <span class="muted">· ' + esc(m.source) + '</span>' : '') + '</figcaption></figure>';
+        const cap = esc(m.title) + (m.source ? ' <span class="muted">· ' + esc(m.source) + '</span>' : '');
+        if (/^idb:/.test(m.src)) { const id = esc(m.src.slice(4));
+          if (m.type === 'video') return '<figure class="media-fig"><video controls data-idb="' + id + '" style="max-width:100%;max-height:420px;border-radius:10px"></video><figcaption>' + cap + '</figcaption></figure>';
+          if (m.type === 'audio') return '<figure class="media-fig"><audio controls data-idb="' + id + '"></audio><figcaption>' + cap + '</figcaption></figure>';
+          return '<figure class="media-fig"><img data-idb="' + id + '" alt="' + esc(m.title) + '"><figcaption>' + cap + '</figcaption></figure>'; }
+        if (m.type === 'image') return '<figure class="media-fig"><img src="' + esc(m.src) + '" alt="' + esc(m.title) + '" loading="lazy"><figcaption>' + cap + '</figcaption></figure>';
+        if (m.type === 'audio') return '<figure class="media-fig"><audio controls src="' + esc(m.src) + '"></audio><figcaption>' + cap + '</figcaption></figure>';
+        if (m.type === 'video' && /\.(mp4|webm|mov|m4v)(\?|$)/i.test(m.src)) return '<figure class="media-fig"><video controls src="' + esc(m.src) + '" style="max-width:100%;max-height:420px;border-radius:10px"></video><figcaption>' + cap + '</figcaption></figure>';
         const e = embedUrl(m.src);
         return e ? '<div class="media-video"><iframe src="' + esc(e) + '" title="' + esc(m.title) + '" allowfullscreen loading="lazy"></iframe><div class="small muted">🎬 ' + esc(m.title) + (m.source ? ' · ' + esc(m.source) : '') + '</div></div>'
                  : '<p class="media-link">🎬 <a href="' + esc(m.src) + '" target="_blank" rel="noopener">' + esc(m.title) + '</a>' + (m.source ? ' <span class="muted small">· ' + esc(m.source) + '</span>' : '') + '</p>';
@@ -417,23 +428,26 @@
     lessonIdx = +lessonIdx || 0;
     if (!lessons.some(l => l._idx === lessonIdx)) lessonIdx = lessons[0]._idx;
     const pos = lessons.findIndex(l => l._idx === lessonIdx);
-    const lesson = lessons[pos];
-    const slides = slidesFor(lesson);
+    let lesson = lessons[pos];
+    let slides = slidesFor(lesson);
     const u = Progress.unit(course.id, unit.id);
     let i = 0;
     const seen = () => u.slides[lessonIdx] || [];
-    const lessonDone = li => { const s = slidesFor(unit.lessons[li]); return s.length > 0 && s.every((_, k) => (u.slides[li] || []).includes(k)); };
+    const lessonDone = li => { const s = slidesFor(lessonAt(unit, li)); return s.length > 0 && s.every((_, k) => (u.slides[li] || []).includes(k)); };
 
     const draw = () => {
+      lesson = lessonAt(unit, lessonIdx); slides = slidesFor(lesson);   // re-read: the teacher may have just edited this slide
+      if (!slides.length) { app.innerHTML = Overlay.bar(course) + '<div class="empty">This lesson has no slides for the current level.</div>'; Overlay.bindBar(draw); return; }
+      if (i >= slides.length) i = slides.length - 1;
       Progress.markSlide(course.id, unit.id, lessonIdx, i);
       const s = slides[i];
-      app.innerHTML = crumbs([{ label: 'Dashboard', href: '#/' }, { label: course.title, href: '#/course/' + course.id }, { label: unit.title, href: '#/course/' + course.id }, { label: 'Lesson ' + (pos + 1), href: '#/lesson/' + course.id + '/' + unit.id + '/' + lessonIdx }, { label: 'Slides' }]) +
+      app.innerHTML = crumbs([{ label: 'Dashboard', href: '#/' }, { label: course.title, href: '#/course/' + course.id }, { label: unit.title, href: '#/course/' + course.id }, { label: 'Lesson ' + (pos + 1), href: '#/lesson/' + course.id + '/' + unit.id + '/' + lessonIdx }, { label: 'Slides' }]) + Overlay.bar(course) +
         '<div class="page-head"><div><span class="tag">Lesson ' + (pos + 1) + ' of ' + lessons.length + '</span><h1 style="margin-top:0.4rem">📖 ' + esc(lesson.title) + '</h1><p class="muted">' + esc(unit.title) + '</p></div>' +
         '<div class="btn-row">' + Print.button('#/print/' + course.id + '/' + unit.id + '/slides/' + lessonIdx, 'Print slides') + '<a class="btn ghost" href="#/lesson/' + course.id + '/' + unit.id + '/' + lessonIdx + '">✕ Lesson page</a></div></div>' +
         '<div class="lesson-tabs">' + lessons.map(les => '<a href="#/study/' + course.id + '/' + unit.id + '/' + les._idx + '" class="' + (les._idx === lessonIdx ? 'active' : '') + (lessonDone(les._idx) ? ' done' : '') + '">' + esc(les.title) + '</a>').join('') + '</div>' +
         '<div class="slide">' + (s.visual ? '<div class="slide-visual">' + s.visual + '</div>' : '') +
         '<div class="slide-read"><div class="btn-row between"><h2>' + esc(L(s.title)) + '</h2>' + speakBtn(L(s.title) + '. ' + String(LH.body(s)).replace(/[*#-]/g, ''), '.slide-read') + '</div>' +
-        '<div class="slide-body">' + md(LH.body(s)) + (s.html ? L(s.html) : '') + '</div></div>' + mediaHtml(lesson, i) +
+        '<div class="slide-body">' + md(LH.body(s)) + (s.html ? L(s.html) : '') + '</div></div>' + mediaHtml(lesson, s) +
         (i === slides.length - 1 && Settings.get('dictation') !== false && Media.canRecord ? '<div class="plan-section"><div class="plan-label">🎙️ Voice note — say what you learned (optional)</div><div data-recorder="' + esc(Students.current.id + '/' + course.id + '/' + unit.id + '/' + lessonIdx + '/note') + '" data-label="Record a voice note"></div></div>' : '') +
         '<div class="slide-foot"><button class="btn secondary" id="prevBtn"' + (i === 0 ? ' disabled' : '') + '>← Back</button>' +
         '<div class="dots">' + slides.map((_, k) => '<span class="' + (k === i ? 'current' : seen().includes(k) ? 'seen' : '') + '"></span>').join('') + '</div>' +
@@ -442,7 +456,9 @@
             pos < lessons.length - 1 ? '<a class="btn success" href="#/lesson/' + course.id + '/' + unit.id + '/' + lessons[pos + 1]._idx + '">Next lesson →</a>' :
             '<a class="btn success" href="#/test/' + course.id + '/' + unit.id + '">Go to the unit test →</a>')) +
         '</div></div>' +
-        '<p class="muted small center" style="margin-top:1rem">Slide ' + (i + 1) + ' of ' + slides.length + ' · Lesson ' + (pos + 1) + ' of ' + lessons.length + '</p>';
+        '<p class="muted small center" style="margin-top:1rem">Slide ' + (i + 1) + ' of ' + slides.length + ' · Lesson ' + (pos + 1) + ' of ' + lessons.length + '</p>' +
+        Overlay.slideEditor(course, unit, lesson, s);
+      Overlay.bindSlideEditor(course, unit, lesson, s, (what) => { if (what === 'added') i = lesson._custom ? i + 1 : 1e9; draw(); });
       const prev = app.querySelector('#prevBtn'), next = app.querySelector('#nextBtn');
       if (prev) prev.addEventListener('click', () => { i--; draw(); });
       if (next) next.addEventListener('click', () => { i++; draw(); });
@@ -529,7 +545,7 @@
   function pageQuiz(courseId, unitId, lessonIdx) {
     const course = findCourse(courseId), unit = findUnit(course, unitId); if (!unit || !Students.enrolled(course.id)) return notFound();
     setCourseColor(course); setNav('home');
-    lessonIdx = +lessonIdx || 0; const les = unit.lessons[lessonIdx]; if (!les) return notFound();
+    lessonIdx = +lessonIdx || 0; const les = lessonAt(unit, lessonIdx); if (!les) return notFound();
     const u = Progress.unit(course.id, unit.id); u.quiz = u.quiz || {};
     const rec = u.quiz[lessonIdx] || (u.quiz[lessonIdx] = { best: 0, attempts: 0, passed: false });
     const head = crumbs([{ label: 'Dashboard', href: '#/' }, { label: course.title, href: '#/course/' + course.id }, { label: les.title, href: '#/lesson/' + course.id + '/' + unit.id + '/' + lessonIdx }, { label: 'Quiz' }]) +
@@ -681,6 +697,9 @@
         (archived.length ? '<optgroup label="Archived">' + archived.map(sec => '<option value="' + sec.id + '"' + (cur && cur.id === sec.id ? ' selected' : '') + '>📦 ' + esc(sec.name) + (sec.term ? ' · ' + esc(sec.term) : '') + '</option>').join('') + '</optgroup>' : '') + '</select>' +
         (cur ? '<button class="btn ghost sm" data-section-archive="' + cur.id + '">' + (cur.archived ? '📤 Retrieve' : '📦 Archive') + '</button>' : '<span></span>') +
         '<button class="btn secondary sm" id="sectionsToggle">' + (open ? '▾ Hide' : '＋ New section') + '</button></div>' +
+      (cur ? '<div class="small" style="margin:0.5rem 0 0">✏️ Classroom shell: <strong>' + Overlay.countChanges(cur, cur.courseId) + '</strong> customisation' + (Overlay.countChanges(cur, cur.courseId) === 1 ? '' : 's') + ' · <a href="#/course/' + cur.courseId + '">open the course to customise</a>' +
+        (Sections.list.filter(x => x.id !== cur.id && x.courseId === cur.courseId && x.overlay).length ? ' · <select class="text-input" id="ovCopyFrom" style="max-width:280px;display:inline-block"><option value="">copy customisations from…</option>' + Sections.list.filter(x => x.id !== cur.id && x.courseId === cur.courseId && x.overlay).map(x => '<option value="' + x.id + '">' + esc(x.name) + (x.term ? ' · ' + esc(x.term) : '') + '</option>').join('') + '</select>' : '') +
+        (Overlay.countChanges(cur, cur.courseId) ? ' · <button class="btn ghost sm" id="ovReset">Reset to the program</button>' : '') + '</div>' : '') +
       (cur ? '<p class="small muted" style="margin:0.4rem 0 0">' + (cur.archived ? '📦 Archived section — ' : '') + 'Course: <strong>' + esc((findCourseAll(cur.courseId) || { title: cur.courseId }).title) + '</strong>' + (cur.teacherId ? ' · Teacher: ' + esc((teachers.find(t => t.id === cur.teacherId) || { name: '?' }).name) : Staff.isMaster ? ' · no teacher assigned' : '') + ' · ' + (cur.students || []).length + ' student' + ((cur.students || []).length === 1 ? '' : 's') + '</p>' : '') +
       (open ? '<div class="plan-unit" style="margin-top:0.6rem"><div class="plan-label">New section</div><div class="search-row" style="grid-template-columns:1fr 1fr 1fr' + (Staff.isMaster ? ' 1fr' : '') + ' auto"><input class="text-input" id="secName" placeholder="Name, e.g. HRF3O Period 2"><select class="text-input" id="secCourse">' + allCourses().map(c => '<option value="' + c.id + '">' + c.icon + ' ' + esc(c.title) + '</option>').join('') + '</select><input class="text-input" id="secTerm" placeholder="Term, e.g. Fall 2026">' +
         (Staff.isMaster ? '<select class="text-input" id="secTeacher"><option value="">Teacher: me (master)</option>' + teachers.map(t => '<option value="' + t.id + '">' + esc(t.name) + '</option>').join('') + '</select>' : '') + '<button class="btn" id="secCreate">Create</button></div></div>' : '');
@@ -691,6 +710,8 @@
     const tg = app.querySelector('#sectionsToggle'); if (tg) tg.addEventListener('click', () => { sessionStorage.setItem('learnhub.sectionsOpen', sessionStorage.getItem('learnhub.sectionsOpen') === '1' ? '0' : '1'); pageSettings(); });
     const cr = app.querySelector('#secCreate'); if (cr) cr.addEventListener('click', () => { const name = app.querySelector('#secName').value.trim(); if (!name) return alert('Give the section a name.'); const tSel = app.querySelector('#secTeacher'); const sec = Sections.add(name, app.querySelector('#secCourse').value, tSel && tSel.value ? tSel.value : (Staff.isMaster ? null : sid), app.querySelector('#secTerm').value.trim()); Sections.setCurrent(sid, sec.id); sessionStorage.setItem('learnhub.sectionsOpen', '0'); pageSettings(); });
     app.querySelectorAll('[data-section-archive]').forEach(b => b.addEventListener('click', () => { const sec = Sections.byId(b.dataset.sectionArchive); Sections.setArchived(sec.id, !sec.archived); if (sec.archived) Sections.setCurrent(sid, null); pageSettings(); }));
+    const cf = app.querySelector('#ovCopyFrom'); if (cf) cf.addEventListener('change', () => { const cur = Sections.currentFor(sid); if (cf.value && confirm('Copy all customisations from that section into ' + cur.name + '? This replaces any customisations ' + cur.name + ' already has.')) { Overlay.copyOverlay(cf.value, cur.id); pageSettings(); } });
+    const rs = app.querySelector('#ovReset'); if (rs) rs.addEventListener('click', () => { const cur = Sections.currentFor(sid); if (confirm('Remove every customisation in ' + cur.name + ' and show the program version?')) { Overlay.resetOverlay(cur.id); pageSettings(); } });
   }
 
   /* ----- Teachers (master only) ----- */

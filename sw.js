@@ -1,10 +1,10 @@
 /* LearnHub service worker — offline cache + update detection.
    BUMP THE VERSION every time you deploy changed files; that is what
    makes installed copies show the "Update available" notice. */
-const VERSION = 'learnhub-v26';
+const VERSION = 'learnhub-v27';
 const FILES = [
   './', './index.html', './styles.css', './manifest.json', './icon-192.png', './icon-512.png', './logo.png',
-  './storage.js', './util.js', './badges.js', './games.js', './print.js', './media.js', './drive.js', './dashboard.js', './app.js', './pwa.js', './colouring.js',
+  './storage.js', './util.js', './badges.js', './games.js', './print.js', './media.js', './drive.js', './overlay.js', './dashboard.js', './app.js', './pwa.js', './colouring.js',
   './english.js', './science.js', './olc4o.js', './hrf3o.js', './media-guide-hrf3o.html', './media-guide-olc4o.html'
 ];
 

@@ -225,6 +225,19 @@ Good sources of public-domain line art: openclipart.org, publicdomainvectors.org
 
 Accounts are stored on the device (`learnhub.staff`, `learnhub.sections`). To move a roster or a student's work to another device, use the export/import below.
 
+## Classroom shell (per-section customisation)
+
+A teacher can tailor any course for **one section** without touching the program or other teachers' classes. Everything lives in an *overlay* on the section (`Sections.list[n].overlay[courseId][unitId]`); the course files are never edited.
+
+- **Turn it on** — sign in as a teacher, open the course, pick one of your sections in the bar at the top, then **✏️ Customise**. The orange bar means every change applies only to that section. **✓ Done customising** hides the tools.
+- **Course page** — move lessons up/down, rename or hide a lesson (hidden ones are listed so you can bring them back), add a lesson of your own, add or hide words in the unit word bank, reset the unit to the program.
+- **Slides** — under each slide: edit the title and text at every level (1–4 and the Modified bands), change the icon, hide the slide, add a slide after it, revert to the original. Media slots: paste a link (image, YouTube, audio or video URL), **upload** a picture / audio / video from the device, or add a new media item with a caption.
+- **Lesson page** — edit, hide or add assignments (task, sentence starter and success criteria at each level); edit, hide or add quiz questions (multiple choice, true/false, fill-in; optionally only at some levels). Added questions join that lesson's quiz and the unit test for the section.
+- **Students** see the customised course automatically through the section they are enrolled in (first non-archived section for that course). Teacher tools never appear for students.
+- **Settings → Sections** shows the number of customisations for the current section, **copy customisations from…** another section of the same course, and **Reset to the program**.
+- **Uploads** are stored in the browser (IndexedDB, 25 MB per file) and only show on the device they were uploaded to; a link works everywhere. Exports and Google Drive pushes carry the overlay (edits, links, hidden items) but not uploaded files.
+- Printing uses the customised text; uploaded pictures are skipped on paper.
+
 ## Level progression (85% rule)
 
 After every lesson quiz on the standard track:

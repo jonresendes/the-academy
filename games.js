@@ -406,7 +406,7 @@
 
       const play = () => {
         const pic = pics[state.pic];
-        const lesson = ctx.unit.lessons[state.lesson] || { slides: [] };
+        const lesson = window.LH.lessonAt(ctx.unit, state.lesson) || { slides: [] };
         const cards = window.LH.slidesFor(lesson).map(s => ({ title: L(s.title), body: LH.body(s), visual: s.visual || '' }));
         const facts = cards.map(c => c.title + ': ' + shorten(String(c.body).replace(/[*\n-]+/g, ' ').trim(), 150))
           .concat(termsFor(ctx.unit).map(t => t.term + ' — ' + t.def));

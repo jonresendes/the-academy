@@ -1,5 +1,5 @@
 {
- "version": "26",
- "date": "2026-11-04",
- "notes": "Fix Google Drive 401 on folder creation and upload"
+ "version": "27",
+ "date": "2026-11-05",
+ "notes": "Classroom shell: teachers customise lessons, slides, words, questions, assignments and media per section; picture/audio/video uploads"
 }

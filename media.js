@@ -44,13 +44,37 @@
   }
 
   /* ---------- recordings in IndexedDB ---------- */
-  const DB = 'learnhub-media', STORE = 'audio';
+  const DB = 'learnhub-media', STORE = 'audio', FILES = 'files';
   function db() {
     return new Promise((res, rej) => {
-      const r = indexedDB.open(DB, 1);
-      r.onupgradeneeded = () => { r.result.createObjectStore(STORE); };
+      const r = indexedDB.open(DB, 2);
+      r.onupgradeneeded = () => { const d = r.result; if (!d.objectStoreNames.contains(STORE)) d.createObjectStore(STORE); if (!d.objectStoreNames.contains(FILES)) d.createObjectStore(FILES); };
       r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
     });
+  }
+  /* ---------- uploaded media files (pictures, audio, video) for the classroom shell ----------
+     Stored on this device; referenced from a slide's media as src 'idb:<id>'. */
+  const MAX_FILE = 25 * 1024 * 1024;
+  async function putFile(file, meta) {
+    if (file.size > MAX_FILE) throw new Error('That file is ' + Math.round(file.size / 1048576) + ' MB — the limit is 25 MB. Try a smaller file or paste a link instead.');
+    const id = 'f' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    const d = await db();
+    await new Promise((res, rej) => { const tx = d.transaction(FILES, 'readwrite'); tx.objectStore(FILES).put({ blob: file, type: file.type, name: file.name, size: file.size, at: new Date().toISOString(), meta: meta || {} }, id); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); });
+    return id;
+  }
+  async function getFile(id) { const d = await db(); return new Promise((res, rej) => { const r = d.transaction(FILES).objectStore(FILES).get(id); r.onsuccess = () => res(r.result || null); r.onerror = () => rej(r.error); }); }
+  async function delFile(id) { const d = await db(); return new Promise((res, rej) => { const tx = d.transaction(FILES, 'readwrite'); tx.objectStore(FILES).delete(id); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); }
+  const urlCache = {};
+  /** Object URL for an uploaded file id (cached). */
+  async function fileUrl(id) { if (urlCache[id]) return urlCache[id]; const f = await getFile(id); if (!f) return null; return urlCache[id] = URL.createObjectURL(f.blob); }
+  /** Fill in <img|video|audio data-idb="id"> elements with their object URLs. */
+  async function mountIdb(root) {
+    for (const el of (root || document).querySelectorAll('[data-idb]:not([data-idb-ready])')) {
+      el.dataset.idbReady = '1';
+      const f = await getFile(el.dataset.idb); if (!f) { el.replaceWith(Object.assign(document.createElement('div'), { className: 'muted small', textContent: '(uploaded file not on this device)' })); continue; }
+      const url = urlCache[el.dataset.idb] || (urlCache[el.dataset.idb] = URL.createObjectURL(f.blob));
+      if (el.tagName === 'IMG' || el.tagName === 'VIDEO' || el.tagName === 'AUDIO') el.src = url; else el.href = url;
+    }
   }
   async function put(key, blob, meta) { const d = await db(); return new Promise((res, rej) => { const tx = d.transaction(STORE, 'readwrite'); tx.objectStore(STORE).put({ blob, type: blob.type, at: new Date().toISOString(), meta: meta || {} }, key); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); }
   async function get(key) { const d = await db(); return new Promise((res, rej) => { const r = d.transaction(STORE).objectStore(STORE).get(key); r.onsuccess = () => res(r.result || null); r.onerror = () => rej(r.error); }); }
@@ -90,8 +114,8 @@
     }
   }
   // mount whenever the app re-renders
-  const mo = new MutationObserver(() => { if (document.querySelector('[data-recorder]:not([data-ready])')) mountRecorders(); });
+  const mo = new MutationObserver(() => { if (document.querySelector('[data-recorder]:not([data-ready])')) mountRecorders(); if (document.querySelector('[data-idb]:not([data-idb-ready])')) mountIdb(); });
   mo.observe(document.getElementById('app') || document.body, { childList: true, subtree: true });
 
-  window.Media = { canDictate, canRecord, dictateBtn, stopDictation, put, get, del, keys, mountRecorders };
+  window.Media = { canDictate, canRecord, dictateBtn, stopDictation, put, get, del, keys, mountRecorders, putFile, getFile, delFile, fileUrl, mountIdb, MAX_FILE };
 })();

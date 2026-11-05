@@ -209,7 +209,7 @@
     byId(id) { return this.list.find(x => x.id === id) || null; },
     /** Sections a staff member may see (master: all). */
     visible(staffId, includeArchived) { return this.list.filter(sec => (staffId === 'master' || sec.teacherId === staffId) && (includeArchived || !sec.archived)); },
-    add(name, courseId, teacherId, term) { const sec = { id: 'sec' + Date.now().toString(36), name: String(name).trim().slice(0, 60), courseId, teacherId: teacherId || null, term: term || '', students: [], archived: false, createdAt: new Date().toISOString() }; this.list.push(sec); this.save(); return sec; },
+    add(name, courseId, teacherId, term) { const sec = { id: 'sec' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name: String(name).trim().slice(0, 60), courseId, teacherId: teacherId || null, term: term || '', students: [], archived: false, createdAt: new Date().toISOString() }; this.list.push(sec); this.save(); return sec; },
     update(id, patch) { const sec = this.byId(id); if (sec) { Object.assign(sec, patch); this.save(); } },
     remove(id) { this.data.list = this.list.filter(x => x.id !== id); this.save(); },
     setArchived(id, on) { this.update(id, { archived: !!on }); },

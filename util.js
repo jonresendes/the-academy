@@ -156,10 +156,52 @@
     return course.units.filter(u => Focus.unitEntry(course.id, u.id));
   }
 
-  /** Lessons of a unit the student can see, each tagged with its original index as `_idx`. */
+  /* ---------- Classroom shell (section overlay) ----------
+     A teacher's customisations for one section live in Sections.byId(id).overlay[courseId][unitId]:
+       { lessonOrder: [idx…] | null, lessons: { [idx]: { hidden, title, slides: { [i]: { hidden, title, body, mod } },
+         addSlides: [ { title, body, visual } ], assignments: { [n]: { hidden, title, prompt, starter, success } },
+         addAssignments: [ … ], media: { [m]: { src } } } },
+         customLessons: [ { title, slides: [ … ], assignments: [ … ] } ],      // appear as lesson indexes 1000+
+         questions: { hidden: [key…], edited: { [key]: q }, added: [ q… ] },
+         terms: { hidden: [term…], added: [ { term, def } ] } }
+     The overlay in force is the section the signed-in student belongs to for this course, or — in a
+     teacher session — the section the teacher has selected. Nothing is ever written to the course files. */
+  function overlaySection(courseId) {
+    if (!window.Sections || !window.Students) return null;
+    const s = Students.current; if (!s) return null;
+    let sec = null;
+    if (s.isStaff) { const cur = Sections.currentFor(s.staffId); sec = cur && cur.courseId === courseId ? cur : null; }
+    else sec = Sections.forStudent(s.id, true).find(x => x.courseId === courseId && !x.archived) || Sections.forStudent(s.id, true).find(x => x.courseId === courseId) || null;
+    return sec;
+  }
+  function unitOverlay(unit, create) {
+    const courseId = unit && unit.__courseId; if (!courseId) return null;
+    const sec = overlaySection(courseId); if (!sec) return null;
+    if (!create) return sec.overlay && sec.overlay[courseId] && sec.overlay[courseId][unit.id] || null;
+    sec.overlay = sec.overlay || {}; const c = sec.overlay[courseId] = sec.overlay[courseId] || {};
+    return c[unit.id] = c[unit.id] || { lessonOrder: null, lessons: {}, customLessons: [], questions: { hidden: [], edited: {}, added: [] }, terms: { hidden: [], added: [] } };
+  }
+  const CUSTOM_BASE = 1000;
+  /** A lesson by index (original or custom), with the overlay's title/media merged and `_ov` attached. */
+  function lessonAt(unit, idx) {
+    idx = +idx; const ov = unitOverlay(unit);
+    let base = idx >= CUSTOM_BASE ? (ov && ov.customLessons && ov.customLessons[idx - CUSTOM_BASE]) : unit.lessons[idx];
+    if (!base) return null;
+    const lo = ov && ov.lessons && ov.lessons[idx];
+    const les = Object.assign({ _idx: idx }, base);
+    if (idx >= CUSTOM_BASE) les._custom = true;
+    if (lo) { les._ov = lo; if (lo.title) les.title = lo.title;
+      if (lo.media && base.media) les.media = base.media.map((m, k) => lo.media[k] && lo.media[k].src !== undefined ? Object.assign({}, m, lo.media[k], lo.media[k].src ? {} : { type: m.type }) : m);
+      if (lo.addMedia && lo.addMedia.length) les.media = (les.media || []).concat(lo.addMedia.map((m, k) => Object.assign({ _added: k }, m))); }
+    return les;
+  }
+  /** Lessons of a unit the student can see, each tagged with its index as `_idx` (overlay order, hidden lessons removed). */
   function lessonsFor(unit) {
-    const f = focusFor(unit);
-    return unit.lessons.map((les, i) => Object.assign({ _idx: i }, les))
+    const f = focusFor(unit), ov = unitOverlay(unit);
+    const idxs = (ov && ov.lessonOrder) ? ov.lessonOrder.slice() : unit.lessons.map((_, i) => i);
+    if (ov && ov.customLessons) ov.customLessons.forEach((_, k) => { if (!idxs.includes(CUSTOM_BASE + k)) idxs.push(CUSTOM_BASE + k); });
+    return idxs.map(i => lessonAt(unit, i)).filter(Boolean)
+      .filter(les => !(les._ov && les._ov.hidden))
       .filter(les => !f || !f.lessons || f.lessons.includes(les._idx));
   }
 
@@ -169,16 +211,20 @@
   function termsFor(unit, level) {
     level = level || Settings.level;
     const f = focusFor(unit);
-    return (unit.terms || []).filter(t => band() || !t.levels || t.levels.includes(level))
+    const ov = unitOverlay(unit); const hiddenT = ov && ov.terms ? ov.terms.hidden || [] : [];
+    return (unit.terms || []).concat(ov && ov.terms ? ov.terms.added || [] : []).filter(t => !hiddenT.includes(L(t.term, 2))).filter(t => band() || !t.levels || t.levels.includes(level))
       .map(t => ({ term: L(t.term, level), def: def(t), key: L(t.term, 2) }))
       .filter(t => !f || !f.terms || f.terms.includes(t.key));
   }
 
-  /** Slides of a lesson for the level. */
+  /** Slides of a lesson for the level (with the section overlay's edits, hidden slides and added slides). */
   function slidesFor(lesson, level) {
     level = level || Settings.level;
-    if (band()) return lesson.slides || [];
-    return (lesson.slides || []).filter(s => !s.levels || s.levels.includes(level));
+    let slides = (lesson.slides || []).map((s, i) => { const o = lesson._ov && lesson._ov.slides && lesson._ov.slides[i]; return o ? Object.assign({}, s, o, { _i: i, _edited: true }) : Object.assign({}, s, { _i: i }); })
+      .filter(s => !s.hidden);
+    if (lesson._ov && lesson._ov.addSlides) slides = slides.concat(lesson._ov.addSlides.map((s, k) => Object.assign({}, s, { _added: k })));
+    if (band()) return slides;
+    return slides.filter(s => !s.levels || s.levels.includes(level));
   }
 
   /** Multiple-choice options resolved for the level. The answer is always present. */
@@ -222,12 +268,15 @@
     level = level || Settings.level;
     const f = focusFor(unit);
     const b = band();
+    const ov = unitOverlay(unit); const oq = ov && ov.questions;
+    const all = (unit.questions || []).map(q => oq && oq.edited && oq.edited[qKey(q)] ? Object.assign({}, oq.edited[qKey(q)], { _edited: true }) : q)
+      .filter(q => !(oq && oq.hidden && oq.hidden.includes(qKey(q)))).concat(oq && oq.added ? oq.added.map(q => Object.assign({}, q, { _added: true })) : []);
     let qs;
     if (b) {   // Modified: this band's questions, topped up with Level 1 items when a lesson has few
-      qs = (unit.questions || []).filter(q => q.bands && q.bands.includes(b));
-      const fallback = (unit.questions || []).filter(q => !q.bands && (!q.levels || q.levels.includes(1)));
+      qs = all.filter(q => q.bands && q.bands.includes(b));
+      const fallback = all.filter(q => !q.bands && (!q.levels || q.levels.includes(1)));
       qs = qs.concat(fallback.filter(q => !types || types.includes(q.type)).slice(0, Math.max(0, 6 - qs.length)));
-    } else qs = (unit.questions || []).filter(q => !q.bands && (!q.levels || q.levels.includes(level)));
+    } else qs = all.filter(q => !q.bands && (!q.levels || q.levels.includes(level)));
     if (f && f.cats) qs = qs.filter(q => !q.cat || f.cats.includes(q.cat));   // untagged questions always stay
     if (f && f.terms && !f.cats) qs = qs.filter(q => q.type !== 'match');     // a narrowed vocabulary list drops the big matching question
     if (types) qs = qs.filter(q => types.includes(q.type));
@@ -247,7 +296,7 @@
     level = level || Settings.level;
     const a = accom();
     const optLevel = a.simplify ? Math.max(1, level - 1) : level;   // choices from one level down
-    const r = { type: q.type, prompt: L(q.prompt, level), cat: q.cat || '', _key: qKey(q) };
+    const r = { type: q.type, prompt: L(q.prompt, level), cat: q.cat || '', _key: qKey(q) }; if (q._added) r._added = true; if (q._edited) r._edited = true;
     if (unit && unit.__courseId) r._unit = { courseId: unit.__courseId, unitId: unit.id };
     if (q.type === 'mc') { r.answer = L(q.answer, level); r.options = q.bands ? shuffle(q.options.slice()) : mcOptions(q, optLevel); if (!r.options.includes(r.answer)) r.options = shuffle([r.answer].concat(r.options.slice(0, -1))); }
     else if (q.type === 'tf') { r.answer = !!q.answer; r.options = ['True', 'False']; }
@@ -285,11 +334,14 @@
      lesson lists `cats: ['Nouns', 'Verbs']`, or the category starts with "L<n> "
      where n is the lesson's position (the convention used by OLC4O and HRF3O). */
   function lessonCats(unit, lessonIdx) {
-    const les = unit.lessons[lessonIdx]; if (!les) return [];
+    const les = lessonAt(unit, lessonIdx); if (!les) return [];
     if (Array.isArray(les.cats)) return les.cats;
+    if (les._custom) return ['C' + (lessonIdx - CUSTOM_BASE + 1) + ' ' + les.title];
     const re = new RegExp('^L' + (lessonIdx + 1) + '(\\b|[^0-9])');
     return catsOf(unit).filter(c => re.test(c));
   }
+  /** The category new questions for a lesson should carry. */
+  function lessonCat(unit, lessonIdx) { const c = lessonCats(unit, lessonIdx); const les = lessonAt(unit, lessonIdx); return c[0] || (les ? 'L' + (lessonIdx + 1) + ' ' + les.title : ''); }
   function lessonQuestions(unit, lessonIdx, level, types) {
     const cats = lessonCats(unit, lessonIdx); if (!cats.length) return [];
     return questionsFor(unit, level, types).filter(q => cats.includes(q.cat));
@@ -298,8 +350,9 @@
   function assignmentsFor(lesson, level) {
     level = level || Settings.level;
     const b = band();
-    return (lesson.assignments || []).map((a, i) => Object.assign({ _idx: i }, a))
-      .filter(a => b ? (a.bands && a.bands.includes(b)) : (!a.bands && (!a.levels || a.levels.includes(level))));
+    let list = (lesson.assignments || []).map((a, i) => { const o = lesson._ov && lesson._ov.assignments && lesson._ov.assignments[i]; return o ? Object.assign({ _idx: i }, a, o, { _edited: true }) : Object.assign({ _idx: i }, a); }).filter(a => !a.hidden);
+    if (lesson._ov && lesson._ov.addAssignments) list = list.concat(lesson._ov.addAssignments.map((a, k) => Object.assign({ _idx: 100 + k, _added: true }, a)));
+    return list.filter(a => b ? (a.bands && a.bands.includes(b)) : (!a.bands && (!a.levels || a.levels.includes(level))));
   }
 
   /** Any mc/tf question can be asked as MC in games; fill/term questions are converted too. */
@@ -333,12 +386,12 @@
   function findUnit(course, unitId) { return course && unitsFor(course).find(u => u.id === unitId); }
 
   /** Question categories available in a unit (for the Focus Plan editor). */
-  function catsOf(unit) { return [...new Set((unit.questions || []).map(q => q.cat).filter(Boolean))]; }
+  function catsOf(unit) { const ov = unitOverlay(unit); return [...new Set((unit.questions || []).concat(ov && ov.questions ? ov.questions.added || [] : []).map(q => q.cat).filter(Boolean))]; }
   /** Every term of a unit at the standard level (keys used by the Focus Plan). */
   function allTermKeys(unit) { return (unit.terms || []).map(t => L(t.term, 2)); }
 
   window.LH = { LEVELS, LEVEL_NAMES, LEVEL_DESC, BANDS, band, body, def, byLevel, L, shuffle, sample, esc, md, speak, stopSpeaking, speakBtn, termsFor, slidesFor, mcOptions,
                 questionsFor, resolveQuestion, termQuestions, choicePool, normalize, findCourse, findUnit, markSeen,
                 focusFor, unitsFor, lessonsFor, catsOf, allTermKeys, accom, assessmentCount, difficulty, assessmentOrder,
-                lessonCats, lessonQuestions, assignmentsFor };
+                lessonCats, lessonCat, lessonQuestions, assignmentsFor, overlaySection, unitOverlay, lessonAt, CUSTOM_BASE, qKey };
 })();
