@@ -394,6 +394,19 @@
     const m = String(u).match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([\w-]{6,})/);
     return m ? 'https://www.youtube-nocookie.com/embed/' + m[1] : null;
   }
+  /** Google Slides / Docs / Forms share links → { kind, embed, open } (null for anything else). */
+  function googleEmbed(u) {
+    u = String(u || '');
+    let m = u.match(/docs\.google\.com\/presentation\/d\/(?:e\/)?([\w-]+)/);
+    if (m) return { kind: 'slides', label: 'Google Slides', icon: '📽️', embed: 'https://docs.google.com/presentation/d/' + (u.includes('/d/e/') ? 'e/' : '') + m[1] + '/embed?start=false&loop=false&delayms=60000', open: u, tall: false };
+    m = u.match(/docs\.google\.com\/document\/d\/(?:e\/)?([\w-]+)/);
+    if (m) return { kind: 'doc', label: 'Google Docs', icon: '📄', embed: 'https://docs.google.com/document/d/' + (u.includes('/d/e/') ? 'e/' : '') + m[1] + (u.includes('/d/e/') ? '/pub?embedded=true' : '/preview'), open: u, tall: true };
+    m = u.match(/docs\.google\.com\/forms\/d\/(?:e\/)?([\w-]+)/);
+    if (m) return { kind: 'form', label: 'Google Forms', icon: '📝', embed: 'https://docs.google.com/forms/d/' + (u.includes('/d/e/') ? 'e/' : '') + m[1] + '/viewform?embedded=true', open: u, tall: true };
+    m = u.match(/forms\.gle\/([\w-]+)/);
+    if (m) return { kind: 'form', label: 'Google Forms', icon: '📝', embed: null, open: u, tall: true };   // short links cannot be embedded; open in a new tab
+    return null;
+  }
   function mediaHtml(lesson, slideIdx) {
     const key = slideIdx && slideIdx._added !== undefined ? 'a' + slideIdx._added : (slideIdx && slideIdx._i !== undefined ? slideIdx._i : slideIdx);
     const slots = (lesson.media || []).filter(m => String(m.slide) === String(key));
@@ -401,6 +414,9 @@
     return slots.map(m => {
       if (m.src) {
         const cap = esc(m.title) + (m.source ? ' <span class="muted">· ' + esc(m.source) + '</span>' : '');
+        const g = googleEmbed(m.src);
+        if (g) return '<div class="media-google' + (g.tall ? ' tall' : '') + '">' + (g.embed ? '<iframe src="' + esc(g.embed) + '" title="' + esc(m.title) + '" allowfullscreen loading="lazy"></iframe>' : '<p class="small muted">This short link opens in a new tab.</p>') +
+          '<div class="btn-row between"><span class="small muted">' + g.icon + ' ' + esc(m.title) + (m.source ? ' · ' + esc(m.source) : '') + '</span><a class="btn secondary sm" href="' + esc(g.open) + '" target="_blank" rel="noopener">' + g.icon + ' Open in ' + g.label + '</a></div></div>';
         if (/^idb:/.test(m.src)) { const id = esc(m.src.slice(4));
           if (m.type === 'video') return '<figure class="media-fig"><video controls data-idb="' + id + '" style="max-width:100%;max-height:420px;border-radius:10px"></video><figcaption>' + cap + '</figcaption></figure>';
           if (m.type === 'audio') return '<figure class="media-fig"><audio controls data-idb="' + id + '"></audio><figcaption>' + cap + '</figcaption></figure>';

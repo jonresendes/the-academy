@@ -237,6 +237,7 @@ A teacher can tailor any course for **one section** without touching the program
 - **Settings → Sections** shows the number of customisations for the current section, **copy customisations from…** another section of the same course, and **Reset to the program**.
 - **Uploads** are stored in the browser (IndexedDB, 25 MB per file) and only show on the device they were uploaded to; a link works everywhere. Exports and Google Drive pushes carry the overlay (edits, links, hidden items) but not uploaded files.
 - Printing uses the customised text; uploaded pictures are skipped on paper.
+- **Google Slides, Docs and Forms** — paste the file's share link into a media slot (or add it as a new link) and the lesson shows it inline: a Slides deck with its own controls, a Doc scrolling in the page (read-only), or a live Form students fill in right there (responses go to the teacher's Sheet as usual). An **Open in Google …** button sits beside every frame. The file must be viewable by the students ("Anyone with the link" or the school domain), otherwise they see a Google sign-in box. Short `forms.gle` links can't be framed and open in a new tab. Embedded files need the internet and print as a link.
 
 ## Level progression (85% rule)
 
