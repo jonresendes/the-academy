@@ -16,8 +16,8 @@ window.LearnHub = window.LearnHub || { courses: [] };
 
   const course = {
     id: 'snc1l2l',
-    title: 'Science at Work',
-    subtitle: 'SNC1L/2L · Locally Developed Science',
+    title: 'SNC1L/2L - Grade 9-10 Science',
+    subtitle: 'Science at Work · Locally Developed',
     description: 'Science you will use at work, at home and in the community. Every lesson has one thing to write down, one thing to do, and one job it connects to.',
     icon: '🔧',
     color: '#2a6f66',

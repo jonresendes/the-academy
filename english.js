@@ -7,7 +7,7 @@
 window.LearnHub = window.LearnHub || { courses: [] };
 window.LearnHub.courses.push({
   id: 'english',
-  title: 'English',
+  title: 'Sample - English',
   subtitle: 'Literature & Language',
   description: 'Words, sentences and stories — how language works and how writers use it.',
   icon: '📚',

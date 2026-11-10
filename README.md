@@ -200,7 +200,7 @@ Notes on questions:
 - `cat` groups questions into Jeopardy categories (needs ≥ 2 categories with enough questions each; otherwise the board is built automatically).
 - Slide bodies accept light markdown: blank lines for paragraphs, `- ` for bullets, `**bold**`, `> ` for a quoted passage (a reading text), and `| a | b |` rows for a table (first row is the header). A slide can also carry `html: '<div>…</div>'` for raw HTML such as a bar chart (see the `GRAPH` block in `olc4o.js`).
 
-## OLC4O Literacy course
+## OLC4O - Literacy Course
 
 `olc4o.js` holds Unit 1 (seven lessons) built from the Unit 1 slideshows, worksheets and answer keys, with Level 4 extensions, Level-4-only application questions and two assignments per lesson. Each lesson's vocabulary, case text (Jaden's Tuesday, Why employers talk about skills, Bouncing back, The second sitting, the Riverside schedule and graph, Priya's e-mail and the Food Handler web page, the model reflection) and worksheet questions are in the app, with Level 1 using shortened passages and plain sentences. Questions carry `cat: 'L1 …' … 'L7 …'`, so the Focus Plan's *Question topics* and Jeopardy's categories line up with the lessons. Add Unit 2 as a second entry in `units`.
 
@@ -225,6 +225,10 @@ Good sources of public-domain line art: openclipart.org, publicdomainvectors.org
 
 Accounts are stored on the device (`learnhub.staff`, `learnhub.sections`). To move a roster or a student's work to another device, use the export/import below.
 
+## Course naming
+
+Every course's `title` is its Ontario course code, a hyphen, and a short description: `HRF3O - World Religions`, `OLC4O - Literacy Course`, `SNC1L/2L - Grade 9-10 Science`, and for future courses e.g. `CLN4U - International Law`, `HZT4U - Philosophy`. The `subtitle` carries the fuller name or theme. The two template courses without a code are titled `Sample - English` and `Sample - Science`.
+
 ## Classroom shell (per-section customisation)
 
 A teacher can tailor any course for **one section** without touching the program or other teachers' classes. Everything lives in an *overlay* on the section (`Sections.list[n].overlay[courseId][unitId]`); the course files are never edited.
@@ -237,7 +241,7 @@ A teacher can tailor any course for **one section** without touching the program
 - **Settings → Sections** shows the number of customisations for the current section, **copy customisations from…** another section of the same course, and **Reset to the program**.
 - **Uploads** are stored in the browser (IndexedDB, 25 MB per file) and only show on the device they were uploaded to; a link works everywhere. Exports and Google Drive pushes carry the overlay (edits, links, hidden items) but not uploaded files.
 - Printing uses the customised text; uploaded pictures are skipped on paper.
-- **Google Slides, Docs and Forms** — paste the file's share link into a media slot (or add it as a new link) and the lesson shows it inline: a Slides deck with its own controls, a Doc scrolling in the page (read-only), or a live Form students fill in right there (responses go to the teacher's Sheet as usual). An **Open in Google …** button sits beside every frame. The file must be viewable by the students ("Anyone with the link" or the school domain), otherwise they see a Google sign-in box. Short `forms.gle` links can't be framed and open in a new tab. Embedded files need the internet and print as a link.
+- **Google Slides, Docs and Forms** — paste the file's share link into a media slot (or add it as a new link) and the lesson shows it inline: a Slides deck with its own controls, a Doc scrolling in the page (read-only), or a live Form students fill in right there (responses go to the teacher's Sheet as usual). An **Open in Google …** button sits beside every frame. The file must be viewable by the students ("Anyone with the link" or the school domain), otherwise they see a Google sign-in box. Drive share links (`drive.google.com/file/d/…`, the shape you get from the Drive file list) and Sheets links work too — Drive previews PDFs, Office files, images and videos as well as Docs and Slides. Short `forms.gle` links can't be framed and open in a new tab. Embedded files need the internet and print as a link.
 
 ## Level progression (85% rule)
 

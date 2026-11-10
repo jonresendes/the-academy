@@ -54,7 +54,7 @@ window.LearnHub = window.LearnHub || { courses: [] };
 
   window.LearnHub.courses.push({
     id: 'olc4o',
-    title: 'OLC4O Literacy',
+    title: 'OLC4O - Literacy Course',
     subtitle: 'Ontario Secondary School Literacy Course',
     description: 'Reading like a detective: find the clues in everyday texts, read between the lines, and write to reflect.',
     icon: '🕵️',

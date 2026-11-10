@@ -4,7 +4,7 @@
 window.LearnHub = window.LearnHub || { courses: [] };
 window.LearnHub.courses.push({
   id: 'science',
-  title: 'Science',
+  title: 'Sample - Science',
   subtitle: 'Living Things & Matter',
   description: 'How the natural world works — from tiny cells to the states of matter.',
   icon: '🔬',

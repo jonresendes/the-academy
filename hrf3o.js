@@ -16,7 +16,7 @@
 window.LearnHub = window.LearnHub || { courses: [] };
 window.LearnHub.courses.push({
   id: 'hrf3o',
-  title: 'HRF3O World Religions',
+  title: 'HRF3O - World Religions',
   subtitle: 'Belief Traditions in Daily Life · Grade 11 Open',
   description: {
     1: 'Learn how people believe, celebrate, read sacred stories and build sacred places — and how beliefs are part of life in Canada.',
