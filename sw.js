@@ -1,22 +1,43 @@
-/* LearnHub service worker — offline cache + update detection.
-   BUMP THE VERSION every time you deploy changed files; that is what
-   makes installed copies show the "Update available" notice. */
-const VERSION = 'learnhub-v31';
+/* The Academy · Learn Hub — service worker (offline cache + update detection).
+   BUMP THE VERSION every time you upload changed files; that is what makes
+   installed copies show the "Update available" notice. */
+const VERSION = 'learnhub-v11';
 const FILES = [
-  './', './index.html', './styles.css', './manifest.json', './icon-192.png', './icon-512.png', './logo.png',
-  './storage.js', './util.js', './badges.js', './games.js', './print.js', './media.js', './drive.js', './overlay.js', './dashboard.js', './app.js', './pwa.js', './colouring.js',
-  './english.js', './science.js', './olc4o.js', './hrf3o.js', './snc1l2l.js', './media-guide-hrf3o.html', './media-guide-olc4o.html'
+  './',
+  './index.html',
+  './manifest.json',
+  './icon-192.png',
+  './icon-512.png',
+  './logo.png',
+  './styles.css',
+  './english.js',
+  './science.js',
+  './olc4o.js',
+  './colouring.js',
+  './hrf3o.js',
+  './snc1l2l.js',
+  './storage.js',
+  './util.js',
+  './badges.js',
+  './games.js',
+  './print.js',
+  './media.js',
+  './drive.js',
+  './overlay.js',
+  './dashboard.js',
+  './app.js',
+  './pwa.js',
+  './glc2o.js',
 ];
 
 self.addEventListener('install', e => {
-  // Cache each file on its own so one missing file cannot break the whole install.
-  e.waitUntil(caches.open(VERSION).then(c => Promise.all(FILES.map(f => c.add(f).catch(() => null)))).then(() => self.skipWaiting()));
+  // Fetch fresh copies and cache each file on its own, so one missing file cannot break the install.
+  e.waitUntil(caches.open(VERSION).then(c => Promise.all(FILES.map(f =>
+    fetch(new Request(f, { cache: 'reload' })).then(r => { if (r.ok) return c.put(f, r); }).catch(() => null)
+  ))).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
-  e.waitUntil(
-    caches.keys().then(keys => Promise.all(keys.filter(k => k !== VERSION).map(k => caches.delete(k))))   // removes other apps' caches too
-      .then(() => self.clients.claim())
-  );
+  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== VERSION).map(k => caches.delete(k)))).then(() => self.clients.claim()));
 });
 self.addEventListener('message', e => { if (e.data === 'SKIP_WAITING') self.skipWaiting(); });
 
@@ -24,13 +45,12 @@ self.addEventListener('message', e => { if (e.data === 'SKIP_WAITING') self.skip
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
   const url = new URL(e.request.url);
-  if (url.origin !== location.origin) return;           // fonts etc. go straight to the network
-  if (/version\.json$/.test(url.pathname)) return;       // the version check always hits the network
+  if (url.origin !== location.origin) return;                                   // fonts etc. go straight to the network
+  if (/\/(sw\.js|version\.json|cloud\.json)$/.test(url.pathname)) return;      // update checks always hit the website
   e.respondWith(
     fetch(e.request).then(res => {
-      const copy = res.clone();
-      caches.open(VERSION).then(c => c.put(e.request, copy));
+      if (res.ok) { const copy = res.clone(); caches.open(VERSION).then(c => c.put(e.request, copy)); }
       return res;
-    }).catch(() => caches.match(e.request, { ignoreSearch: true }).then(r => r || caches.match('./index.html')))
+    }).catch(() => caches.match(e.request, { ignoreSearch: true }).then(r => r || (e.request.mode === 'navigate' ? caches.match('./index.html') : undefined)))
   );
 });
