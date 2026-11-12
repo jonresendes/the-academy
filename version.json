@@ -1,5 +1,5 @@
 {
- "version": "41",
+ "version": "42",
  "date": "2026-11-12",
- "notes": "Teacher notes: saved the moment you leave the page, sent as their own field, and never replaced by an older cloud copy"
+ "notes": "Headmaster: recognised from the cloud's master record, badge in the header, Teachers tab (add, profiles, sections, students, reset password, remove). Dyslexia-friendly text option. Found a problem? button with screenshot, sent to the Headmaster."
 }

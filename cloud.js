@@ -12,7 +12,9 @@
    Loads BEFORE storage.js (storage.js calls Cloud.onLocalSave after each save).
 
    Firestore layout:
-     meta/master              { uid, name, at }                    first teacher = master account
+     meta/master              { uid, name, at }                    the one Headmaster (admin) account
+     issues/{id}              a reported problem + screenshot (see report.js); read by the Headmaster only
+     logins/{teacherId}       { email, uid, at }                   which sign-in a teacher ID uses now (after a password reset)
      staff/{uid}              { id, name, role, login, avatar, colour, prefs, archived, createdAt }
      students/{uid}           profile (same shape as storage.js) + number, dob, createdAt
      sections/{id}            section (same shape as storage.js)
@@ -37,6 +39,14 @@
   const studentEmail = n => String(n).trim().toLowerCase().replace(/[^a-z0-9._-]/g, '') + '@' + SD;
   const staffEmail = n => String(n).trim().toLowerCase().replace(/[^a-z0-9._-]/g, '') + '@' + TD;
   const now = () => new Date().toISOString();
+  const normLogin = n => String(n).trim().toLowerCase().replace(/[^a-z0-9._-]/g, '');
+  /* A teacher whose password the Headmaster has reset signs in with a fresh account behind the same teacher ID
+     (the browser cannot change someone else's password). logins/{teacherId} says which address is current. */
+  const genEmail = (login, gen) => gen > 1 ? normLogin(login) + '+r' + gen + '@' + TD : staffEmail(login);
+  async function emailForLogin(login) {
+    try { const d = await db.collection('logins').doc(normLogin(login)).get(); if (d.exists && d.data().email) return d.data().email; } catch (e) {}
+    return staffEmail(login);
+  }
   const KEY_ACTIVE = 'learnhub.lastActive', KEY_KEEP = 'learnhub.keepSignedIn';
 
   /* ---------- status + events ---------- */
@@ -95,7 +105,7 @@
           } else if (key === 'learnhub.staff' && Cloud.role !== 'student') {
             const m = v.master, recs = [];
             if (m && m.uid) recs.push({ id: m.uid, name: m.name, avatar: m.avatar, colour: m.colour, prefs: m.prefs || null, archived: m.archived || [], role: 'master', login: m.login || '', email: m.email || '', notes: m.notes || null });
-            for (const t of (v.teachers || [])) recs.push({ id: t.id, name: t.name, avatar: t.avatar, colour: t.colour, prefs: t.prefs || null, archived: t.archived || [], role: 'teacher', login: t.login || '', createdAt: t.createdAt || now(), notes: t.notes || null });
+            for (const t of (v.teachers || [])) recs.push({ id: t.id, name: t.name, avatar: t.avatar, colour: t.colour, prefs: t.prefs || null, archived: t.archived || [], role: 'teacher', login: t.login || '', email: t.email || '', createdAt: t.createdAt || now(), notes: t.notes || null });
             for (const r of recs) { if (Cloud.role !== 'master' && r.id !== me.uid) continue;   // a teacher only ever writes their own record
               try { await pushStaff(r); } catch (e) { failed = failed || e; console.warn('staff push failed', r.id, e); } }
           } else if (key === 'learnhub.sections' && Cloud.role !== 'student') {
@@ -125,9 +135,9 @@
     const prev = seenStaff[r.id], ref = db.collection('staff').doc(r.id);
     if (!prev) { const full = clean(r); await ref.set(full, { merge: true }); seenStaff[r.id] = full; return; }
     const args = [], next = Object.assign({}, prev);
-    for (const k of new Set([...Object.keys(r), ...Object.keys(prev)])) { if (k === 'createdAt' || J(prev[k]) === J(r[k])) continue; args.push(FP(k), r[k] === undefined || r[k] === null ? null : clean(r[k])); next[k] = clean(r[k]); }
+    for (const k of Object.keys(r)) { if (k === 'createdAt' || J(prev[k]) === J(r[k])) continue; args.push(FP(k), r[k] === undefined || r[k] === null ? null : clean(r[k])); next[k] = clean(r[k]); }
     if (!args.length) return;
-    try { await ref.update(...args); } catch (e) { if (e && e.code === 'not-found') await ref.set(clean(r), { merge: true }); else throw e; }
+    try { await ref.update(...args); } catch (e) { if (e && e.code === 'not-found') { if (Cloud.user && r.id === Cloud.user.uid) await ref.set(clean(r), { merge: true }); else return; } else throw e; }   // a record the Headmaster removed is not brought back
     seenStaff[r.id] = next;
   }
   /** Read a student's profile straight from the cloud (never the cache) and apply it here.
@@ -220,9 +230,12 @@
       // my own notes typed on this device but not yet confirmed by the cloud must not be wiped by an older copy
       const loc = localOf(t.id); const newer = loc && loc.notes && loc.notes.updatedAt && (!t.notes || !t.notes.updatedAt || loc.notes.updatedAt > t.notes.updatedAt);
       if (newer && Cloud.user && t.id === Cloud.user.uid) { t.notes = loc.notes; setTimeout(() => { pending['learnhub.staff'] = lsGet('learnhub.staff'); lastSeen['learnhub.staff'] = ''; flush(); }, 0); }
-      if (t.role === 'master') staff.master = Object.assign({ pin: '' }, t, { uid: t.id, id: 'master' }); else staff.teachers.push(Object.assign({ pin: '' }, t)); });   // the master keeps the local id 'master'; its Firebase uid is in .uid
+      if (isMasterDoc(t)) staff.master = Object.assign({ pin: '' }, t, { role: 'master', uid: t.id, id: 'master' }); else staff.teachers.push(Object.assign({ pin: '' }, t, { role: 'teacher' })); });   // the master keeps the local id 'master'; its Firebase uid is in .uid
     lsSet('learnhub.staff', staff); reloadStores('staff');
   }
+  /** The Headmaster is the account named in meta/master (the same record the security rules trust);
+      the role written on a staff record is only a fallback for when that record cannot be read. */
+  function isMasterDoc(t) { const m = Cloud.masterInfo; return m && m.uid ? t.id === m.uid : t.role === 'master'; }
   function applySections(docs) {
     const cur = lsGet('learnhub.sections') || { list: [], current: {} };
     const list = docs.map(d => { const s = d.data(); delete s.updatedAt; return s; });
@@ -288,9 +301,14 @@
   let readyResolve; const readyP = new Promise(r => { readyResolve = r; });
   Cloud.whenReady = () => readyP;
   async function resolveRole(user) {
-    const st = await db.collection('staff').doc(user.uid).get().catch(() => null);
-    if (st && st.exists) return st.data().role === 'master' ? 'master' : 'teacher';
-    return 'student';
+    const ref = db.collection('staff').doc(user.uid);
+    const [st, meta] = await Promise.all([ref.get().catch(() => null), db.collection('meta').doc('master').get().catch(() => null)]);
+    Cloud.masterInfo = meta && meta.exists ? meta.data() : null;
+    if (!st || !st.exists) return 'student';
+    const mine = Cloud.masterInfo && Cloud.masterInfo.uid ? Cloud.masterInfo.uid === user.uid : st.data().role === 'master';
+    // The Headmaster's own record lost its role (older versions could leave it as 'teacher'): put it back.
+    if (mine && st.data().role !== 'master') { try { await ref.update({ role: 'master' }); } catch (e) { console.warn('could not repair the Headmaster record', e); } }
+    return mine ? 'master' : 'teacher';
   }
   async function loadOnce(user, role) {
     // First pull so the app has data before it draws (listeners keep it fresh afterwards).
@@ -339,7 +357,7 @@
   };
   Cloud.signInStaff = async (login, password, keep) => {
     try { localStorage.setItem(KEY_KEEP, keep ? '1' : '0'); } catch (e) {}
-    try { await auth.signInWithEmailAndPassword(staffEmail(login), password); } catch (e) { throw new Error(friendly(e)); }
+    try { await auth.signInWithEmailAndPassword(await emailForLogin(login), password); } catch (e) { throw new Error(friendly(e)); }
     await waitForRole();
     if (Cloud.role === 'student') { await auth.signOut(); throw new Error('That is a student account — use the student sign-in.'); }
   };
@@ -352,7 +370,7 @@
     const name = 'secondary-' + Date.now();
     const sec = fb.initializeApp(CFG.firebase, name);
     try { const cred = await sec.auth().createUserWithEmailAndPassword(email, password); const uid = cred.user.uid; await sec.auth().signOut(); return uid; }
-    catch (e) { throw new Error(friendly(e)); }
+    catch (e) { const err = new Error(friendly(e)); err.code = e.code; throw err; }
     finally { setTimeout(() => sec.delete().catch(() => {}), 500); }
   }
   /** Change a user's password when the old one is known (used to fix a wrong birthday). */
@@ -381,24 +399,94 @@
     await changeAuthPassword(studentEmail(student.number), oldPw, newPw);
     window.Students.update(student.id, { dob: newDob });
   };
-  /** Master creates a teacher (login + password); the first teacher ever becomes the master. */
+  /** Create a staff sign-in for a teacher ID, stepping past addresses used by removed or reset accounts. */
+  async function createStaffAuth(login, password, fromGen) {
+    for (let gen = fromGen || 1; gen <= 30; gen++) {
+      try { const uid = await createAuthUser(genEmail(login, gen), password); return { uid, gen, authEmail: genEmail(login, gen) }; }
+      catch (e) { if (e.code !== 'auth/email-already-in-use') throw e; }
+    }
+    throw new Error('That teacher ID has been used too many times — choose a different ID.');
+  }
+  /** Undo a sign-in that was created for a record the cloud then refused (keeps the teacher ID free). */
+  async function dropAuthUser(email, password) {
+    const sec = fb.initializeApp(CFG.firebase, 'secondary-' + Date.now());
+    try { const cred = await sec.auth().signInWithEmailAndPassword(email, password); await cred.user.delete(); } catch (e) {}
+    finally { setTimeout(() => sec.delete().catch(() => {}), 500); }
+  }
+  const loginTaken = (login, exceptId) => { const St = window.Staff, n = normLogin(login); if (!St) return null; if (St.master && St.master.uid !== exceptId && normLogin(St.master.login || '') === n) return St.master; return St.teachers.find(t => t.id !== exceptId && normLogin(t.login || '') === n) || null; };
+  const rulesHint = e => /permission|insufficient/i.test((e && (e.code || '')) + ' ' + (e && e.message)) ? 'The cloud refused the change. Paste the new firestore.rules into Firebase → Firestore → Rules → Publish, then try again.' : describe(e);
+
+  /** The Headmaster adds a teacher: name, teacher ID, password, optional e-mail and picture. */
   Cloud.createStaff = async ({ name, login, password, avatar, email }) => {
+    if (Cloud.role !== 'master') throw new Error('Only the Headmaster can add teachers.');
+    name = String(name || '').trim().slice(0, 40); if (!name) throw new Error('Enter the teacher\'s name.');
+    login = String(login || '').trim(); if (!/^[A-Za-z0-9._-]{3,}$/.test(login)) throw new Error('Enter a teacher ID of at least 3 characters (letters, digits, dot, dash or underscore).');
+    if (String(password || '').length < 6) throw new Error('The password must be at least 6 characters.');
+    const clash = loginTaken(login); if (clash) throw new Error('The teacher ID "' + login + '" already belongs to ' + clash.name + '.');
+    const a = await createStaffAuth(login, password, 1);
+    const rec = clean({ id: a.uid, name, role: 'teacher', login, email: String(email || '').trim(), avatar: avatar || '🧑‍🏫', colour: '#1f5f8b', archived: [], createdAt: now(), authEmail: a.authEmail, gen: a.gen });
+    try {
+      const b = db.batch(); b.set(db.collection('staff').doc(a.uid), rec);
+      if (a.gen > 1) b.set(db.collection('logins').doc(normLogin(login)), { email: a.authEmail, uid: a.uid, at: now() });
+      await b.commit();
+    } catch (e) { await dropAuthUser(a.authEmail, password); throw new Error(rulesHint(e)); }
+    return rec;
+  };
+  /** First-time set-up only (the hidden #/setup page): the very first account becomes the Headmaster.
+      The security rules refuse this once a Headmaster exists. */
+  Cloud.createMaster = async ({ name, login, password, email }) => {
+    name = String(name || '').trim().slice(0, 40); if (!name) throw new Error('Enter your name.');
     login = String(login || '').trim(); if (!/^[A-Za-z0-9._-]{3,}$/.test(login)) throw new Error('Enter a teacher ID (letters and digits only).');
     if (String(password || '').length < 6) throw new Error('The password must be at least 6 characters.');
-    let role;
-    try { const meta = await db.collection('meta').doc('master').get(); role = meta.exists ? 'teacher' : 'master'; }
-    catch (e) { role = Cloud.role === 'master' ? 'teacher' : 'master'; }     // not signed in: the rules hide meta/master; creation below fails safely if one exists
-    if (role === 'teacher' && Cloud.role !== 'master') throw new Error('Only the Headmaster can add teachers. If you are setting up for the first time and see this, a Headmaster account already exists — sign in with it.');
-    const uid = await createAuthUser(staffEmail(login), password);
-    const rec = clean({ id: uid, name: String(name).trim().slice(0, 40), role, login, email: email || '', avatar: avatar || '🧑‍🏫', colour: '#1f5f8b', archived: [], createdAt: now() });
-    if (role === 'master') {
-      // The first teacher writes their own record, then claims the master record (rules allow both only while no master exists).
-      const sname = 'secondary-' + Date.now(); const sec = fb.initializeApp(CFG.firebase, sname);
-      try { await sec.auth().signInWithEmailAndPassword(staffEmail(login), password); const sdb = sec.firestore(); await sdb.collection('staff').doc(uid).set(rec); await sdb.collection('meta').doc('master').set({ uid, name: rec.name, at: now() }); await sec.auth().signOut(); }
-      catch (e) { try { await sec.auth().signOut(); } catch (x) {} throw new Error(/permission|insufficient/i.test(e.message) ? 'A Headmaster account already exists — sign in with it, and add yourself as a teacher from Settings → Teachers.' : friendly(e)); }
-      finally { setTimeout(() => sec.delete().catch(() => {}), 500); }
-    } else await db.collection('staff').doc(uid).set(rec);   // the signed-in master writes the teacher's record
+    const exists = 'A Headmaster account already exists. There is only one — sign in with it.';
+    const sec = fb.initializeApp(CFG.firebase, 'secondary-' + Date.now());
+    try {
+      let cred;
+      try { cred = await sec.auth().createUserWithEmailAndPassword(staffEmail(login), password); } catch (e) { throw new Error(friendly(e)); }
+      const uid = cred.user.uid, sdb = sec.firestore();
+      const rec = clean({ id: uid, name, role: 'master', login, email: email || '', avatar: '🧑‍🏫', colour: '#1f5f8b', archived: [], createdAt: now() });
+      try { await sdb.collection('meta').doc('master').set({ uid, name, at: now() }); await sdb.collection('staff').doc(uid).set(rec); }
+      catch (e) { try { await cred.user.delete(); } catch (x) {} throw new Error(/permission|insufficient/i.test(e.message) ? exists : friendly(e)); }
+      return rec;
+    } finally { try { await sec.auth().signOut(); } catch (x) {} setTimeout(() => sec.delete().catch(() => {}), 500); }
+  };
+  /** The Headmaster gives a teacher a new password. A browser cannot change another person's password, so the
+      teacher gets a fresh sign-in behind the same teacher ID: their record, notes and sections move to it and the
+      old sign-in stops working. */
+  Cloud.resetStaffPassword = async (teacherId, newPassword) => {
+    if (Cloud.role !== 'master') throw new Error('Only the Headmaster can reset a teacher\'s password.');
+    if (String(newPassword || '').length < 6) throw new Error('The password must be at least 6 characters.');
+    const old = await db.collection('staff').doc(teacherId).get({ source: 'server' }).catch(() => null);
+    if (!old || !old.exists) throw new Error('That teacher could not be found in the cloud.');
+    const t = old.data(); if (!t.login) throw new Error('This teacher has no teacher ID on record.');
+    const a = await createStaffAuth(t.login, newPassword, (+t.gen || 1) + 1);
+    const rec = clean(Object.assign({}, t, { id: a.uid, role: 'teacher', authEmail: a.authEmail, gen: a.gen, passwordResetAt: now() }));
+    try {
+      const secs = await db.collection('sections').where('teacherId', '==', teacherId).get();
+      const b = db.batch();
+      b.set(db.collection('staff').doc(a.uid), rec);
+      b.set(db.collection('logins').doc(normLogin(t.login)), { email: a.authEmail, uid: a.uid, at: now() });
+      secs.docs.forEach(d => b.update(d.ref, { teacherId: a.uid, updatedAt: now() }));
+      b.delete(db.collection('staff').doc(teacherId));
+      await b.commit();
+    } catch (e) { await dropAuthUser(a.authEmail, newPassword); throw new Error(rulesHint(e)); }
     return rec;
+  };
+  /** The Headmaster removes a teacher: the record is deleted (so the sign-in no longer opens anything)
+      and their sections pass to the Headmaster until they are assigned to someone else. */
+  Cloud.removeStaff = async (teacherId) => {
+    if (Cloud.role !== 'master') throw new Error('Only the Headmaster can remove a teacher.');
+    if (Cloud.user && teacherId === Cloud.user.uid) throw new Error('The Headmaster account cannot be removed.');
+    try {
+      const old = await db.collection('staff').doc(teacherId).get().catch(() => null);
+      const login = old && old.exists ? (old.data() || {}).login : '';
+      const secs = await db.collection('sections').where('teacherId', '==', teacherId).get();
+      const b = db.batch();
+      secs.docs.forEach(d => b.update(d.ref, { teacherId: null, updatedAt: now() }));
+      b.delete(db.collection('staff').doc(teacherId));
+      await b.commit();
+      if (login) await db.collection('logins').doc(normLogin(login)).delete().catch(() => {});
+    } catch (e) { throw new Error(rulesHint(e)); }
   };
   Cloud.changeMyPassword = async (oldPw, newPw) => { const u = auth.currentUser; if (!u) throw new Error('Not signed in.'); try { const cred = fb.auth.EmailAuthProvider.credential(u.email, oldPw); await u.reauthenticateWithCredential(cred); await u.updatePassword(newPw); } catch (e) { throw new Error(friendly(e)); } };
   Cloud.hasMaster = async () => (await db.collection('meta').doc('master').get()).exists;

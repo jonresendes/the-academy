@@ -16,7 +16,7 @@
        courses: null | [courseId, …],  null = every course
        coursesLocked: bool,            student cannot change the list
        accommodations: { reduce, simplify, chunk },   (used by the Test Room)
-       prefs: { fontScale, font, contrast, motion, readAloud },
+       prefs: { fontScale, font, dyslexia, contrast, tint, motion, readAloud, dictation },
        suggestions: { [courseId]: { level, pct, unit, at } } }  level changes suggested by test results
    ========================================================= */
 (function () {
@@ -25,10 +25,11 @@
   const KEY_PROGRESS = 'learnhub.progress';   // + '.' + studentId
   const KEY_FOCUS = 'learnhub.focus';         // + '.' + studentId
 
-  const PREF_KEYS = ['fontScale', 'font', 'contrast', 'tint', 'motion', 'readAloud', 'dictation'];
+  const PREF_KEYS = ['fontScale', 'font', 'dyslexia', 'contrast', 'tint', 'motion', 'readAloud', 'dictation'];
   const DEFAULT_PREFS = {
     fontScale: 1,        // 1, 1.15, 1.3
     font: 'default',     // 'default' | 'lexend'
+    dyslexia: false,     // dyslexia-friendly text: OpenDyslexic + wider word and line spacing
     contrast: 'normal',  // 'normal' | 'high' | 'inverted'
     tint: 'none',        // Irlen-style colour overlay: 'none' | 'cream' | 'blue' | 'green' | 'rose' | 'yellow' | 'grey' | 'peach' | 'lavender'
     motion: 'normal',    // 'normal' | 'reduced'
@@ -259,6 +260,7 @@
       const b = document.body;
       document.documentElement.style.setProperty('--font-scale', this.get('fontScale'));
       b.dataset.font = this.get('font');
+      b.dataset.dyslexia = this.get('dyslexia') === true ? 'on' : 'off';
       b.dataset.contrast = this.get('contrast');
       b.dataset.tint = this.get('tint') || 'none';
       b.dataset.motion = this.get('motion');

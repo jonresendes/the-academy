@@ -1,7 +1,7 @@
 /* The Academy · Learn Hub — service worker (offline cache + update detection).
    BUMP THE VERSION every time you upload changed files; that is what makes
    installed copies show the "Update available" notice. */
-const VERSION = 'learnhub-v21';
+const VERSION = 'learnhub-v42';
 const FILES = [
   './',
   './index.html',
@@ -9,6 +9,8 @@ const FILES = [
   './icon-192.png',
   './icon-512.png',
   './logo.png',
+  './opendyslexic-400.woff2',
+  './opendyslexic-700.woff2',
   './styles.css',
   './english.js',
   './science.js',
@@ -27,6 +29,8 @@ const FILES = [
   './dashboard.js',
   './app.js',
   './pwa.js',
+  './report.js',
+  './html2canvas.min.js',
   './glc2o.js',
   './cloud-config.js',
   './cloud.js',

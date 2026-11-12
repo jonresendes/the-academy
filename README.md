@@ -22,6 +22,9 @@ olc4o.js        OLC4O Literacy — Unit 1 · Reading Like a Detective (Lessons 1
 colouring.js    line-art pictures for the Colouring Page
 media-guide-<course>.html   checklist of suggested images/videos per lesson (generated)
 pwa.js          install button, update notice, phone back button
+report.js       "Found a problem?" button: screenshot + message to the Headmaster
+html2canvas.min.js   screenshot library (MIT), loaded only when the button is pressed
+opendyslexic-400.woff2 / opendyslexic-700.woff2   dyslexia-friendly font (SIL OFL, see opendyslexic-LICENSE.txt)
 cloud-config.js Firebase project settings (public identifiers)
 cloud.js        Firebase sign-in + live sync layer
 firestore.rules security rules to paste into the Firebase console
@@ -46,7 +49,7 @@ Since v32 the app runs on a Firebase project (`cloud-config.js`): accounts, rost
 
 **One-time set-up (already done for the-academy---learnhub):** Firebase console → Authentication → Email/Password enabled; Authorized domains includes `jonresendes.github.io`; Firestore database created; the web app's config pasted into `cloud-config.js`; the contents of `firestore.rules` pasted into Firestore → **Rules** → Publish.
 
-**Sign-in.** Students: student number + birthday as `DDMMYYYY` (12 January 2008 → `12012008`). Teachers: teacher ID + password. The first teacher to open the app sets up the **Headmaster (admin) account** (Teacher tab → *First time here? Set up the Headmaster account*). The Headmaster adds other teachers in Settings → Teachers (name, teacher ID, password).
+**Sign-in.** Students: student number + birthday as `DDMMYYYY` (12 January 2008 → `12012008`). Teachers: teacher ID + password. There is **one Headmaster (admin) account**. The sign-in screen no longer offers to create one (v42); on a brand-new Firebase project open `…/#/setup` once to create it, and the cloud refuses a second. The Headmaster adds other teachers in the **Teachers** tab (below).
 
 **Students** are created by a teacher in Settings → Students (first name, student number, birthday) — this creates the login and enrols them in the selected section — or, if *Students may create their own profile* is on, by the student themselves (they then wait for a teacher to add them to a class). Wrong birthday? The student's row has **Fix birthday / reset password**.
 
@@ -58,7 +61,23 @@ Since v32 the app runs on a Firebase project (`cloud-config.js`): accounts, rost
 
 **Is it really saved? (v40)** The student row's Save button now waits for the cloud to confirm every write that is in flight, then reads the profile straight back from the server and compares it with what you set; it says *✓ Confirmed by the cloud · Profile vN* only if they match, and otherwise *⚠️ Not confirmed* with the reason. Settings has a cloud status line (synced / sending, N waiting / offline / error). If writes keep waiting, another open copy of the app on the same phone (a Chrome tab plus the installed app) may be holding the cache — close the other copy. Writes go out one batch at a time in the order they were made.
 
-**Firestore layout:** `students/{uid}`, `staff/{uid}`, `meta/master`, `sections/{id}`, `progress/{uid}__{courseId}`, `focus/{uid}`, `settings/global`. Security rules: students read only their own documents and may update only their own fields of their profile; staff read/write everything; only the master manages staff. After changing `firestore.rules`, paste it again into Firestore → Rules → Publish.
+**Firestore layout:** `students/{uid}`, `staff/{uid}`, `meta/master`, `logins/{teacherId}`, `issues/{id}`, `sections/{id}`, `progress/{uid}__{courseId}`, `focus/{uid}`, `settings/global`. Security rules: students read only their own documents and may update only their own fields of their profile; staff read/write everything; only the master manages staff. After changing `firestore.rules`, paste it again into Firestore → Rules → Publish.
+
+## Headmaster, Teachers tab, dyslexia-friendly text and problem reports (v42)
+
+**Who is the Headmaster.** The account named in `meta/master` (the same record the security rules trust) is the Headmaster, whatever role is written on its staff record; if that record says `teacher` the app corrects it at sign-in. A Headmaster session is marked by a gold line across the top of the header, a **👑 Headmaster** badge on the name chip, a banner at the top of Settings and an *Account type* row in Settings → My profile. A teacher's *Account type* row names the Headmaster on record and, under *This should be the Headmaster account?*, gives the Firebase console step to move the role (set `meta/master.uid`).
+
+**Teachers tab** (top menu, Headmaster only; the same panel is in Settings → Teachers):
+- **Add a teacher** — name, teacher ID (sign-in name, 3+ letters/digits), password (6+), optional school e-mail, optional first section.
+- **Teacher profiles** — one fold-out per teacher: change name and e-mail; see their sections; move a section to another teacher or back to the Headmaster; assign an existing section; create a new section for them; open a section's roster to add an existing student, create a new student (first name, number, birthday) or remove one from the section.
+- **Reset password** — a browser cannot change someone else's password, so the teacher gets a fresh sign-in behind the same teacher ID: their record, notes and sections move to it and the old password stops working. `logins/{teacherId}` records which sign-in address the ID uses now; the sign-in screen looks it up.
+- **Remove teacher** — deletes the staff record (their sign-in then opens nothing); their sections and students are kept and pass to the Headmaster. The same teacher ID can be given out again.
+
+**Dyslexia-friendly text** — Settings → Accessibility (students) / My accessibility (teachers): a switch that shows the whole app in OpenDyslexic with extra room between words and lines and no italics. It is a per-person preference (`prefs.dyslexia`) that follows the account; the font files are in the repo and cached for offline use.
+
+**Found a problem?** — a button in the bottom-left corner of every page for anyone signed in. It takes a picture of the screen, opens a box showing the picture (with a tick-box to leave it out) and a place to describe the problem, and sends both to the Headmaster. **Settings → 🐞 Reported problems** (Headmaster only) lists them — who, when, which page, app version, the message and the screenshot — with *Save screenshot* (downloads a JPEG), *Mark resolved / Reopen*, *Delete*, and Open / Resolved / All filters. Reports live in `issues/{id}`; the screenshot is a JPEG shrunk to fit inside the record. Embedded Google files and videos appear blank in a screenshot.
+
+**Rules changed in v42** — `firestore.rules` gains `logins/{id}` and `issues/{id}`. Paste it into Firestore → Rules → Publish, or password resets and problem reports are refused.
 
 ## Desks, Sections and Grades (v34)
 

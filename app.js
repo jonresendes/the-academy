@@ -91,12 +91,17 @@
     const h = document.querySelector('[data-nav="home"]'); if (h) h.textContent = deskName();
     const cs = document.querySelector('[data-nav="case"]'); if (cs) cs.hidden = !Students.current || Students.current.isStaff;
     const sn = document.querySelector('[data-nav="sections"]'); if (sn) sn.hidden = !Students.current;
+    const tn = document.querySelector('[data-nav="teachers"]'); if (tn) tn.hidden = !(Students.current && Students.current.role === 'master');
   }
+  function setNavRoles() { const tn = document.querySelector('[data-nav="teachers"]'); if (tn) tn.hidden = !(Students.current && Students.current.role === 'master'); }
   /** The "signed in as" chip in the header. */
   function renderWho() {
     const el = document.getElementById('whoChip'); if (!el) return;
     const s = Students.current;
-    el.innerHTML = s ? '<button class="who" type="button" id="whoBtn" title="Account"><span class="who-avatar" style="background:' + esc(s.colour) + '">' + s.avatar + '</span><span class="who-name">' + esc(s.name) + (s.isStaff ? ' <span class="muted small">(' + (s.role === 'master' ? 'Headmaster' : 'teacher') + ')</span>' : '') + '</span><span class="who-switch">▾</span></button>' : '';
+    const hm = !!(s && s.role === 'master');
+    document.body.dataset.role = !s ? '' : hm ? 'master' : s.isStaff ? 'teacher' : 'student';   // the Headmaster session is marked in the header
+    el.innerHTML = s ? '<button class="who' + (hm ? ' who-master' : '') + '" type="button" id="whoBtn" title="' + (hm ? 'Signed in as the Headmaster (admin)' : 'Account') + '"><span class="who-avatar" style="background:' + esc(s.colour) + '">' + s.avatar + '</span><span class="who-name">' + esc(s.name) + (s.isStaff && !hm ? ' <span class="muted small">(teacher)</span>' : '') + '</span>' + (hm ? '<span class="role-badge" aria-label="Headmaster">👑<span class="role-badge-text"> Headmaster</span></span>' : '') + '<span class="who-switch">▾</span></button>' : '';
+    setNavRoles();
     const b = el.querySelector('#whoBtn'); if (b) b.addEventListener('click', accountMenu);
   }
   /** Tapping the name/picture: a small sheet with Switch user / Sign out / Settings (no immediate sign-out). */
@@ -104,7 +109,7 @@
     const s = Students.current; if (!s) return;
     const old = document.getElementById('accountMenu'); if (old) { old.remove(); return; }
     const d = document.createElement('div'); d.id = 'accountMenu'; d.className = 'learn-overlay';
-    d.innerHTML = '<div class="learn-card account-card"><div class="account-head">' + avatarHtml(s, 'who-avatar big') + '<div><strong>' + esc(s.name) + '</strong><div class="muted small">' + (s.isStaff ? (s.role === 'master' ? 'Headmaster' : 'Teacher') + (Cloud.enabled && Staff.current && Staff.current.login ? ' · ID ' + esc(Staff.current.login) : '') : 'Student' + (s.number ? ' · #' + esc(s.number) : '')) + '</div></div></div>' +
+    d.innerHTML = '<div class="learn-card account-card"><div class="account-head">' + avatarHtml(s, 'who-avatar big') + '<div><strong>' + esc(s.name) + '</strong><div class="muted small">' + (s.isStaff ? (s.role === 'master' ? '👑 Headmaster (admin)' : 'Teacher') + (Cloud.enabled && Staff.current && Staff.current.login ? ' · ID ' + esc(Staff.current.login) : '') : 'Student' + (s.number ? ' · #' + esc(s.number) : '')) + '</div></div></div>' +
       '<div class="account-actions">' +
       '<button class="btn secondary" id="acctSwitch">🔁 Switch user</button>' +
       '<button class="btn secondary" id="acctSignOut">🚪 Sign out</button>' +
@@ -234,7 +239,7 @@
                  : field('siUser', 'Teacher ID', 'text', 'Teacher ID') + field('siPass', 'Password', 'password', 'Password')) +
         '<label class="chk" style="margin-top:0.5rem"><input type="checkbox" id="siKeep"' + (keep ? ' checked' : '') + '> Keep me signed in on this device <span class="muted small">(untick on shared computers)</span></label>' +
         '<div class="btn-row" style="margin-top:0.75rem"><button class="btn lg" id="siGo"' + (st.busy ? ' disabled' : '') + '>' + (st.busy ? 'Signing in…' : 'Sign in') + '</button>' +
-        (student && canSelf ? '<button class="btn ghost" id="siSignup">New student? Create an account</button>' : '') + (!student ? '<button class="btn ghost" id="siFirstTeacher">🎓 First time here? Set up the Headmaster (admin) account</button>' : '') + '</div></div>';
+        (student && canSelf ? '<button class="btn ghost" id="siSignup">New student? Create an account</button>' : '') + '</div></div>';
     }
     app.innerHTML = '<div class="signin"><div class="signin-head"><div class="signin-logo">🎓</div><h1>Welcome to The Academy</h1><p class="muted">' + (student ? 'Sign in with your student number and your birthday.' : 'Teachers sign in with their teacher ID and password.') + '</p></div>' +
       (st.msg ? '<div class="signin-msg' + (st.msgOk ? ' ok' : '') + '">' + esc(st.msg) + '</div>' : '') + form +
@@ -259,18 +264,16 @@
       try { await Cloud.createStudent({ name, number, dob, level: 2, courses: [] }); await Cloud.signInStudent(number, Cloud.dobPassword(dob), false); st.busy = false; st.signup = false; enterCloudSession(); }
       catch (e) { fail(e.message); }
     });
-    // first-ever teacher: offer master set-up when no master exists yet
-    const ft = app.querySelector('#siFirstTeacher'); if (ft) ft.addEventListener('click', () => { st.signup = 'master'; pageMasterSetup(); });
     const first = app.querySelector('#siUser, #suNumber'); if (first) first.focus();
   }
   function pageMasterSetup() {
-    app.innerHTML = '<div class="signin"><div class="signin-head"><div class="signin-logo">🎓</div><h1>Set up the Headmaster account</h1><p class="muted">The Headmaster is the admin account: it adds teachers, creates sections and sees every student. It can only be created once — after that, teachers are added by the Headmaster in Settings → Teachers.</p></div>' +
+    app.innerHTML = '<div class="signin"><div class="signin-head"><div class="signin-logo">🎓</div><h1>Set up the Headmaster account</h1><p class="muted">The Headmaster is the admin account: it adds teachers, creates sections and sees every student. There is only one, and it can only be created while none exists — after that, teachers are added by the Headmaster in the Teachers tab.</p></div>' +
       '<div class="card signin-card"><label class="signin-field">Your name<input class="text-input" id="mName" maxlength="40" placeholder="e.g. Ms Patel"></label><label class="signin-field">Teacher ID (what you will sign in with)<input class="text-input" id="mLogin" placeholder="e.g. jresendes"></label><label class="signin-field">Password (at least 6 characters)<input class="text-input" id="mPass" type="password"></label><label class="signin-field">School e-mail (optional)<input class="text-input" id="mEmail" placeholder="name@school.ca"></label>' +
       '<div class="btn-row" style="margin-top:0.75rem"><button class="btn lg" id="mGo">Create Headmaster account</button><button class="btn ghost" id="mBack">Cancel</button></div><p class="muted small" id="mMsg"></p></div></div>';
-    app.querySelector('#mBack').addEventListener('click', () => { signinState.signup = false; pageCloudSignIn(); });
+    app.querySelector('#mBack').addEventListener('click', () => { signinState.signup = false; location.hash = '#/signin'; pageCloudSignIn(); });
     app.querySelector('#mGo').addEventListener('click', async () => {
       const g = id => app.querySelector(id).value.trim(); const msg = app.querySelector('#mMsg');
-      try { msg.textContent = 'Creating…'; const rec = await Cloud.createStaff({ name: g('#mName'), login: g('#mLogin'), password: app.querySelector('#mPass').value, email: g('#mEmail') }); await Cloud.signInStaff(rec.login, app.querySelector('#mPass').value, true); signinState.signup = false; enterCloudSession(); }
+      try { msg.textContent = 'Creating…'; const rec = await Cloud.createMaster({ name: g('#mName'), login: g('#mLogin'), password: app.querySelector('#mPass').value, email: g('#mEmail') }); await Cloud.signInStaff(rec.login, app.querySelector('#mPass').value, true); signinState.signup = false; enterCloudSession(); }
       catch (e) { msg.textContent = e.message; msg.style.color = 'var(--danger)'; }
     });
   }
@@ -348,7 +351,7 @@
     const secs = Sections.visible(s.staffId, false), archived = Sections.visible(s.staffId, true).filter(x => x.archived);
     const scope = studentsInScope();
     document.body.dataset.page = 'desk';
-    app.innerHTML = '<div class="page-head"><div><h1>🧑‍🏫 Teacher\'s Desk</h1><p class="muted">Welcome, ' + esc(s.name) + ' · ' + (s.role === 'master' ? 'Headmaster' : 'Teacher') + ' · ' + secs.length + ' active section' + (secs.length === 1 ? '' : 's') + ' · ' + scope.length + ' student' + (scope.length === 1 ? '' : 's') + '</p></div>' +
+    app.innerHTML = '<div class="page-head"><div><h1>🧑‍🏫 Teacher\'s Desk</h1><p class="muted">Welcome, ' + esc(s.name) + ' · ' + (s.role === 'master' ? '<span class="tag hm-tag">👑 Headmaster</span>' : 'Teacher') + ' · ' + secs.length + ' active section' + (secs.length === 1 ? '' : 's') + ' · ' + scope.length + ' student' + (scope.length === 1 ? '' : 's') + '</p></div>' +
       '<div class="btn-row"><a class="btn secondary" href="#/settings">⚙️ Settings &amp; students</a></div></div>' +
       '<details class="card desk-fold"><summary class="class-summary"><span class="card-icon">🏫</span><span class="class-text"><h2>Sections</h2><span class="muted small">' + secs.length + ' active' + (archived.length ? ' · ' + archived.length + ' archived' : '') + '</span></span></summary><div class="class-body">' +
       (secs.length ? '<div class="section-list">' + secs.map(sec => teacherSectionCard(sec)).join('') + '</div>' : '<p class="muted">No sections yet — create one in Settings → Sections.</p>') +
@@ -838,13 +841,14 @@
     const accessibility =
       pref('fontScale', 'Text size', 'Make everything larger.', [[1, 'Normal'], [1.15, 'Large'], [1.3, 'Extra large']]) +
       pref('font', 'Reading font', 'Lexend is designed for easier reading.', [['default', 'Standard'], ['lexend', 'Lexend']]) +
+      sw('dyslexia', 'Dyslexia-friendly text', 'Shows everything in OpenDyslexic — letters with heavy bottoms that are harder to flip or swap — with widely spaced letters, extra room between words and lines, and no italics. Replaces the reading font while it is on.', Settings.get('dyslexia') === true) +
       pref('contrast', 'Contrast', 'High contrast: black text and strong borders. Inverted: white text on a black background.', [['normal', 'Normal'], ['high', 'High'], ['inverted', 'Inverted']]) +
       '<div class="setting-row"><div><label>Colour overlay (Irlen / visual stress)</label><div class="help">Tints the page like a coloured overlay. Try a few — the right colour is personal.</div></div><div class="tint-row">' + TINTS.map(t => '<button class="tint-swatch tint-' + t[0] + (Settings.get('tint') === t[0] ? ' on' : '') + '" data-tint="' + t[0] + '" title="' + t[1] + '" aria-label="' + t[1] + '"></button>').join('') + '<select class="text-input" id="tintSelect" style="max-width:170px">' + TINTS.map(t => '<option value="' + t[0] + '"' + (Settings.get('tint') === t[0] ? ' selected' : '') + '>' + t[1] + '</option>').join('') + '</select></div></div>' +
       pref('motion', 'Animation', 'Reduced motion removes flips, spins and slide effects.', [['normal', 'Normal'], ['reduced', 'Reduced']]) +
       sw('readAloud', 'Read aloud buttons', 'Show 🔊 buttons that read slides and questions out loud and highlight each word as it is read.', Settings.get('readAloud')) +
       sw('dictation', 'Dictation and voice recording', 'Show 🎤 dictate buttons on answers and 🎙️ record buttons on lessons and assignments.' + (Media.canDictate ? '' : ' (Dictation needs Chrome, Edge or Safari.)'), Settings.get('dictation') !== false) +
       '<div class="setting-row"><div><label>Read&amp;Write (Texthelp)</label><div class="help">The Read&amp;Write for Google Chrome extension works on this app as it is: every slide, question and assignment is real text, so hover-to-speak, dictionary, picture dictionary, highlighters and prediction all work. Tip: turn off the read-aloud buttons above to avoid two voices.</div></div><a class="btn secondary sm" href="https://chromewebstore.google.com/search/Read%26Write%20for%20Google%20Chrome" target="_blank" rel="noopener">Chrome Web Store</a></div>';
-    const profile =
+    const profile = () => accountType +
       (staff ? '<div class="setting-row"><div><label>Name</label><div class="help">Shown on the welcome screen and in the header.</div></div><div class="btn-row"><input class="text-input" id="meName" value="' + esc(me.name) + '" maxlength="30" style="max-width:220px"><button class="btn secondary sm" id="meNameSave">Save</button></div></div>'
              : '<div class="setting-row"><div><label>Name</label><div class="help">Your name is set by your teacher — ask them if it needs changing.</div></div><strong>' + esc(me.name) + '</strong></div>' + (Cloud.enabled ? '<div class="setting-row"><div><label>Profile version</label><div class="help">Changes your teacher makes on another device show here once they arrive.</div></div><span class="small muted">' + profileStamp(me) + '</span></div>' : '')) +
       '<div class="setting-row"><div><label>My picture</label></div><div class="avatar-grid">' + (staff ? ['🧑‍🏫', '👩‍🏫', '👨‍🏫', '🦉', '📚', '🍎', '🌟', '🧭'] : Students.AVATARS).map(a => '<button class="avatar-pick' + (a === me.avatar ? ' on' : '') + '" data-avatar="' + a + '">' + a + '</button>').join('') + '</div></div>' +
@@ -852,7 +856,14 @@
         ? '<div class="setting-row"><div><label>Account</label><div class="help">' + (staff ? 'Teacher ID <strong>' + esc((Staff.current || {}).login || '') + '</strong>. ' : 'Student number <strong>' + esc(me.number || '') + '</strong>. Your password is your birthday (DDMMYYYY). ') + (Cloud.keepSignedIn() ? 'You stay signed in on this device.' : 'You are signed out after ' + ((window.CLOUD_CONFIG || {}).idleMinutes || 30) + ' minutes without activity.') + '</div></div><div class="btn-row">' + (staff ? '<button class="btn secondary sm" id="changePw">Change password</button>' : '') + '<button class="btn ghost sm" id="signOutBtn">Sign out</button></div></div>'
         : staff ? '<div class="setting-row"><div><label>Security</label><div class="help">Your 6-digit PIN signs you in from the welcome screen.</div></div><div class="btn-row"><button class="btn secondary sm" id="changePin">Change my PIN</button><a class="btn ghost sm" href="#/welcome">Sign out</a></div></div>'
              : '<div class="setting-row"><div><label>Switch profile</label><div class="help">Go back to the welcome screen.</div></div><a class="btn secondary sm" href="#/welcome">Welcome screen</a></div>');
-    let html = '<div class="page-head"><div><h1>⚙️ Settings</h1><p class="muted">' + (staff ? 'Your profile, your sections and your students.' : 'Your profile, how the app looks and reads, and your classes.') + '</p>' + cloudStatusHtml() + '</div></div>';
+    const hm = staff && me.role === 'master', mi = Cloud.masterInfo || null, myLogin = (Staff.current || {}).login || '';
+    const accountType = !staff ? '' : '<div class="setting-row"><div><label>Account type</label><div class="help">' +
+      (hm ? 'This is the <strong>Headmaster (admin) account</strong> — the only one. It adds, changes and removes teachers, sees every section and student, and runs exports.'
+          : 'This is a <strong>teacher account</strong>: it sees its own sections and students.' + (Cloud.enabled && mi ? ' The Headmaster account on record is <strong>' + esc(mi.name || 'unnamed') + '</strong>.' : '') +
+            (Cloud.enabled && Cloud.user ? '<details class="hm-fix"><summary>This should be the Headmaster account?</summary>Only one account is the Headmaster, and the cloud names it in one place. In the Firebase console open Firestore → <code>meta</code> → <code>master</code> and set <code>uid</code> to this account\'s ID: <code>' + esc(Cloud.user.uid) + '</code> (and <code>name</code> to your name). Then sign out and sign in again.</details>' : '')) +
+      '</div></div><span class="tag ' + (hm ? 'hm-tag' : '') + '">' + (hm ? '👑 Headmaster' : 'Teacher') + '</span></div>';
+    let html = (hm ? '<div class="hm-banner" role="status">👑 <strong>Headmaster account</strong> · signed in as ' + esc(me.name) + (myLogin ? ' · ID ' + esc(myLogin) : '') + ' <a href="#/teachers">Manage teachers →</a></div>' : '') +
+      '<div class="page-head"><div><h1>⚙️ Settings</h1><p class="muted">' + (hm ? 'Your profile, every section, every student and the teachers.' : staff ? 'Your profile, your sections and your students.' : 'Your profile, how the app looks and reads, and your classes.') + '</p>' + cloudStatusHtml() + '</div></div>';
     if (!staff) {
       const classes = '<p class="muted small">Where you are working right now, and the level you start each class at. Archived classes are on your dashboard.</p>' +
         (courses().map(c => { const t = Students.trackFor(c.id); const prev = Students.previousLevel(c.id); const lv = Students.levelFor(c.id);
@@ -860,27 +871,28 @@
             '<span class="btn-row"><span class="tag">Level ' + lv + ' · ' + LEVEL_NAMES[lv] + '</span>' + (prev && prev !== lv ? '<button class="btn ghost sm" data-revert="' + c.id + '">↩ back to Level ' + prev + '</button>' : '') + '</span>') + '</div>'; }).join('') || '<p class="muted">No classes yet.</p>') +
         '<div class="plan-section"><div class="plan-label">Level of learning (default for new classes)</div><div class="level-cards compact">' + [1, 2, 3, 4].map(l => '<button class="level-card ' + (me.level === l ? 'on' : '') + '" data-me-level="' + l + '"><h3>Level ' + l + ' · ' + LEVEL_NAMES[l] + '</h3><p>' + LEVEL_DESC[l] + '</p></button>').join('') + '</div><p class="muted small" style="margin:0.4rem 0 0">Within a class you move up one level after 85%+ on a quiz, or back down when a quiz lands below your level\'s band.</p></div>' +
         '<div class="plan-section"><div class="plan-label">Accommodations' + (me.accommodations && (me.accommodations.reduce || me.accommodations.simplify || me.accommodations.chunk) ? '' : ' (none)') + '</div><p class="muted small" style="margin:0">' + [['reduce', 'Reduction — fewer questions'], ['simplify', 'Complexity — simpler answer choices'], ['chunk', 'Chunking — matching in small parts']].filter(x => me.accommodations && me.accommodations[x[0]]).map(x => '✓ ' + x[1]).join(' · ') + (me.accommodations && (me.accommodations.reduce || me.accommodations.simplify || me.accommodations.chunk) ? '' : 'Your teacher can turn these on for quizzes and tests.') + '</p></div>';
-      html += group('profile', '👤 My profile', esc(me.name), profile) +
+      html += group('profile', '👤 My profile', esc(me.name), profile()) +
         group('classes', '🎚️ My classes, level, accommodations &amp; modifications', courses().length + ' active', classes) +
-        group('access', '♿ Accessibility', 'text, contrast, overlay, read-aloud, dictation', accessibility) +
+        group('access', '♿ Accessibility', 'text, dyslexia-friendly text, contrast, overlay, read-aloud, dictation', accessibility) +
         group('app', '📱 App', 'install and offline', '<div id="appCard"><p class="muted small">Checking…</p></div>') +
         group('progress', '🗑️ Progress', '', '<p class="muted small">' + esc(me.name) + '\'s progress and awards are saved ' + (Cloud.enabled ? 'to the cloud and follow you to any device.' : 'in this browser.') + '</p><button class="btn ghost" id="resetBtn">Reset ' + esc(me.name) + '\'s progress</button>') +
         group('updates', '🔄 Updates', 'version ' + (window.PWA ? PWA.APP_VERSION : '?'), '<div id="updatesCard"><p class="muted small">Checking…</p></div>');
     } else {
-      html += group('profile', '👤 My profile', esc(me.name) + ' · ' + (me.role === 'master' ? 'Headmaster' : 'teacher'), profile) +
+      html += group('profile', '👤 My profile', esc(me.name) + ' · ' + (me.role === 'master' ? 'Headmaster' : 'teacher'), profile()) +
         group('sections', '🏫 Sections', Sections.visible(me.staffId, false).length + ' active', sectionsHtml()) +
         group('students', '👥 Students', 'levels · accommodations &amp; modifications · courses · Focus Plan · work', studentsPanelHtml()) +
-        (me.role === 'master' ? group('teachers', '🧑‍🏫 Teachers', Staff.teachers.length + ' teacher' + (Staff.teachers.length === 1 ? '' : 's'), teachersHtml()) + group('drive', '☁️ Google Drive &amp; exports', '', driveHtml()) : '') +
+        (me.role === 'master' ? group('teachers', '🧑‍🏫 Teachers', 'add a teacher · ' + Staff.teachers.length + ' profile' + (Staff.teachers.length === 1 ? '' : 's') + ' · sections · students · reset · remove', teachersHtml()) + group('issues', '🐞 Reported problems', 'screenshots and messages from the Found a problem? button', '<div id="issuesList"><p class="muted small">Loading…</p></div>') + group('drive', '☁️ Google Drive &amp; exports', '', driveHtml()) : '') +
         group('media', '🖼️ Media checklist', 'images and videos to add', mediaChecklistHtml()) +
         group('options', '🎛️ Class options', 'colouring breaks · welcome screen', '<h3>🎨 Colouring page learning breaks</h3>' +
           seg('colouringEvery', 'Show a learning card every…', 'How many areas the student colours before a lesson card appears. "Student chooses" lets them pick inside the game.', [['student', 'Student chooses'], [1, '1'], [3, '3'], [5, '5'], [10, '10'], [0, 'Off']], Settings.get('colouringEvery')) +
           '<h3 style="margin-top:1rem">🚪 Welcome screen</h3>' + sw('allowSelfSignup', 'Students may create their own profile', 'Off: only students added here appear on the welcome screen.', Settings.get('allowSelfSignup') !== false)) +
-        group('access', '♿ My accessibility', '', accessibility) +
+        group('access', '♿ My accessibility', 'text, dyslexia-friendly text, contrast, overlay, read-aloud', accessibility) +
         group('app', '📱 App', 'install and offline', '<div id="appCard"><p class="muted small">Checking…</p></div>') +
         group('updates', '🔄 Updates', 'version ' + (window.PWA ? PWA.APP_VERSION : '?'), '<div id="updatesCard"><p class="muted small">Checking…</p></div>');
     }
     app.innerHTML = html;
     renderAppCard(); renderUpdatesCard();
+    if (window.Report) Report.mount(app.querySelector('#issuesList'));
     const og = sessionStorage.getItem('learnhub.openGroup'); if (og) { sessionStorage.removeItem('learnhub.openGroup'); const d = app.querySelector('details[data-sgroup="' + og + '"]'); if (d) { d.open = true; setTimeout(() => d.scrollIntoView({ block: 'start' }), 50); } }
     app.querySelectorAll('details.sgroup').forEach(d => d.addEventListener('toggle', () => sessionStorage.setItem('learnhub.sg.' + d.dataset.sgroup, d.open ? '1' : '0')));
     app.querySelectorAll('[data-seg]').forEach(b => b.addEventListener('click', () => { const v = b.dataset.v; Settings.set(b.dataset.seg, isNaN(v) ? v : +v); pageSettings(); }));
@@ -929,19 +941,140 @@
     const rs = app.querySelector('#ovReset'); if (rs) rs.addEventListener('click', () => { const cur = Sections.currentFor(sid); if (confirm('Remove every customisation in ' + cur.name + ' and show the program version?')) { Overlay.resetOverlay(cur.id); pageSettings(); } });
   }
 
-  /* ----- Teachers (master only) ----- */
+  /* ----- Teachers (Headmaster only): add a teacher, open a profile, sections, students, reset, remove ----- */
+  const tUI = { msg: '', ok: true };
+  const redrawTeachers = () => (/^#\/teachers/.test(location.hash) ? pageTeachers() : pageSettings());
   function teachersHtml() {
-    return '<h3>🧑‍🏫 Teachers</h3><p class="muted small">Each teacher gets a 6-digit PIN. When they unlock with it they see only their own sections and students, and can change levels, view work and run exports for them.</p>' +
-      (Staff.teachers.length ? Staff.teachers.map(t => '<div class="course-line"><label>👤 ' + esc(t.name) + ' <span class="muted small">(' + Sections.visible(t.id, true).length + ' section' + (Sections.visible(t.id, true).length === 1 ? '' : 's') + ')</span></label><span class="btn-row">' + (Cloud.enabled ? '<span class="tag">ID ' + esc(t.login || '') + '</span>' : '<button class="btn ghost sm" data-teacher-pin="' + t.id + '">Reset PIN</button>') + '<button class="btn ghost sm" data-teacher-remove="' + t.id + '">Remove</button></span></div>').join('') : '<p class="muted small">No teachers yet.</p>') +
-      (Cloud.enabled ? '<div class="search-row" style="grid-template-columns:1fr 1fr 1fr auto;margin-top:0.6rem"><input class="text-input" id="teacherName" placeholder="Teacher name"><input class="text-input" id="teacherLogin" placeholder="Teacher ID (sign-in name)"><input class="text-input" id="teacherPin" type="password" placeholder="Password (6+ characters)"><button class="btn secondary" id="teacherAddBtn">＋ Add teacher</button></div><p class="small muted" id="teacherAddStaffMsg" style="margin:0.4rem 0 0">Teachers sign in on any device with their teacher ID and password.</p>'
-        : '<div class="btn-row" style="margin-top:0.6rem"><input class="text-input" id="teacherName" placeholder="Teacher name" style="max-width:220px"><input class="text-input pin-input" id="teacherPin" inputmode="numeric" maxlength="6" placeholder="6-digit PIN"><button class="btn secondary" id="teacherAddBtn">＋ Add teacher</button></div>');
+    const cloud = Cloud.enabled;
+    const ts = Staff.teachers.slice().sort((a, b) => String(a.name).localeCompare(String(b.name)));
+    const openT = sessionStorage.getItem('learnhub.teacherOpen') || '', openS = sessionStorage.getItem('learnhub.tSecOpen') || '';
+    const courseTitle = sec => (findCourseAll(sec.courseId) || { title: sec.courseId }).title;
+    const courseOpts = allCourses().map(c => '<option value="' + c.id + '">' + c.icon + ' ' + esc(c.title) + '</option>').join('');
+    const owner = sec => sec.teacherId ? (teacherName(sec) || 'no teacher') : 'Headmaster';
+    const free = Sections.list.filter(sec => !sec.teacherId && !sec.archived);
+    const date = iso => iso ? new Date(iso).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+    const fld = (label, input) => '<label class="hm-field"><span>' + label + '</span>' + input + '</label>';
+
+    const addForm = '<div class="plan-unit hm-add"><div class="plan-label">＋ Add a teacher</div>' +
+      (cloud
+        ? '<div class="hm-grid">' +
+            fld('Name', '<input class="text-input" id="hmName" maxlength="40" placeholder="e.g. Ms Patel" autocomplete="off">') +
+            fld('Teacher ID <span class="muted">(what they sign in with)</span>', '<input class="text-input" id="hmLogin" placeholder="e.g. mpatel" autocomplete="off" autocapitalize="off" spellcheck="false">') +
+            fld('Password <span class="muted">(at least 6 characters)</span>', '<input class="text-input" id="hmPass" type="password" autocomplete="new-password">') +
+            fld('School e-mail <span class="muted">(optional)</span>', '<input class="text-input" id="hmEmail" type="email" placeholder="name@school.ca" autocomplete="off">') +
+            fld('First section <span class="muted">(optional)</span>', '<select class="text-input" id="hmSec"><option value="">None yet — assign later</option>' + free.map(sec => '<option value="' + sec.id + '">' + esc(sec.name) + ' · ' + esc(courseTitle(sec)) + '</option>').join('') + '</select>') +
+          '</div><div class="btn-row" style="margin-top:0.6rem"><button class="btn" id="hmAdd">＋ Add teacher</button><label class="chk"><input type="checkbox" id="hmShow"> Show password</label></div>' +
+          '<p class="small muted" id="hmMsg" style="margin:0.4rem 0 0">The teacher signs in on any device with this teacher ID and password, and can change the password in Settings → My profile.</p>'
+        : '<div class="hm-grid">' + fld('Name', '<input class="text-input" id="hmName" maxlength="40" placeholder="e.g. Ms Patel">') + fld('6-digit PIN', '<input class="text-input pin-input" id="hmPass" inputmode="numeric" maxlength="6">') + '</div>' +
+          '<div class="btn-row" style="margin-top:0.6rem"><button class="btn" id="hmAdd">＋ Add teacher</button></div><p class="small muted" id="hmMsg" style="margin:0.4rem 0 0">Each teacher unlocks the app with their own PIN.</p>') + '</div>';
+
+    const rows = ts.map(t => {
+      const secs = Sections.list.filter(sec => sec.teacherId === t.id);
+      const ids = new Set(); secs.forEach(sec => (sec.students || []).forEach(id => ids.add(id)));
+      const isOpen = openT === t.id;
+      let body = '';
+      if (isOpen) {
+        const others = Sections.list.filter(sec => sec.teacherId !== t.id);
+        body = '<div class="student-body">' +
+          '<div class="plan-section"><div class="plan-label">Profile</div><div class="hm-grid">' +
+            fld('Name', '<input class="text-input" id="hmEditName" maxlength="40" value="' + esc(t.name) + '">') +
+            (cloud ? fld('School e-mail', '<input class="text-input" id="hmEditEmail" type="email" value="' + esc(t.email || '') + '" placeholder="name@school.ca">') : '') +
+            '</div><div class="btn-row" style="margin-top:0.5rem"><button class="btn secondary sm" data-t-save="' + t.id + '">💾 Save profile</button>' +
+            '<span class="small muted">' + (cloud ? 'Teacher ID <strong>' + esc(t.login || '—') + '</strong> (cannot be changed)' : '') + (t.createdAt ? ' · added ' + esc(date(t.createdAt)) : '') + (t.passwordResetAt ? ' · password reset ' + esc(date(t.passwordResetAt)) : '') + '</span></div></div>' +
+
+          '<div class="plan-section"><div class="plan-label">Sections (' + secs.length + ')</div>' +
+            (secs.length ? secs.map(sec => {
+              const sOpen = openS === sec.id, roster = Students.list.filter(s => (sec.students || []).includes(s.id)), rest = Students.list.filter(s => !(sec.students || []).includes(s.id));
+              return '<div class="hm-sec' + (sOpen ? ' open' : '') + '"><div class="course-line"><label>🏫 ' + esc(sec.name) + ' <span class="muted small">' + esc(courseTitle(sec)) + (sec.term ? ' · ' + esc(sec.term) : '') + (sec.archived ? ' · 📦 archived' : '') + '</span></label><span class="btn-row">' +
+                '<button class="btn ghost sm" data-tsec-open="' + sec.id + '">' + (sOpen ? '▾' : '▸') + ' 👥 ' + roster.length + ' student' + (roster.length === 1 ? '' : 's') + '</button>' +
+                '<select class="text-input hm-move" data-sec-move="' + sec.id + '" aria-label="Move this section to another teacher"><option value="__keep">Move to…</option><option value="">Headmaster (me)</option>' + ts.filter(o => o.id !== t.id).map(o => '<option value="' + o.id + '">' + esc(o.name) + '</option>').join('') + '</select></span></div>' +
+                (sOpen ? '<div class="hm-roster">' +
+                  (roster.length ? roster.map(s => '<div class="course-line"><label>' + avatarHtml(s) + ' ' + esc(s.name) + (s.number ? ' <span class="tag">#' + esc(s.number) + '</span>' : '') + '</label><button class="btn ghost sm" data-tsec-unenrol="' + s.id + '" data-sec="' + sec.id + '">Remove from section</button></div>').join('') : '<p class="muted small">No students in this section yet.</p>') +
+                  '<div class="hm-grid" style="margin-top:0.6rem">' +
+                    fld('Add a student who already has an account', '<select class="text-input" data-tsec-enrol="' + sec.id + '"><option value="">Choose a student…</option>' + rest.map(s => '<option value="' + s.id + '">' + esc(s.name) + (s.number ? ' (#' + esc(s.number) + ')' : '') + '</option>').join('') + '</select>') + '</div>' +
+                  '<div class="plan-label" style="margin-top:0.75rem">Or create a new student in this section</div><div class="hm-grid">' +
+                    fld('First name', '<input class="text-input" id="hmStName" maxlength="30" autocomplete="off">') +
+                    (cloud ? fld('Student number', '<input class="text-input" id="hmStNumber" inputmode="numeric" autocomplete="off">') + fld('Birthday <span class="muted">(their password)</span>', '<input class="text-input" id="hmStDob" type="date">') : '') +
+                  '</div><div class="btn-row" style="margin-top:0.5rem"><button class="btn secondary sm" data-tsec-newstudent="' + sec.id + '">＋ Add student</button><span class="small muted" id="hmStMsg"></span></div></div>' : '') + '</div>';
+            }).join('') : '<p class="muted small">No sections yet. Assign one below or create a new one.</p>') +
+            '<div class="hm-grid" style="margin-top:0.75rem">' + fld('Assign an existing section to ' + esc(t.name), '<select class="text-input" data-t-assign="' + t.id + '"><option value="">Choose a section…</option>' + others.map(sec => '<option value="' + sec.id + '">' + esc(sec.name) + ' · ' + esc(courseTitle(sec)) + ' (now: ' + esc(owner(sec)) + ')</option>').join('') + '</select>') + '</div>' +
+            '<div class="plan-label" style="margin-top:0.75rem">Or create a new section for ' + esc(t.name) + '</div><div class="hm-grid">' +
+              fld('Section name', '<input class="text-input" id="hmSecName" placeholder="e.g. HRF3O Period 2" maxlength="60">') + fld('Course', '<select class="text-input" id="hmSecCourse">' + courseOpts + '</select>') + fld('Term', '<input class="text-input" id="hmSecTerm" placeholder="e.g. Fall 2026">') +
+            '</div><div class="btn-row" style="margin-top:0.5rem"><button class="btn secondary sm" data-t-newsec="' + t.id + '">＋ Create section</button></div></div>' +
+
+          '<div class="plan-section"><div class="plan-label">Account</div><div class="btn-row">' +
+            '<button class="btn secondary sm" data-t-reset="' + t.id + '">🔑 Reset ' + (cloud ? 'password' : 'PIN') + '</button>' +
+            '<button class="btn ghost sm hm-danger" data-t-remove="' + t.id + '">🗑️ Remove teacher</button></div>' +
+            '<p class="small muted" style="margin:0.4rem 0 0">' + (cloud ? 'Resetting gives ' + esc(t.name) + ' a new password behind the same teacher ID; the old password stops working. ' : '') + 'Removing a teacher keeps their sections and students — the sections pass to you until you assign them to someone else.</p></div></div>';
+      }
+      return '<div class="student-row' + (isOpen ? ' open' : '') + '"><button class="student-head" data-t-open="' + t.id + '">' + avatarHtml({ avatar: t.avatar || '🧑‍🏫', colour: t.colour || '#1f5f8b' }) + '<span class="student-name">' + esc(t.name) + '</span>' +
+        (cloud ? '<span class="tag">ID ' + esc(t.login || '—') + '</span>' : '') + '<span class="tag">' + secs.length + ' section' + (secs.length === 1 ? '' : 's') + '</span><span class="tag">' + ids.size + ' student' + (ids.size === 1 ? '' : 's') + '</span><span class="muted">' + (isOpen ? '▾' : '▸') + '</span></button>' + body + '</div>';
+    }).join('');
+
+    return (tUI.msg ? '<div class="plan-banner hm-msg' + (tUI.ok ? ' ok' : ' bad') + '" role="status">' + esc(tUI.msg) + '</div>' : '') + addForm +
+      '<h3 style="margin-top:1.25rem">Teacher profiles <span class="muted small">(' + ts.length + ')</span></h3>' +
+      (ts.length ? '<div class="student-list">' + rows + '</div>' : '<p class="muted small">No teachers yet. Add the first one above.</p>');
   }
   function bindTeachers() {
-    const add = app.querySelector('#teacherAddBtn'); if (add) add.addEventListener('click', async () => { const n = app.querySelector('#teacherName').value.trim(), p = app.querySelector('#teacherPin').value.trim(); if (!n) return alert('Enter the teacher\'s name.');
-      if (Cloud.enabled) { const msg = app.querySelector('#teacherAddStaffMsg'); try { msg.textContent = 'Creating…'; await Cloud.createStaff({ name: n, login: app.querySelector('#teacherLogin').value, password: p }); pageSettings(); } catch (e) { msg.textContent = e.message; msg.style.color = 'var(--danger)'; } return; }
-      if (!/^\d{6}$/.test(p)) return alert('The PIN must be exactly 6 digits.'); if (Staff.unlock(p)) return alert('That PIN is already in use — choose another.'); Staff.addTeacher(n, p); pageSettings(); });
-    app.querySelectorAll('[data-teacher-pin]').forEach(b => b.addEventListener('click', () => { const p = (prompt('New 6-digit PIN:') || '').trim(); if (!/^\d{6}$/.test(p)) return; if (Staff.unlock(p)) return alert('That PIN is already in use.'); Staff.updateTeacher(b.dataset.teacherPin, { pin: p }); alert('PIN updated.'); }));
-    app.querySelectorAll('[data-teacher-remove]').forEach(b => b.addEventListener('click', () => { const t = Staff.teachers.find(x => x.id === b.dataset.teacherRemove); if (confirm('Remove ' + t.name + '? Their sections stay but have no teacher until you assign one.')) { Staff.removeTeacher(t.id); pageSettings(); } }));
+    if (!app.querySelector('#hmAdd')) return;
+    const cloud = Cloud.enabled, q = sel => app.querySelector(sel), val = sel => { const el = q(sel); return el ? String(el.value || '').trim() : ''; };
+    const on = (sel, ev, fn) => app.querySelectorAll(sel).forEach(el => el.addEventListener(ev, fn));
+    const done = (msg, ok) => { tUI.msg = msg || ''; tUI.ok = ok !== false; redrawTeachers(); };
+    const teacher = id => Staff.teachers.find(x => x.id === id);
+    const show = q('#hmShow'); if (show) show.addEventListener('change', () => { q('#hmPass').type = show.checked ? 'text' : 'password'; });
+    on('#hmAdd', 'click', async e => {
+      const btn = e.currentTarget, msg = q('#hmMsg'), name = val('#hmName'), pass = q('#hmPass').value || '';
+      const fail = m => { msg.textContent = m; msg.style.color = 'var(--danger)'; btn.disabled = false; };
+      if (!name) return fail('Enter the teacher\'s name.');
+      if (!cloud) { if (!/^\d{6}$/.test(pass)) return fail('The PIN must be exactly 6 digits.'); if (Staff.unlock(pass)) return fail('That PIN is already in use — choose another.'); const t = Staff.addTeacher(name, pass); sessionStorage.setItem('learnhub.teacherOpen', t.id); return done(name + ' was added.'); }
+      btn.disabled = true; msg.style.color = ''; msg.textContent = 'Creating the account…';
+      try {
+        const secId = val('#hmSec'); const rec = await Cloud.createStaff({ name, login: val('#hmLogin'), password: pass, email: val('#hmEmail') });
+        if (secId) Sections.update(secId, { teacherId: rec.id });
+        sessionStorage.setItem('learnhub.teacherOpen', rec.id);
+        done(rec.name + ' was added. They sign in with teacher ID "' + rec.login + '" and the password you chose.');
+      } catch (err) { fail(err.message); }
+    });
+    on('[data-t-open]', 'click', e => { const id = e.currentTarget.dataset.tOpen; sessionStorage.setItem('learnhub.teacherOpen', sessionStorage.getItem('learnhub.teacherOpen') === id ? '' : id); sessionStorage.removeItem('learnhub.tSecOpen'); done(''); });
+    on('[data-t-save]', 'click', e => { const id = e.currentTarget.dataset.tSave, name = val('#hmEditName'); if (!name) return alert('The name cannot be empty.'); const patch = { name: name.slice(0, 40) }; if (q('#hmEditEmail')) patch.email = val('#hmEditEmail'); Staff.updateTeacher(id, patch); Students._staffCache = {}; done('Saved ' + patch.name + '\'s profile.'); });
+    on('[data-tsec-open]', 'click', e => { const id = e.currentTarget.dataset.tsecOpen; sessionStorage.setItem('learnhub.tSecOpen', sessionStorage.getItem('learnhub.tSecOpen') === id ? '' : id); done(''); });
+    on('[data-sec-move]', 'change', e => { const sel = e.currentTarget; if (sel.value === '__keep') return; const sec = Sections.byId(sel.dataset.secMove); const to = sel.value ? teacher(sel.value) : null; Sections.update(sec.id, { teacherId: sel.value || null }); done('"' + sec.name + '" now belongs to ' + (to ? to.name : 'the Headmaster') + '.'); });
+    on('[data-t-assign]', 'change', e => { const sel = e.currentTarget; if (!sel.value) return; const sec = Sections.byId(sel.value), t = teacher(sel.dataset.tAssign); Sections.update(sec.id, { teacherId: t.id }); done('"' + sec.name + '" is now assigned to ' + t.name + '.'); });
+    on('[data-t-newsec]', 'click', e => { const t = teacher(e.currentTarget.dataset.tNewsec), name = val('#hmSecName'); if (!name) return alert('Give the section a name.'); const sec = Sections.add(name, val('#hmSecCourse'), t.id, val('#hmSecTerm')); sessionStorage.setItem('learnhub.tSecOpen', sec.id); done('Section "' + sec.name + '" was created for ' + t.name + '.'); });
+    on('[data-tsec-enrol]', 'change', e => { const sel = e.currentTarget; if (!sel.value) return; const s = Students.byId(sel.value), sec = Sections.byId(sel.dataset.tsecEnrol); Sections.enrol(sec.id, s.id, true); done(s.name + ' was added to "' + sec.name + '".'); });
+    on('[data-tsec-unenrol]', 'click', e => { const b = e.currentTarget, s = Students.byId(b.dataset.tsecUnenrol), sec = Sections.byId(b.dataset.sec); if (!confirm('Remove ' + s.name + ' from "' + sec.name + '"? Their account and work are kept.')) return; Sections.enrol(sec.id, s.id, false); done(s.name + ' was removed from "' + sec.name + '".'); });
+    on('[data-tsec-newstudent]', 'click', async e => {
+      const btn = e.currentTarget, sec = Sections.byId(btn.dataset.tsecNewstudent), msg = q('#hmStMsg'), name = val('#hmStName');
+      const fail = m => { msg.textContent = m; msg.style.color = 'var(--danger)'; btn.disabled = false; };
+      if (!name) return fail('Enter the student\'s first name.');
+      if (!cloud) { const s = Students.add(name, { courses: [sec.courseId] }); Sections.enrol(sec.id, s.id, true); return done(s.name + ' was added to "' + sec.name + '".'); }
+      btn.disabled = true; msg.style.color = ''; msg.textContent = 'Creating the account…';
+      try { const s = await Cloud.createStudent({ name, number: val('#hmStNumber'), dob: val('#hmStDob'), level: 2, courses: [sec.courseId] }); Sections.enrol(sec.id, s.id, true); done(s.name + ' was added to "' + sec.name + '". They sign in with their student number and birthday (DDMMYYYY).'); }
+      catch (err) { fail(err.message); }
+    });
+    on('[data-t-reset]', 'click', async e => {
+      const btn = e.currentTarget, t = teacher(btn.dataset.tReset);
+      if (!cloud) { const p = (prompt('New 6-digit PIN for ' + t.name + ':') || '').trim(); if (!p) return; if (!/^\d{6}$/.test(p)) return alert('The PIN must be exactly 6 digits.'); if (Staff.unlock(p)) return alert('That PIN is already in use.'); Staff.updateTeacher(t.id, { pin: p }); return done(t.name + '\'s PIN was changed.'); }
+      const p = prompt('New password for ' + t.name + ' (at least 6 characters):'); if (p === null) return; if (p.length < 6) return alert('The password must be at least 6 characters.');
+      btn.disabled = true; btn.textContent = 'Resetting…';
+      try { const rec = await Cloud.resetStaffPassword(t.id, p); sessionStorage.setItem('learnhub.teacherOpen', rec.id); done(t.name + '\'s password was reset. Their teacher ID is still "' + rec.login + '"; the old password no longer works.'); }
+      catch (err) { done('Could not reset the password: ' + err.message, false); }
+    });
+    on('[data-t-remove]', 'click', async e => {
+      const btn = e.currentTarget, t = teacher(btn.dataset.tRemove); const n = Sections.list.filter(sec => sec.teacherId === t.id).length;
+      if (!confirm('Remove ' + t.name + '? They will no longer be able to sign in.' + (n ? ' Their ' + n + ' section' + (n === 1 ? '' : 's') + ' and the students in ' + (n === 1 ? 'it' : 'them') + ' are kept and pass to you.' : ''))) return;
+      if (!cloud) { Staff.removeTeacher(t.id); return done(t.name + ' was removed.'); }
+      btn.disabled = true; btn.textContent = 'Removing…';
+      try { await Cloud.removeStaff(t.id); sessionStorage.removeItem('learnhub.teacherOpen'); done(t.name + ' was removed.'); }
+      catch (err) { done('Could not remove the teacher: ' + err.message, false); }
+    });
+  }
+  /** The Headmaster's Teachers tab. */
+  function pageTeachers() {
+    const me = Students.current; if (!me || me.role !== 'master') return pageHome();
+    setCourseColor(null); setNav('teachers');
+    app.innerHTML = '<div class="page-head"><div><h1>🧑‍🏫 Teachers</h1><p class="muted">Every teacher profile at The Academy. Add a teacher, open a profile to change it, assign sections and add students. Only the Headmaster sees this page.</p>' + cloudStatusHtml() + '</div></div><div class="card hm-card">' + teachersHtml() + '</div>';
+    bindTeachers();
   }
 
   /* ----- Google Drive / export (master only) ----- */
@@ -1280,7 +1413,8 @@
     // profile was left signed in on this device. Once a tile is tapped the session proceeds normally.
     // every collapsible area starts closed when a screen is opened
     // (a redraw of the same screen — a setting changed, data arrived from the cloud — keeps them as they are)
-    if (location.hash !== route.last) Object.keys(sessionStorage).filter(k => /^learnhub\.(sg\.|studentOpen|workOpen|recOpen|mediaOpen|planOpen|sectionsOpen|focusOpen)/.test(k)).forEach(k => sessionStorage.removeItem(k));
+    if (location.hash !== route.last) tUI.msg = '';
+    if (location.hash !== route.last) Object.keys(sessionStorage).filter(k => /^learnhub\.(sg\.|studentOpen|workOpen|recOpen|mediaOpen|planOpen|sectionsOpen|focusOpen|teacherOpen|tSecOpen)/.test(k)).forEach(k => sessionStorage.removeItem(k));
     route.last = location.hash;
     if (Cloud.enabled) {
       if (!Cloud.ready) { app.innerHTML = '<div class="empty"><div class="signin-logo">🎓</div><p class="muted">Connecting…</p></div>'; return; }
@@ -1289,7 +1423,7 @@
         // way (the phone's back button stepping through old history, a bookmark) just goes home.
         if (Cloud.user && sessionStorage.getItem('learnhub.switch') !== '1') { location.replace(location.pathname + '#/'); return; }
         sessionStorage.removeItem('learnhub.switch'); if (Cloud.user) Cloud.signOut(); return pageCloudSignIn(); }
-      if (!Cloud.user) return pageCloudSignIn();
+      if (!Cloud.user) return parts[0] === 'setup' ? pageMasterSetup() : pageCloudSignIn();   // #/setup: first-time Headmaster set-up (refused by the cloud once one exists)
       if (!Students.current || !sessionStorage.getItem('learnhub.entered')) { enterCloudSession(); if (!Students.current) return; }
     } else if (parts[0] === 'signin' || parts[0] === 'welcome' || !Students.current || !sessionStorage.getItem('learnhub.entered')) return pageWelcome();
     switch (parts[0]) {
@@ -1310,13 +1444,15 @@
       case 'grades': return Grades.page(parts[1]);
       case 'sections': return pageSections();
       case 'notes': return pageNotes();
+      case 'teachers': return pageTeachers();
+      case 'setup': return pageHome();
       default: return notFound();
     }
   }
   document.addEventListener('click', e => { const g = e.target.closest('[data-open-group]'); if (g) sessionStorage.setItem('learnhub.openGroup', g.dataset.openGroup); });
   window.addEventListener('hashchange', route);
   // Live data from the cloud: redraw data pages (not while someone is typing in a box)
-  window.addEventListener('cloud:change', () => { const a = document.activeElement; if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return; const p = location.hash.replace(/^#\/?/, '').split('/')[0]; if ((['', 'course', 'lesson', 'work', 'dashboard', 'grades', 'case'].includes(p) || (p === 'settings' && !Students.isStaffSession)) && Students.current) route(); renderWho(); });
+  window.addEventListener('cloud:change', () => { const a = document.activeElement; if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return; const p = location.hash.replace(/^#\/?/, '').split('/')[0]; if ((['', 'course', 'lesson', 'work', 'dashboard', 'grades', 'case', 'teachers'].includes(p) || (p === 'settings' && !Students.isStaffSession)) && Students.current) route(); renderWho(); });
   window.addEventListener('cloud:auth', () => {
     if (Cloud.user && /^#\/(welcome|signin)/.test(location.hash)) { location.hash = '#/'; return; }   // just signed in from the sign-in page
     if (!Cloud.user && Students.current) { Students.setCurrent(null); sessionStorage.removeItem('learnhub.entered'); }
