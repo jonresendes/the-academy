@@ -22,7 +22,9 @@
     <button class="back-btn" id="backBtn" type="button" title="Back" aria-label="Back" hidden>← <span class="back-label">Back</span></button>
     <a href="#/" class="brand"><img src="logo.png" alt="The Academy — Learn Hub" class="brand-logo"></a>
     <nav class="topnav">
-      <a href="#/" data-nav="home">Dashboard</a>
+      <a href="#/" data-nav="home">Home</a>
+      <a href="#/grades" data-nav="grades" hidden>Grades</a>
+      <a href="#/dashboard" data-nav="dashboard" hidden>Grades</a>
       <a href="#/case" data-nav="case">Display Case</a>
       <a href="#/settings" data-nav="settings">Settings</a>
     </nav>
@@ -43,6 +45,13 @@
   <script src="hrf3o.js"></script>      <!-- HRF3O World Religions (4 units) — must load after colouring.js: it adds its own colouring pictures -->
   <script src="snc1l2l.js"></script>    <!-- SNC1L/2L Science, Locally Developed — loads after colouring.js -->
   <script src="glc2o.js"></script>      <!-- GLC2O Career Studies (5 units) — loads after colouring.js -->
+
+  <!-- ===== CLOUD (Firebase) — accounts and live sync; set enabled:false in cloud-config.js for device-only mode ===== -->
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <script src="cloud-config.js"></script>
+  <script src="cloud.js"></script>
 
   <!-- ===== APP ===== -->
   <script src="storage.js"></script>

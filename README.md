@@ -22,6 +22,9 @@ olc4o.js        OLC4O Literacy — Unit 1 · Reading Like a Detective (Lessons 1
 colouring.js    line-art pictures for the Colouring Page
 media-guide-<course>.html   checklist of suggested images/videos per lesson (generated)
 pwa.js          install button, update notice, phone back button
+cloud-config.js Firebase project settings (public identifiers)
+cloud.js        Firebase sign-in + live sync layer
+firestore.rules security rules to paste into the Firebase console
 sw.js           service worker (offline cache) — bump VERSION on every deploy
 manifest.json   app name, colours and icons for installing
 icon-192.png / icon-512.png   app icons (the "A" badge)
@@ -36,6 +39,32 @@ README.md
 3. Your app is live at `https://<user>.github.io/<repo>/`.
 
 You can also just open `index.html` locally — it works from a file:// URL too.
+
+## Cloud accounts and sync (Firebase)
+
+Since v32 the app runs on a Firebase project (`cloud-config.js`): accounts, rosters, progress, assignment work and teacher grades live in Firestore and follow people to any device. If Firebase can't be loaded (no internet on first open, or `enabled: false`), the app runs in the older device-only mode.
+
+**One-time set-up (already done for the-academy---learnhub):** Firebase console → Authentication → Email/Password enabled; Authorized domains includes `jonresendes.github.io`; Firestore database created; the web app's config pasted into `cloud-config.js`; the contents of `firestore.rules` pasted into Firestore → **Rules** → Publish.
+
+**Sign-in.** Students: student number + birthday as `DDMMYYYY` (12 January 2008 → `12012008`). Teachers: teacher ID + password. The first teacher to open the app sets up the **master account** (Teacher tab → *First teacher? Set up the master account*). The master adds other teachers in Settings → Teachers (name, teacher ID, password).
+
+**Students** are created by a teacher in Settings → Students (first name, student number, birthday) — this creates the login and enrols them in the selected section — or, if *Students may create their own profile* is on, by the student themselves (they then wait for a teacher to add them to a class). Wrong birthday? The student's row has **Fix birthday / reset password**.
+
+**Sessions.** Closing the app, the back button or a reload never signs anyone out. A device with *Keep me signed in* unticked signs the user out after `idleMinutes` (30) without activity. Settings → My profile has **Sign out**.
+
+**What syncs.** Profiles, levels, accommodations, Focus Plans, sections and rosters, every quiz/test score, award, assignment draft and hand-in, teacher grades and comments. Voice recordings and uploaded media stay on the device they were made on. Changes appear live on other open devices.
+
+**Firestore layout:** `students/{uid}`, `staff/{uid}`, `meta/master`, `sections/{id}`, `progress/{uid}__{courseId}`, `focus/{uid}`, `settings/global`. Security rules: students read/write only their own documents; staff read/write everything; only the master manages staff.
+
+## Grades
+
+Teachers: **Grades** in the top bar (or a section's *Grades grid* on the dashboard). One collapsible table per unit: a row per student; per lesson a quiz cell and a cell per assignment showing ✓ handed in / ✎ draft / – not started with a grade box (out of 10) and a 💬 comment button; then unit test and awards. Grades save to the student's record (and the cloud) as you type.
+
+Students: **Grades** in the top bar, or *My grades* on a class — the same row for themselves, with teacher grades and comments. Nothing on it is editable.
+
+## Collapsible classes and units
+
+Classes on the home page, sections on the teacher dashboard, units on a course page and units on the Grades grids are all fold-outs. Every fold starts closed each time a screen is opened (nothing is remembered between screens).
 
 ## Installing on a phone or computer
 

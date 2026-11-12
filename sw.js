@@ -1,7 +1,7 @@
 /* The Academy · Learn Hub — service worker (offline cache + update detection).
    BUMP THE VERSION every time you upload changed files; that is what makes
    installed copies show the "Update available" notice. */
-const VERSION = 'learnhub-v11';
+const VERSION = 'learnhub-v12';
 const FILES = [
   './',
   './index.html',
@@ -28,6 +28,11 @@ const FILES = [
   './app.js',
   './pwa.js',
   './glc2o.js',
+  './cloud-config.js',
+  './cloud.js',
+  'https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js',
+  'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js',
+  'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js'
 ];
 
 self.addEventListener('install', e => {
@@ -45,7 +50,9 @@ self.addEventListener('message', e => { if (e.data === 'SKIP_WAITING') self.skip
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
   const url = new URL(e.request.url);
-  if (url.origin !== location.origin) return;                                   // fonts etc. go straight to the network
+  const sdk = url.hostname === 'www.gstatic.com' && /firebasejs/.test(url.pathname);
+  if (url.origin !== location.origin && !sdk) return;                           // fonts etc. go straight to the network
+  if (/firestore\.googleapis\.com|identitytoolkit|securetoken/.test(url.hostname)) return;
   if (/\/(sw\.js|version\.json|cloud\.json)$/.test(url.pathname)) return;      // update checks always hit the website
   e.respondWith(
     fetch(e.request).then(res => {

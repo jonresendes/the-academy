@@ -743,3 +743,62 @@ body[data-contrast="inverted"] .rw.reading { background: #ffd600; color: #000; b
 .media-google.tall iframe { aspect-ratio: auto; height: 70vh; min-height: 420px; }
 .media-google .btn-row { margin-top: 0.5rem; }
 @media print { .media-google iframe { display: none; } }
+
+/* ---------- cloud sign-in ---------- */
+.signin-card { max-width: 440px; margin: 0 auto; }
+.signin-field { display: block; font-weight: 700; margin-top: 0.75rem; }
+.signin-field .text-input { margin-top: 0.3rem; font-weight: 600; }
+.signin-seg { display: flex; width: 100%; margin-bottom: 0.5rem; }
+.signin-seg button { flex: 1; }
+.signin-msg { max-width: 440px; margin: 0 auto 0.75rem; padding: 0.7rem 1rem; border-radius: var(--radius-sm); background: var(--danger-soft); color: var(--danger); font-weight: 700; }
+.signin-msg.ok { background: var(--success-soft); color: var(--success); }
+
+/* ---------- collapsible classes, sections and units ---------- */
+details.class-fold, details.unit-card, details.unit-grid { padding: 0; overflow: hidden; }
+details.class-fold > summary, details.unit-card > summary, details.unit-grid > summary { list-style: none; cursor: pointer; padding: 1.1rem 1.25rem; position: relative; }
+details.class-fold > summary::-webkit-details-marker, details.unit-card > summary::-webkit-details-marker, details.unit-grid > summary::-webkit-details-marker { display: none; }
+details.class-fold > summary::after, details.unit-card > summary::after, details.unit-grid > summary::after { content: "▸"; position: absolute; right: 1.1rem; top: 1rem; color: var(--muted); font-size: 1.1rem; transition: transform var(--motion); }
+details[open].class-fold > summary::after, details[open].unit-card > summary::after, details[open].unit-grid > summary::after { transform: rotate(90deg); }
+details.class-fold > summary:hover, details.unit-card > summary:hover, details.unit-grid > summary:hover { background: var(--surface-2); }
+.class-list { display: flex; flex-direction: column; gap: 0.9rem; }
+.class-summary { display: grid; grid-template-columns: auto 1fr auto; gap: 0.5rem 1rem; align-items: center; padding-right: 2.5rem !important; }
+.class-summary .card-icon { margin: 0; font-size: 2rem; }
+.class-summary h2 { font-size: 1.25rem; margin: 0; }
+.class-text { display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; }
+.class-text .progress { margin: 0.35rem 0 0; }
+.class-tags { justify-content: flex-end; }
+.class-body { padding: 0 1.25rem 1.1rem; border-top: 1px solid var(--line); }
+.unit-line { display: grid; grid-template-columns: auto 1fr auto 90px; gap: 0.75rem; align-items: center; padding: 0.55rem 0; border-bottom: 1px dashed var(--line); color: inherit; }
+.unit-line:last-of-type { border-bottom: none; }
+.unit-line-title { font-weight: 700; }
+.progress.mini { height: 8px; margin: 0; }
+.roster { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.75rem; }
+.roster-chip { background: var(--surface-2); border-radius: 999px; padding: 0.25rem 0.7rem; font-weight: 700; font-size: 0.9rem; }
+.unit-summary .unit-head { margin: 0; padding-right: 2rem; }
+.unit-summary { padding: 1.25rem !important; }
+.fold-hint { display: block; font-size: 0.78rem; color: var(--muted); font-weight: 700; margin-top: 0.3rem; }
+details.unit-card > .lesson-list, details.unit-card > .unit-foot, details.unit-card > .ov-unit-tools { margin-left: 1.25rem; margin-right: 1.25rem; }
+details.unit-card > :last-child { margin-bottom: 1.25rem; }
+details.unit-grid > summary { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding-right: 2.5rem; }
+details.unit-grid > .d-wrap { padding: 0 1.25rem 1.25rem; }
+details.unit-grid > .small { padding: 0 1.25rem 1rem; }
+.class-grades { margin-bottom: 1.5rem; }
+.class-grades h2 { margin-bottom: 0.6rem; }
+.class-grades details.unit-grid { margin-bottom: 0.75rem; }
+@media (max-width: 640px) { .class-summary { grid-template-columns: auto 1fr; } .class-tags { grid-column: 1 / -1; justify-content: flex-start; } .unit-line { grid-template-columns: auto 1fr; } .unit-line .muted, .unit-line .progress { grid-column: 2; } }
+
+/* ---------- grades grid ---------- */
+.dash th.d-sub { font-size: 0.72rem; font-weight: 700; color: var(--muted); padding: 0.2rem 0.4rem; white-space: nowrap; }
+.dash td.a-cell { white-space: nowrap; }
+.a-state { display: inline-block; width: 1.3em; font-weight: 800; }
+.a-state.done { color: var(--success); } .a-state.draft { color: #8a5a00; } .a-state.none { color: var(--line); }
+.grade-box { display: inline-flex; align-items: center; gap: 1px; margin-left: 0.2rem; }
+.grade-in { width: 3.2em; padding: 0.15rem 0.3rem; border: 1px solid var(--line); border-radius: 6px; font: inherit; font-size: 0.85rem; text-align: right; background: var(--surface); color: var(--text); }
+.grade-in:focus { outline: none; border-color: var(--primary); }
+.grade-in.saved { border-color: var(--success); background: var(--success-soft); }
+.grade-max { font-size: 0.75rem; color: var(--muted); font-weight: 700; }
+.grade-show { font-weight: 800; margin-left: 0.3rem; } .grade-show.ok { color: var(--success); }
+.grade-note-btn { border: none; background: transparent; cursor: pointer; opacity: 0.35; padding: 0 0.1rem; font-size: 0.9rem; }
+.grade-note-btn.has { opacity: 1; }
+.grade-note { margin-left: 0.2rem; }
+@media print { details.unit-grid { break-inside: avoid; } .grade-note-btn:not(.has) { display: none; } }

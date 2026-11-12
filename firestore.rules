@@ -1,0 +1,50 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function isStaff() { return signedIn() && exists(/databases/$(database)/documents/staff/$(request.auth.uid)); }
+    function isMaster() { return signedIn() && exists(/databases/$(database)/documents/meta/master) && get(/databases/$(database)/documents/meta/master).data.uid == request.auth.uid; }
+    function noMasterYet() { return !exists(/databases/$(database)/documents/meta/master); }
+
+    // The first teacher claims the master record; afterwards only the master may change it.
+    match /meta/master {
+      allow read: if signedIn();
+      allow create: if signedIn() && noMasterYet() && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if isMaster();
+    }
+    // Staff records: the master creates them (the very first teacher creates their own while
+    // no master exists yet); a teacher may update their own; the master manages everyone.
+    match /staff/{uid} {
+      allow read: if signedIn();
+      allow create: if isMaster() || (signedIn() && request.auth.uid == uid && noMasterYet());
+      allow update: if isMaster() || (isStaff() && request.auth.uid == uid);
+      allow delete: if isMaster();
+    }
+    // Student profiles: the student and all staff can read; staff or the student may write.
+    match /students/{uid} {
+      allow read: if signedIn() && (isStaff() || request.auth.uid == uid);
+      allow create, update: if signedIn() && (isStaff() || request.auth.uid == uid);
+      allow delete: if isStaff();
+    }
+    // Sections: every signed-in user can read (students need their roster); only staff write.
+    match /sections/{id} {
+      allow read: if signedIn();
+      allow write: if isStaff();
+    }
+    // Progress and assignment work: the owner or staff.
+    match /progress/{id} {
+      allow read: if signedIn() && (isStaff() || resource.data.student == request.auth.uid);
+      allow create: if signedIn() && (isStaff() || request.resource.data.student == request.auth.uid);
+      allow update: if signedIn() && (isStaff() || resource.data.student == request.auth.uid);
+      allow delete: if isStaff();
+    }
+    match /focus/{uid} {
+      allow read: if signedIn() && (isStaff() || request.auth.uid == uid);
+      allow write: if isStaff();
+    }
+    match /settings/global {
+      allow read: if signedIn();
+      allow write: if isStaff();
+    }
+  }
+}

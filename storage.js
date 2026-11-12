@@ -61,8 +61,9 @@
   }
   function save(key, value) {
     try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* storage blocked – app still works for the session */ }
+    if (window.Cloud && window.Cloud.enabled) window.Cloud.onLocalSave(key, value);   // mirror to the cloud (cloud.js)
   }
-  function remove(key) { try { localStorage.removeItem(key); } catch (e) {} }
+  function remove(key) { try { localStorage.removeItem(key); } catch (e) {} if (window.Cloud && window.Cloud.enabled && window.Cloud.onLocalRemove) window.Cloud.onLocalRemove(key); }
 
   /* ---------- Students ---------- */
   const AVATARS = ['🦊', '🐼', '🦉', '🐸', '🐙', '🦁', '🐧', '🦄', '🐢', '🐝', '🦋', '🐨', '🐯', '🦖', '🐬', '🦜'];
@@ -293,7 +294,16 @@
     /** Read another student's progress without switching (teacher views of work). */
     peek(studentId) { return load(KEY_PROGRESS + '.' + studentId, {}); },
     /** Reset another student's progress (teacher). */
-    resetFor(studentId) { remove(KEY_PROGRESS + '.' + studentId); if (Students.current && Students.current.id === studentId) this.load(); }
+    resetFor(studentId) { remove(KEY_PROGRESS + '.' + studentId); if (Students.current && Students.current.id === studentId) this.load(); },
+    /** Write another student's progress (teacher: grades, notes). */
+    saveFor(studentId, data) { save(KEY_PROGRESS + '.' + studentId, data); if (Students.current && Students.current.id === studentId) this.load(); },
+    /** Teacher grade on an assignment: { score, max, note, by, at }. Works for any student. */
+    setGrade(studentId, courseId, unitId, lessonIdx, n, grade) {
+      const data = this.peek(studentId); const c = data[courseId] = data[courseId] || {}; const u = c[unitId] = c[unitId] || {};
+      u.work = u.work || {}; const wl = u.work[lessonIdx] = u.work[lessonIdx] || {}; const w = wl[n] = wl[n] || { text: '', done: false };
+      if (grade === null) delete w.grade; else w.grade = Object.assign({}, w.grade || {}, grade, { at: new Date().toISOString() });
+      this.saveFor(studentId, data);
+    }
   };
 
   /* Focus Plan — a teacher-chosen slice of the curriculum for a student

@@ -1,5 +1,5 @@
 {
- "version": "31",
- "date": "2026-11-09",
- "notes": "Courses named by course code"
+ "version": "32",
+ "date": "2026-11-11",
+ "notes": "Cloud accounts (student number + birthday), live sync across devices, Grades grid, collapsible classes and units"
 }
