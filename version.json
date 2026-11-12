@@ -1,5 +1,5 @@
 {
- "version": "37",
+ "version": "38",
  "date": "2026-11-11",
- "notes": "Cloud accounts (student number + birthday), live sync across devices, Grades grid, collapsible classes and units"
+ "notes": "Profile sync fix: only changed fields are sent, students cannot overwrite teacher settings, profile version stamp on every screen"
 }

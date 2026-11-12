@@ -851,3 +851,7 @@ body[data-page="desk"] .page-head .muted, body[data-page="desk"] .stat .l { colo
 body[data-page="desk"] h1 { color: #2e1d0f; }
 body[data-page="desk"] .desk-fold > summary:hover { background: #fbf4e6; }
 body[data-contrast="high"][data-page="desk"], body[data-contrast="inverted"][data-page="desk"] { background: var(--bg); }   /* accessibility modes keep their own backgrounds */
+
+/* ---- profile version stamp (sync trace) ---- */
+.stamp { font-weight: 600; opacity: 0.85; }
+.student-head .row-stamp { flex-basis: 100%; font-weight: 500; margin-top: -0.2rem; }

@@ -62,7 +62,7 @@
     clearTimeout(flushTimer); flushTimer = setTimeout(flush, 300);
   };
   /** Push everything waiting right now (Save buttons, sign-out, leaving the page). */
-  Cloud.flushNow = async function () { clearTimeout(flushTimer); await flush(); };
+  Cloud.flushNow = async function () { clearTimeout(flushTimer); await flush(); if (Cloud.lastError) throw new Error(Cloud.lastError); };
   window.addEventListener('pagehide', () => { if (Object.keys(pending).length) flush(); });
   document.addEventListener('visibilitychange', () => { if (document.hidden && Object.keys(pending).length) flush(); });
   async function flush() {
@@ -72,7 +72,7 @@
       for (const key of Object.keys(batch)) {
         const v = batch[key];
         if (key === 'learnhub.students') {
-          for (const s of (v.list || [])) if (s.id && (Cloud.role !== 'student' || s.id === me.uid)) await db.collection('students').doc(s.id).set(clean(Object.assign({}, s, { updatedAt: now() })), { merge: true });
+          for (const s of (v.list || [])) if (s.id) await pushStudent(s, me);
           if (Cloud.role !== 'student') for (const id of removedStudents(v.list || [])) await db.collection('students').doc(id).delete().catch(() => {});
         } else if (key === 'learnhub.staff' && Cloud.role !== 'student') {
           const m = v.master; if (m && m.uid) await db.collection('staff').doc(m.uid).set(clean({ id: m.uid, name: m.name, avatar: m.avatar, colour: m.colour, prefs: m.prefs || null, archived: m.archived || [], role: 'master', login: m.login || '', email: m.email || '', notes: m.notes || null }), { merge: true });
@@ -92,8 +92,50 @@
           await db.collection('settings').doc('global').set({ allowSelfSignup: v.allowSelfSignup !== false, colouringEvery: v.colouringEvery === undefined ? 'student' : v.colouringEvery, updatedAt: now() }, { merge: true });
         }
       }
-      setStatus(Cloud.online ? 'synced' : 'offline');
-    } catch (e) { console.warn('cloud push failed', e); setStatus('error', e.message); }
+      Cloud.lastError = ''; setStatus(Cloud.online ? 'synced' : 'offline');
+    } catch (e) { console.warn('cloud push failed', e); Cloud.lastError = describe(e); setStatus('error', Cloud.lastError); }
+  }
+  const describe = e => e && e.code === 'permission-denied' ? 'The cloud refused the change (permission denied). Check the Firestore rules in the Firebase console.' : e && e.code === 'unavailable' ? 'The cloud is not reachable right now.' : (e && e.message) || String(e);
+
+  /* ---------- student profiles: send only the fields that changed ----------
+     Every device used to rewrite the whole profile, so a phone holding an old copy (offline, or a
+     cached read) could put the old level and course list back over the teacher's newer one.
+     Now each push compares the local record with the last copy we saw from the cloud and updates
+     only the fields that differ; a student may only touch their own fields; and every change bumps
+     `rev` and stamps who made it, so the same profile version can be checked on any screen. */
+  const seenStudents = {};                                                             // id → last cloud copy applied here
+  const META = ['updatedAt', 'updatedBy', 'rev'];
+  const STUDENT_OWN = ['prefs', 'archived', 'suggestions', 'lessonLevels', 'levelLog', 'courseLevels', 'avatar', 'colour'];   // a student may change these about themselves
+  const PER_COURSE = ['courseLevels', 'levelLog', 'lessonLevels', 'suggestions', 'track'];                                     // maps keyed by course: one course at a time
+  const isMap = v => !!v && typeof v === 'object' && !Array.isArray(v);
+  const J = v => JSON.stringify(v === undefined ? null : v);
+  const FP = (...seg) => new fb.firestore.FieldPath(...seg);
+  function whoAmI() { const S = window.Students, c = S && S.current; return c ? String(c.name || '') : ''; }
+  async function pushStudent(s, me) {
+    const id = s.id, prev = seenStudents[id], mine = Cloud.role === 'student';
+    if (mine && id !== me.uid) return;
+    if (!prev) {
+      if (mine) return;                                                                // own profile not loaded yet: nothing safe to compare with
+      const full = clean(Object.assign({}, s, { updatedAt: now(), updatedBy: whoAmI(), rev: (+s.rev || 0) + 1 }));
+      await db.collection('students').doc(id).set(full); seenStudents[id] = full; return;
+    }
+    const args = [], next = Object.assign({}, prev); let changed = 0;
+    const FV = fb.firestore.FieldValue;
+    const put = (path, val) => { args.push(FP(...path), val === undefined ? FV.delete() : clean(val)); changed++; };
+    for (const k of new Set([...Object.keys(s), ...Object.keys(prev)])) {
+      if (META.includes(k) || (mine && !STUDENT_OWN.includes(k)) || J(prev[k]) === J(s[k])) continue;
+      if (PER_COURSE.includes(k) && isMap(prev[k]) && isMap(s[k])) {
+        const n = Object.assign({}, prev[k]);
+        for (const c of new Set([...Object.keys(prev[k]), ...Object.keys(s[k])])) { if (J(prev[k][c]) === J(s[k][c])) continue; put([k, c], s[k][c]); if (s[k][c] === undefined) delete n[c]; else n[c] = clean(s[k][c]); }
+        next[k] = n;
+      } else { put([k], s[k]); if (s[k] === undefined) delete next[k]; else next[k] = clean(s[k]); }
+    }
+    if (!changed) return;
+    const stamp = { updatedAt: now(), updatedBy: whoAmI() };
+    args.push(FP('updatedAt'), stamp.updatedAt, FP('updatedBy'), stamp.updatedBy, FP('rev'), FV.increment(1));
+    try { await db.collection('students').doc(id).update(...args); }
+    catch (e) { if (e && e.code === 'not-found' && !mine) await db.collection('students').doc(id).set(clean(Object.assign({}, s, stamp, { rev: 1 }))); else throw e; }
+    seenStudents[id] = Object.assign(next, stamp, { rev: (+prev.rev || 0) + 1 });
   }
   let knownSections = new Set(), knownStudents = new Set();
   function removedSections(list) { const ids = new Set(list.map(s => s.id)); const gone = [...knownSections].filter(id => !ids.has(id)); knownSections = ids; return gone; }
@@ -116,7 +158,7 @@
 
   function applyStudents(docs) {
     const cur = lsGet('learnhub.students') || { list: [], current: null };
-    const list = docs.map(d => { const s = d.data(); delete s.updatedAt; return s; });
+    const list = docs.map(d => { const s = d.data(); s.id = s.id || d.id; seenStudents[s.id] = clean(s); return s; });   // keep rev / updatedAt / updatedBy: screens show them
     if (Cloud.role === 'student') { // a student only ever holds their own profile locally
       const mine = list.find(s => s.id === Cloud.user.uid); const others = (cur.list || []).filter(s => s.id !== Cloud.user.uid && !String(s.id).startsWith('s'));
       lsSet('learnhub.students', { list: mine ? [mine] : [], current: cur.current });
@@ -210,7 +252,7 @@
     }
   }
   auth.onAuthStateChanged(async user => {
-    stopListening();
+    stopListening(); Object.keys(seenStudents).forEach(k => delete seenStudents[k]);
     if (!user) { Cloud.user = null; Cloud.role = null; Cloud.ready = true; setStatus('signed-out'); readyResolve(); emit('auth'); return; }
     try {
       if (idleExpired()) { await auth.signOut(); return; }
@@ -276,7 +318,7 @@
     const uid = await createAuthUser(studentEmail(number), pw);
     const S = window.Students;
     const profile = S.add(name, Object.assign({ id: uid, number, dob, level: level || 2, courses: courses === undefined ? null : courses }, prefs ? { prefs } : {}, avatar ? { avatar } : {}));
-    await db.collection('students').doc(uid).set(clean(Object.assign({}, profile, { updatedAt: now() })));
+    const full = clean(Object.assign({}, profile, { updatedAt: now(), updatedBy: whoAmI(), rev: 1 })); await db.collection('students').doc(uid).set(full); seenStudents[uid] = full;
     return profile;
   };
   /** Fix a student's birthday (and therefore their password). */

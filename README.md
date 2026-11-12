@@ -54,7 +54,9 @@ Since v32 the app runs on a Firebase project (`cloud-config.js`): accounts, rost
 
 **What syncs.** Profiles, levels, accommodations, Focus Plans, sections and rosters, every quiz/test score, award, assignment draft and hand-in, teacher grades and comments. Voice recordings and uploaded media stay on the device they were made on. Changes appear live on other open devices.
 
-**Firestore layout:** `students/{uid}`, `staff/{uid}`, `meta/master`, `sections/{id}`, `progress/{uid}__{courseId}`, `focus/{uid}`, `settings/global`. Security rules: students read/write only their own documents; staff read/write everything; only the master manages staff.
+**Profile sync (v38).** A device sends only the profile fields that changed since the last copy it received, never the whole record, so a phone holding an old copy (offline, or opened from cache) cannot put an old level or course list back over a newer one. A student's own account may only change its own fields (preferences, archived courses, avatar, quiz-driven level moves and logs); the level, course list, accommodations, track, name and number are teacher-only, enforced in `firestore.rules`. Every saved change raises the profile's **version** (`rev`) and stamps who saved it and when; the stamp shows on the student's desk, in their Settings → My profile, and under their name in the teacher's Students list. If two screens show different version numbers, the newer one has not reached the other yet — Settings → App status says whether that device is synced, offline or in error, and the Save button now reports a refused write instead of claiming success.
+
+**Firestore layout:** `students/{uid}`, `staff/{uid}`, `meta/master`, `sections/{id}`, `progress/{uid}__{courseId}`, `focus/{uid}`, `settings/global`. Security rules: students read only their own documents and may update only their own fields of their profile; staff read/write everything; only the master manages staff. After changing `firestore.rules`, paste it again into Firestore → Rules → Publish.
 
 ## Desks, Sections and Grades (v34)
 

@@ -20,10 +20,16 @@ service cloud.firestore {
       allow update: if isMaster() || (isStaff() && request.auth.uid == uid);
       allow delete: if isMaster();
     }
-    // Student profiles: the student and all staff can read; staff or the student may write.
+    // Student profiles: the student and all staff can read; staff write anything; a student may
+    // create their own profile (self sign-up) and afterwards change only their own fields —
+    // never the level, course list, accommodations, track, name or number a teacher set.
+    function studentOwnFields() {
+      return ['prefs', 'archived', 'suggestions', 'lessonLevels', 'levelLog', 'courseLevels', 'avatar', 'colour', 'rev', 'updatedAt', 'updatedBy'];
+    }
     match /students/{uid} {
       allow read: if signedIn() && (isStaff() || request.auth.uid == uid);
-      allow create, update: if signedIn() && (isStaff() || request.auth.uid == uid);
+      allow create: if signedIn() && (isStaff() || request.auth.uid == uid);
+      allow update: if isStaff() || (signedIn() && request.auth.uid == uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(studentOwnFields()));
       allow delete: if isStaff();
     }
     // Sections: every signed-in user can read (students need their roster); only staff write.
