@@ -901,13 +901,16 @@ select.text-input.hm-move { width: auto; max-width: 170px; font-size: 0.9rem; pa
 .hm-card h3:first-child { margin-top: 0; }
 
 /* ---------- "Found a problem?" button, report box and the Headmaster's list ---------- */
-.report-fab { position: fixed; left: 1rem; bottom: 1rem; z-index: 35; display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.5rem 0.9rem; border-radius: 999px; border: 2px solid var(--line); background: var(--surface); color: var(--text); font-weight: 700; font-size: 0.85rem; box-shadow: var(--shadow-lg); cursor: pointer; opacity: 0.92; max-width: calc(100vw - 2rem); }
-.report-fab:hover, .report-fab:focus-visible { opacity: 1; border-color: var(--primary); color: var(--primary); }
+.report-fab { position: fixed; left: 1rem; bottom: 1rem; z-index: 35; display: inline-flex; align-items: center; height: 2.6rem; min-width: 2.6rem; padding: 0 0.7rem; border-radius: 999px; border: 2px solid var(--line); background: var(--surface); color: var(--text); font-weight: 700; font-size: 0.85rem; line-height: 1; box-shadow: var(--shadow-lg); cursor: pointer; max-width: calc(100vw - 2rem); opacity: 0.55; filter: grayscale(0.85); transition: opacity var(--motion, 0.2s) ease, filter var(--motion, 0.2s) ease, border-color var(--motion, 0.2s) ease; }
+/* Resting: a small, greyed bug. Hover (or keyboard focus): full colour and the whole sentence slides out. */
+.report-fab .report-fab-text { display: inline-block; max-width: 0; overflow: hidden; white-space: nowrap; opacity: 0; transition: max-width 0.25s ease, opacity 0.2s ease, margin-left 0.25s ease; }
 .report-fab .report-fab-more { font-weight: 600; color: var(--muted); }
+.report-fab:hover, .report-fab:focus-visible { opacity: 1; filter: none; border-color: var(--primary); }
+.report-fab:hover .report-fab-text, .report-fab:focus-visible .report-fab-text { max-width: 30rem; opacity: 1; margin-left: 0.4rem; }
 .report-fab.busy { cursor: progress; opacity: 0.6; }
 .report-fab[hidden] { display: none; }
-@media (max-width: 900px) { .report-fab .report-fab-more { display: none; } }
-@media (max-width: 560px) { .report-fab { padding: 0.5rem 0.65rem; left: 0.6rem; bottom: 0.6rem; } .report-fab .report-fab-text { display: none; } }
+@media (max-width: 560px) { .report-fab { left: 0.6rem; bottom: 0.6rem; } .report-fab .report-fab-more { display: none; } }
+@media (hover: none) { .report-fab:hover .report-fab-text { max-width: 0; opacity: 0; margin-left: 0; } .report-fab:hover { opacity: 0.55; filter: grayscale(0.85); border-color: var(--line); } }   /* touch screens: stays a bug; one tap opens the report box */
 @media print { .report-fab, .report-overlay { display: none !important; } }
 .app { padding-bottom: 4.5rem; }   /* room so the button never covers the last line of a page */
 .report-overlay { z-index: 60; }
@@ -939,3 +942,4 @@ select.text-input.hm-move { width: auto; max-width: 170px; font-size: 0.9rem; pa
   .topnav { order: 3; width: 100%; flex: none; }
   .who-chip { margin-left: auto; }
 }
+.report-fab > span:first-child { font-size: 1.3rem; line-height: 1; }
