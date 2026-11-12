@@ -475,7 +475,8 @@ body { overflow-x: hidden; }
 .who:hover { background: var(--primary-soft); }
 .who-avatar { width: 32px; height: 32px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 1.1rem; flex: none; }
 .who-switch { color: var(--muted); font-weight: 700; font-size: 0.8rem; }
-.who-name { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.who-name { white-space: nowrap; }   /* the full name and role always show; narrow screens hide the name instead (below) */
+.who-chip { flex: none; }
 .avatar-grid { display: flex; flex-wrap: wrap; gap: 0.35rem; max-width: 420px; }
 .avatar-pick { width: 44px; height: 44px; border-radius: 50%; border: 2px solid var(--line); background: var(--surface); font-size: 1.4rem; cursor: pointer; }
 .avatar-pick.on { border-color: var(--primary); background: var(--primary-soft); transform: scale(1.1); }
@@ -872,7 +873,6 @@ body[data-dyslexia="on"] .plan-label { letter-spacing: 0; }
 body[data-dyslexia="on"] .install-btn, body[data-dyslexia="on"] .topnav a { white-space: nowrap; }
 body[data-dyslexia="on"] .topnav a { padding-left: 0.6rem; padding-right: 0.6rem; }
 body[data-dyslexia="on"] .topbar { gap: 0.6rem; } body[data-dyslexia="on"] .install-btn { font-size: 0.78rem; padding-left: 0.6rem; padding-right: 0.6rem; } body[data-dyslexia="on"] .topnav a { font-size: 0.92rem; }
-body[data-dyslexia="on"] .who-name { max-width: 190px; }
 
 /* ---------- Headmaster identification ---------- */
 .role-badge { display: inline-flex; align-items: center; padding: 0.12rem 0.55rem; border-radius: 999px; background: var(--accent); color: var(--on-accent, #1f2937); font-size: 0.78rem; font-weight: 800; white-space: nowrap; }
@@ -931,3 +931,11 @@ select.text-input.hm-move { width: auto; max-width: 170px; font-size: 0.9rem; pa
 .issue-text { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0.5rem 0 0.7rem; font-weight: 600; }
 .issue-tech { opacity: 0.8; }
 @media (max-width: 640px) { .issue { grid-template-columns: 1fr; } .issue-shot { max-width: 320px; } }
+
+/* ---------- header: the name chip is never cut off ----------
+   Between phone width and a wide window the menu drops to its own row so the full name and role fit. */
+@media (min-width: 641px) and (max-width: 1150px) {
+  .topbar { flex-wrap: wrap; row-gap: 0.4rem; }
+  .topnav { order: 3; width: 100%; flex: none; }
+  .who-chip { margin-left: auto; }
+}
