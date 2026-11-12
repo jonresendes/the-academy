@@ -63,6 +63,10 @@ Since v32 the app runs on a Firebase project (`cloud-config.js`): accounts, rost
 - **Display Case** stays in the student menu; for teachers it is a fold-out at the top of each course page (students get that fold too).
 - **Settings** groups all start closed each time Settings is opened. The Focus Plan and keyword search live inside each student's row in Settings → Students (no separate group). Each open student row has a **💾 Save changes** button that pushes the row's changes to the cloud immediately and confirms; changes are also pushed automatically within a second and on sign-out.
 
+## Teacher notes
+
+Teachers and the Headmaster have a **Notes** fold on the Teacher's Desk and on the Sections page, and a notes page (`#/notes`): 4, 6, 8 or 10 sticky notes, each with a title, a colour and free text. Notes save as you type, are private to that teacher, and follow them to any device (stored on their staff record). Students never see them.
+
 ## Grades
 
 Teachers: open a section (Desk → Sections, or the Sections page) → **Grades**. One collapsible table per unit: a row per student; per lesson a quiz cell and a cell per assignment showing ✓ handed in / ✎ draft / – not started with a grade box (out of 10) and a 💬 comment button; then unit test and awards. Grades save to the student's record (and the cloud) as you type.

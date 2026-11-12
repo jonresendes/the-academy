@@ -75,8 +75,8 @@
           for (const s of (v.list || [])) if (s.id && (Cloud.role !== 'student' || s.id === me.uid)) await db.collection('students').doc(s.id).set(clean(Object.assign({}, s, { updatedAt: now() })), { merge: true });
           if (Cloud.role !== 'student') for (const id of removedStudents(v.list || [])) await db.collection('students').doc(id).delete().catch(() => {});
         } else if (key === 'learnhub.staff' && Cloud.role !== 'student') {
-          const m = v.master; if (m && m.uid) await db.collection('staff').doc(m.uid).set(clean({ id: m.uid, name: m.name, avatar: m.avatar, colour: m.colour, prefs: m.prefs || null, archived: m.archived || [], role: 'master', login: m.login || '', email: m.email || '' }), { merge: true });
-          for (const t of (v.teachers || [])) await db.collection('staff').doc(t.id).set(clean({ id: t.id, name: t.name, avatar: t.avatar, colour: t.colour, prefs: t.prefs || null, archived: t.archived || [], role: 'teacher', login: t.login || '', createdAt: t.createdAt || now() }), { merge: true });
+          const m = v.master; if (m && m.uid) await db.collection('staff').doc(m.uid).set(clean({ id: m.uid, name: m.name, avatar: m.avatar, colour: m.colour, prefs: m.prefs || null, archived: m.archived || [], role: 'master', login: m.login || '', email: m.email || '', notes: m.notes || null }), { merge: true });
+          for (const t of (v.teachers || [])) await db.collection('staff').doc(t.id).set(clean({ id: t.id, name: t.name, avatar: t.avatar, colour: t.colour, prefs: t.prefs || null, archived: t.archived || [], role: 'teacher', login: t.login || '', createdAt: t.createdAt || now(), notes: t.notes || null }), { merge: true });
         } else if (key === 'learnhub.sections' && Cloud.role !== 'student') {
           for (const sec of (v.list || [])) await db.collection('sections').doc(sec.id).set(clean(Object.assign({}, sec, { updatedAt: now() })));
           for (const id of removedSections(v.list || [])) await db.collection('sections').doc(id).delete().catch(() => {});

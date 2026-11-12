@@ -319,7 +319,7 @@
       (secs.length ? '<div class="section-list">' + secs.map(sec => teacherSectionCard(sec)).join('') + '</div>' : '<p class="muted">No sections yet — create one in Settings → Sections.</p>') +
       (archived.length ? '<details class="other-courses"><summary>📦 Archived sections (' + archived.length + ')</summary><div class="section-list" style="margin-top:1rem">' + archived.map(sec => teacherSectionCard(sec)).join('') + '</div></details>' : '') +
       '<p class="small muted" style="margin:0.75rem 0 0"><a href="#/sections">Open the Sections page →</a></p></div></details>' +
-      '<details class="card desk-fold"><summary class="class-summary"><span class="card-icon">📚</span><span class="class-text"><h2>Courses</h2><span class="muted small">' + allCourses().length + ' courses · teacher preview</span></span></summary><div class="class-body"><div class="grid" style="margin-top:0.75rem">' + allCourses().map(c => '<a class="card link course-card" href="#/course/' + c.id + '" style="--course:' + esc(c.color || '') + '"><div class="card-icon">' + c.icon + '</div><h2>' + esc(c.title) + '</h2><p class="muted">' + esc(c.subtitle || '') + '</p><span class="tag">' + c.units.length + ' units · ' + c.units.reduce((n, u) => n + u.lessons.length, 0) + ' lessons</span></a>').join('') + '</div></div></details>';
+      '<details class="card desk-fold"><summary class="class-summary"><span class="card-icon">📚</span><span class="class-text"><h2>Courses</h2><span class="muted small">' + allCourses().length + ' courses · teacher preview</span></span></summary><div class="class-body"><div class="grid" style="margin-top:0.75rem">' + allCourses().map(c => '<a class="card link course-card" href="#/course/' + c.id + '" style="--course:' + esc(c.color || '') + '"><div class="card-icon">' + c.icon + '</div><h2>' + esc(c.title) + '</h2><p class="muted">' + esc(c.subtitle || '') + '</p><span class="tag">' + c.units.length + ' units · ' + c.units.reduce((n, u) => n + u.lessons.length, 0) + ' lessons</span></a>').join('') + '</div></div></details>' + notesFoldHtml();
     app.querySelectorAll('[data-section]').forEach(a => a.addEventListener('click', () => Sections.setCurrent(s.staffId, a.dataset.section)));
   }
 
@@ -330,6 +330,38 @@
       '<div class="class-body">' + (roster.length ? '<div class="roster">' + roster.map(st => '<span class="roster-chip">' + st.avatar + ' ' + esc(st.name) + (st.number ? ' <span class="muted small">#' + esc(st.number) + '</span>' : '') + '</span>').join('') + '</div>' : '<p class="muted small">No students yet — add them in Settings → Students.</p>') +
       '<div class="btn-row" style="margin-top:0.6rem"><a class="btn" href="#/dashboard" data-section="' + sec.id + '">📊 Grades</a>' + (c ? '<a class="btn secondary sm" href="#/course/' + c.id + '">📚 Open the course</a>' : '') + '<a class="btn secondary sm" href="#/settings" data-section="' + sec.id + '" data-open-group="students">👥 Students</a>' + (c ? '<a class="btn ghost sm" href="#/print/' + c.id + '/' + c.units[0].id + '/unit">🖨️ Print unit 1</a>' : '') + '</div></div></details>';
   }
+  /* ----- Teacher notes: sticky notes, private to the signed-in teacher ----- */
+  const NOTE_COLOURS = ['yellow', 'pink', 'blue', 'green', 'orange', 'purple'];
+  function notesData() {
+    let n = Staff.notes; if (!n || !Array.isArray(n.items)) n = { count: 6, items: [] };
+    while (n.items.length < 10) n.items.push({ title: '', text: '', colour: NOTE_COLOURS[n.items.length % NOTE_COLOURS.length] });
+    n.count = [4, 6, 8, 10].includes(n.count) ? n.count : 6;
+    return n;
+  }
+  function notesFoldHtml() {
+    const n = notesData(); const used = n.items.slice(0, n.count).filter(x => (x.title || x.text).trim());
+    return '<details class="card desk-fold notes-fold"><summary class="class-summary"><span class="card-icon">📝</span><span class="class-text"><h2>Notes</h2><span class="muted small">' + (used.length ? used.length + ' note' + (used.length === 1 ? '' : 's') + ' with something on them' : 'your sticky notes — only you see them') + '</span></span></summary><div class="class-body">' +
+      (used.length ? '<div class="sticky-grid preview">' + used.slice(0, 4).map((x, i) => '<a class="sticky ' + x.colour + '" href="#/notes">' + (x.title ? '<strong>' + esc(x.title) + '</strong>' : '') + '<span class="sticky-text">' + esc(x.text.slice(0, 120)) + (x.text.length > 120 ? '…' : '') + '</span></a>').join('') + '</div>' : '<p class="muted small">Nothing written yet.</p>') +
+      '<div class="btn-row" style="margin-top:0.75rem"><a class="btn" href="#/notes">📝 Open my notes</a></div></div></details>';
+  }
+  function pageNotes() {
+    const me = Students.current; if (!me || !me.isStaff) { location.hash = '#/'; return; }
+    setCourseColor(null); setNav('sections');
+    const n = notesData();
+    app.innerHTML = crumbs([{ label: deskName(), href: '#/' }, { label: 'Notes' }]) +
+      '<div class="page-head"><div><h1>📝 My notes</h1><p class="muted">Sticky notes for ' + esc(me.name) + ' — reminders, to-dos, things to say to a class. Only you can see them, on every device you sign in on. Each note saves itself as you type.</p></div>' +
+      '<div class="btn-row"><span class="muted small">Number of notes</span><div class="seg">' + [4, 6, 8, 10].map(k => '<button data-notes-count="' + k + '" class="' + (n.count === k ? 'on' : '') + '">' + k + '</button>').join('') + '</div></div></div>' +
+      '<div class="sticky-grid">' + n.items.slice(0, n.count).map((x, i) => '<div class="sticky ' + x.colour + '" data-note="' + i + '"><div class="sticky-top"><input class="sticky-title" data-note-title="' + i + '" placeholder="Title" maxlength="40" value="' + esc(x.title) + '"><span class="sticky-tools">' + NOTE_COLOURS.map(c => '<button class="sticky-dot ' + c + (x.colour === c ? ' on' : '') + '" data-note-colour="' + i + '" data-c="' + c + '" title="' + c + '"></button>').join('') + '<button class="sticky-clear" data-note-clear="' + i + '" title="Clear this note">✕</button></span></div>' +
+        '<textarea class="sticky-body" data-note-text="' + i + '" placeholder="Write here…">' + esc(x.text) + '</textarea><div class="sticky-foot muted small" data-note-saved="' + i + '">' + (x.at ? 'saved ' + new Date(x.at).toLocaleString() : '') + '</div></div>').join('') + '</div>';
+    let timer = null;
+    const persist = (i, msg) => { n.items[i].at = new Date().toISOString(); Staff.setNotes({ count: n.count, items: n.items }); const f = app.querySelector('[data-note-saved="' + i + '"]'); if (f) f.textContent = msg || ('saved ' + new Date().toLocaleTimeString()); };
+    app.querySelectorAll('[data-note-text]').forEach(t => t.addEventListener('input', () => { const i = +t.dataset.noteText; n.items[i].text = t.value; const f = app.querySelector('[data-note-saved="' + i + '"]'); if (f) f.textContent = 'saving…'; clearTimeout(timer); timer = setTimeout(() => persist(i), 500); }));
+    app.querySelectorAll('[data-note-title]').forEach(t => t.addEventListener('input', () => { const i = +t.dataset.noteTitle; n.items[i].title = t.value; clearTimeout(timer); timer = setTimeout(() => persist(i), 500); }));
+    app.querySelectorAll('[data-note-colour]').forEach(b => b.addEventListener('click', () => { const i = +b.dataset.noteColour; n.items[i].colour = b.dataset.c; persist(i); const card = app.querySelector('[data-note="' + i + '"]'); card.className = 'sticky ' + b.dataset.c; card.querySelectorAll('.sticky-dot').forEach(d => d.classList.toggle('on', d.dataset.c === b.dataset.c)); }));
+    app.querySelectorAll('[data-note-clear]').forEach(b => b.addEventListener('click', () => { const i = +b.dataset.noteClear; if (!(n.items[i].title || n.items[i].text) || confirm('Clear this note?')) { n.items[i].title = ''; n.items[i].text = ''; persist(i, 'cleared'); pageNotes(); } }));
+    app.querySelectorAll('[data-notes-count]').forEach(b => b.addEventListener('click', () => { n.count = +b.dataset.notesCount; Staff.setNotes({ count: n.count, items: n.items }); pageNotes(); }));
+  }
+
   /* ----- Sections page (top menu) ----- */
   function pageSections() {
     setCourseColor(null); setNav('sections');
@@ -338,7 +370,7 @@
       const secs = Sections.visible(me.staffId, false), archived = Sections.visible(me.staffId, true).filter(x => x.archived);
       app.innerHTML = '<div class="page-head"><div><h1>🏫 Sections</h1><p class="muted">Each class you teach, with its grades, course and students.</p></div><div class="btn-row"><a class="btn secondary" href="#/settings" data-open-group="sections">＋ Create or manage sections</a></div></div>' +
         (secs.length ? '<div class="section-list">' + secs.map(sec => teacherSectionCard(sec)).join('') + '</div>' : '<div class="empty">No sections yet — create one in Settings → Sections.</div>') +
-        (archived.length ? '<details class="other-courses"><summary>📦 Archived sections (' + archived.length + ')</summary><div class="section-list" style="margin-top:1rem">' + archived.map(sec => teacherSectionCard(sec)).join('') + '</div></details>' : '');
+        (archived.length ? '<details class="other-courses"><summary>📦 Archived sections (' + archived.length + ')</summary><div class="section-list" style="margin-top:1rem">' + archived.map(sec => teacherSectionCard(sec)).join('') + '</div></details>' : '') + notesFoldHtml();
       app.querySelectorAll('[data-section]').forEach(a => a.addEventListener('click', () => Sections.setCurrent(me.staffId, a.dataset.section)));
     } else {
       const secs = mySections();
@@ -1220,6 +1252,7 @@
       case 'settings': return pageSettings();
       case 'grades': return Grades.page(parts[1]);
       case 'sections': return pageSections();
+      case 'notes': return pageNotes();
       default: return notFound();
     }
   }

@@ -812,3 +812,24 @@ details.unit-grid > .small { padding: 0 1.25rem 1rem; }
 .student-focus > summary { list-style: none; }
 .student-focus > summary::-webkit-details-marker { display: none; }
 @media (max-width: 640px) { .topnav { flex-wrap: nowrap; overflow-x: auto; justify-content: flex-start; gap: 0.15rem; scrollbar-width: none; } .topnav::-webkit-scrollbar { display: none; } .topnav a { padding: 0.35rem 0.55rem; font-size: 0.88rem; white-space: nowrap; } }
+
+/* ---------- sticky notes ---------- */
+.sticky-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); margin-top: 0.5rem; }
+.sticky-grid.preview { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+.sticky { border-radius: 4px; padding: 0.75rem 0.85rem 0.6rem; box-shadow: 2px 4px 12px rgba(31,41,55,0.15); display: flex; flex-direction: column; gap: 0.4rem; min-height: 180px; color: #2b2b2b; font-family: var(--font); transform: rotate(-0.4deg); transition: transform var(--motion); }
+.sticky:nth-child(even) { transform: rotate(0.5deg); }
+.sticky:hover { transform: rotate(0) scale(1.01); }
+.sticky.yellow { background: #fff3a3; } .sticky.pink { background: #ffd1e3; } .sticky.blue { background: #cfe8ff; } .sticky.green { background: #d4f5d0; } .sticky.orange { background: #ffe0b8; } .sticky.purple { background: #e5d9ff; }
+.sticky-top { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
+.sticky-title { flex: 1; min-width: 0; border: none; background: transparent; font: inherit; font-weight: 800; font-size: 1.05rem; color: inherit; border-bottom: 1px dashed rgba(0,0,0,0.25); padding: 0.1rem 0; }
+.sticky-title:focus, .sticky-body:focus { outline: none; }
+.sticky-tools { display: flex; gap: 3px; align-items: center; }
+.sticky-dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid rgba(0,0,0,0.2); cursor: pointer; padding: 0; }
+.sticky-dot.on { border-color: #2b2b2b; }
+.sticky-dot.yellow { background: #ffe34d; } .sticky-dot.pink { background: #ff9ec4; } .sticky-dot.blue { background: #8ec5ff; } .sticky-dot.green { background: #9ee89a; } .sticky-dot.orange { background: #ffc078; } .sticky-dot.purple { background: #c4adff; }
+.sticky-clear { border: none; background: transparent; cursor: pointer; font-weight: 800; color: rgba(0,0,0,0.45); margin-left: 4px; }
+.sticky-body { flex: 1; min-height: 110px; resize: vertical; border: none; background: transparent; font: inherit; font-size: 1rem; line-height: 1.45; color: inherit; }
+.sticky-foot { font-size: 0.72rem; text-align: right; opacity: 0.7; }
+a.sticky { text-decoration: none; min-height: 120px; }
+a.sticky .sticky-text { white-space: pre-wrap; font-size: 0.9rem; }
+@media print { .sticky { box-shadow: none; border: 1px solid #999; transform: none; } }
