@@ -833,3 +833,11 @@ details.unit-grid > .small { padding: 0 1.25rem 1rem; }
 a.sticky { text-decoration: none; min-height: 120px; }
 a.sticky .sticky-text { white-space: pre-wrap; font-size: 0.9rem; }
 @media print { .sticky { box-shadow: none; border: 1px solid #999; transform: none; } }
+
+/* ---------- account menu (tap the name) ---------- */
+button.who { font: inherit; border: none; background: var(--surface-2); cursor: pointer; }
+.account-card { max-width: 360px; }
+.account-head { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; }
+.who-avatar.big { width: 52px; height: 52px; font-size: 1.8rem; }
+.account-actions { display: grid; gap: 0.5rem; }
+.account-actions .btn { width: 100%; justify-content: flex-start; }

@@ -96,7 +96,28 @@
   function renderWho() {
     const el = document.getElementById('whoChip'); if (!el) return;
     const s = Students.current;
-    el.innerHTML = s ? '<a class="who" href="#/welcome" title="Switch profile"><span class="who-avatar" style="background:' + esc(s.colour) + '">' + s.avatar + '</span><span class="who-name">' + esc(s.name) + (s.isStaff ? ' <span class="muted small">(' + (s.role === 'master' ? 'master' : 'teacher') + ')</span>' : '') + '</span><span class="who-switch">Switch</span></a>' : '';
+    el.innerHTML = s ? '<button class="who" type="button" id="whoBtn" title="Account"><span class="who-avatar" style="background:' + esc(s.colour) + '">' + s.avatar + '</span><span class="who-name">' + esc(s.name) + (s.isStaff ? ' <span class="muted small">(' + (s.role === 'master' ? 'Headmaster' : 'teacher') + ')</span>' : '') + '</span><span class="who-switch">▾</span></button>' : '';
+    const b = el.querySelector('#whoBtn'); if (b) b.addEventListener('click', accountMenu);
+  }
+  /** Tapping the name/picture: a small sheet with Switch user / Sign out / Settings (no immediate sign-out). */
+  function accountMenu() {
+    const s = Students.current; if (!s) return;
+    const old = document.getElementById('accountMenu'); if (old) { old.remove(); return; }
+    const d = document.createElement('div'); d.id = 'accountMenu'; d.className = 'learn-overlay';
+    d.innerHTML = '<div class="learn-card account-card"><div class="account-head">' + avatarHtml(s, 'who-avatar big') + '<div><strong>' + esc(s.name) + '</strong><div class="muted small">' + (s.isStaff ? (s.role === 'master' ? 'Headmaster' : 'Teacher') + (Cloud.enabled && Staff.current && Staff.current.login ? ' · ID ' + esc(Staff.current.login) : '') : 'Student' + (s.number ? ' · #' + esc(s.number) : '')) + '</div></div></div>' +
+      '<div class="account-actions">' +
+      '<button class="btn secondary" id="acctSwitch">🔁 Switch user</button>' +
+      '<button class="btn secondary" id="acctSignOut">🚪 Sign out</button>' +
+      '<a class="btn ghost" href="#/settings" id="acctSettings">⚙️ Settings</a>' +
+      '<button class="btn ghost" id="acctClose">Stay signed in</button></div>' +
+      (Cloud.enabled ? '<p class="muted small" style="margin:0.75rem 0 0">' + (Cloud.keepSignedIn() ? 'This device keeps you signed in.' : 'You are signed out automatically after ' + ((window.CLOUD_CONFIG || {}).idleMinutes || 30) + ' minutes without activity.') + '</p>' : '') + '</div>';
+    document.body.appendChild(d);
+    const close = () => d.remove();
+    d.addEventListener('click', e => { if (e.target === d) close(); });
+    d.querySelector('#acctClose').addEventListener('click', close);
+    d.querySelector('#acctSettings').addEventListener('click', close);
+    d.querySelector('#acctSwitch').addEventListener('click', () => { close(); location.hash = '#/welcome'; });
+    d.querySelector('#acctSignOut').addEventListener('click', () => { if (!confirm('Sign out of The Academy on this device?')) return; close(); location.hash = '#/welcome'; });
   }
   const avatarHtml = (s, cls) => '<span class="' + (cls || 'who-avatar') + '" style="background:' + esc(s.colour) + '">' + s.avatar + '</span>';
 
