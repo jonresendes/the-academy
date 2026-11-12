@@ -59,8 +59,12 @@
     if (lastSeen[key] === json) return;
     lastSeen[key] = json;
     pending[key] = value;
-    clearTimeout(flushTimer); flushTimer = setTimeout(flush, 600);
+    clearTimeout(flushTimer); flushTimer = setTimeout(flush, 300);
   };
+  /** Push everything waiting right now (Save buttons, sign-out, leaving the page). */
+  Cloud.flushNow = async function () { clearTimeout(flushTimer); await flush(); };
+  window.addEventListener('pagehide', () => { if (Object.keys(pending).length) flush(); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden && Object.keys(pending).length) flush(); });
   async function flush() {
     const batch = Object.assign({}, pending); for (const k in batch) delete pending[k];
     const me = Cloud.user; if (!me) return;
@@ -174,6 +178,7 @@
       listen(db.collection('progress').where('student', '==', uid), q => applyProgress(q.docs));
       listen(db.collection('focus').doc(uid), d => applyFocus(d.exists ? [d] : []));
       listen(db.collection('settings').doc('global'), applySettings);
+      listen(db.collection('staff'), q => applyStaff(q.docs));          // teacher names for the student's sections
     } else {
       listen(db.collection('students'), q => applyStudents(q.docs));
       listen(db.collection('staff'), q => applyStaff(q.docs));
@@ -195,10 +200,10 @@
   async function loadOnce(user, role) {
     // First pull so the app has data before it draws (listeners keep it fresh afterwards).
     if (role === 'student') {
-      const [p, secs, prog, foc, g] = await Promise.all([
+      const [p, secs, prog, foc, g, st] = await Promise.all([
         db.collection('students').doc(user.uid).get(), db.collection('sections').where('students', 'array-contains', user.uid).get(),
-        db.collection('progress').where('student', '==', user.uid).get(), db.collection('focus').doc(user.uid).get(), db.collection('settings').doc('global').get()]);
-      applyStudents(p.exists ? [p] : []); applySections(secs.docs); applyProgress(prog.docs); applyFocus(foc.exists ? [foc] : []); applySettings(g);
+        db.collection('progress').where('student', '==', user.uid).get(), db.collection('focus').doc(user.uid).get(), db.collection('settings').doc('global').get(), db.collection('staff').get()]);
+      applyStudents(p.exists ? [p] : []); applySections(secs.docs); applyProgress(prog.docs); applyFocus(foc.exists ? [foc] : []); applySettings(g); applyStaff(st.docs);
     } else {
       const [ss, st, secs, prog, foc, g] = await Promise.all([db.collection('students').get(), db.collection('staff').get(), db.collection('sections').get(), db.collection('progress').get(), db.collection('focus').get(), db.collection('settings').doc('global').get()]);
       applyStudents(ss.docs); applyStaff(st.docs); applySections(secs.docs); applyProgress(prog.docs); applyFocus(foc.docs); applySettings(g);
@@ -244,7 +249,7 @@
     if (Cloud.role === 'student') { await auth.signOut(); throw new Error('That is a student account — use the student sign-in.'); }
   };
   function waitForRole() { return new Promise(res => { const t = setInterval(() => { if (Cloud.user && Cloud.role) { clearInterval(t); res(); } }, 50); }); }
-  Cloud.signOut = async () => { Students_signOutLocal(); if (!auth.currentUser && !Cloud.user) return; Cloud.user = null; Cloud.role = null; stopListening(); try { await auth.signOut(); } catch (e) {} };
+  Cloud.signOut = async () => { try { await Cloud.flushNow(); } catch (e) {} Students_signOutLocal(); if (!auth.currentUser && !Cloud.user) return; Cloud.user = null; Cloud.role = null; stopListening(); try { await auth.signOut(); } catch (e) {} };
   function Students_signOutLocal() { try { sessionStorage.removeItem('learnhub.entered'); } catch (e) {} if (window.Students) window.Students.setCurrent(null); }
 
   /** Create a user without disturbing the current session (a secondary Firebase app). */

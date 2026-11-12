@@ -56,9 +56,16 @@ Since v32 the app runs on a Firebase project (`cloud-config.js`): accounts, rost
 
 **Firestore layout:** `students/{uid}`, `staff/{uid}`, `meta/master`, `sections/{id}`, `progress/{uid}__{courseId}`, `focus/{uid}`, `settings/global`. Security rules: students read/write only their own documents; staff read/write everything; only the master manages staff.
 
+## Desks, Sections and Grades (v34)
+
+- **Student Desk / Teacher's Desk** is the home page: two fold-outs, **Sections** first, then **Courses**. Students see the sections they are in (teacher, term, Open class / Grades / Display Case) and their courses (with Join / Archived); teachers see their sections (roster, Grades, Open the course, Students) and the course previews.
+- **Sections** in the top menu opens a page with every section and its options. Grades are reached from a section (teacher: the grid for that section; student: their grades for that course). There is no separate Grades or Dashboard menu item.
+- **Display Case** stays in the student menu; for teachers it is a fold-out at the top of each course page (students get that fold too).
+- **Settings** groups all start closed each time Settings is opened. The Focus Plan and keyword search live inside each student's row in Settings → Students (no separate group). Each open student row has a **💾 Save changes** button that pushes the row's changes to the cloud immediately and confirms; changes are also pushed automatically within a second and on sign-out.
+
 ## Grades
 
-Teachers: **Grades** in the top bar (or a section's *Grades grid* on the dashboard). One collapsible table per unit: a row per student; per lesson a quiz cell and a cell per assignment showing ✓ handed in / ✎ draft / – not started with a grade box (out of 10) and a 💬 comment button; then unit test and awards. Grades save to the student's record (and the cloud) as you type.
+Teachers: open a section (Desk → Sections, or the Sections page) → **Grades**. One collapsible table per unit: a row per student; per lesson a quiz cell and a cell per assignment showing ✓ handed in / ✎ draft / – not started with a grade box (out of 10) and a 💬 comment button; then unit test and awards. Grades save to the student's record (and the cloud) as you type.
 
 Students: **Grades** in the top bar, or *My grades* on a class — the same row for themselves, with teacher grades and comments. Nothing on it is editable.
 
