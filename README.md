@@ -69,7 +69,7 @@ Since v32 the app runs on a Firebase project (`cloud-config.js`): accounts, rost
 
 ## Teacher notes
 
-Teachers and the Headmaster have a **Notes** fold on the Teacher's Desk and on the Sections page, and a notes page (`#/notes`): 4, 6, 8 or 10 sticky notes, each with a title, a colour and free text. Notes save as you type, are private to that teacher, and follow them to any device (stored on their staff record). Students never see them.
+Teacher's Desk and the Sections page each have a collapsible **Notes** area; **Open my notes** goes to a page of 4 / 6 / 8 / 10 sticky notes (title, text, colour, clear). Notes are private to the signed-in teacher and follow them to any device. Each note saves itself half a second after you stop typing, and the moment you leave the page (back button, a menu tap, closing the app). Only the `notes` field of the teacher's own record is sent to the cloud (v41), and a copy arriving from the cloud never replaces notes typed more recently on this device — those are sent up again instead.
 
 ## Grades
 

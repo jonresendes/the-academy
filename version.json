@@ -1,5 +1,5 @@
 {
- "version": "40",
+ "version": "41",
  "date": "2026-11-12",
- "notes": "Save is confirmed by reading the cloud copy back; stuck writes are reported with a cloud status line in Settings; writes are sent in order; one window at a time holds the offline cache"
+ "notes": "Teacher notes: saved the moment you leave the page, sent as their own field, and never replaced by an older cloud copy"
 }

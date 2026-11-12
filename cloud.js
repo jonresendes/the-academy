@@ -93,8 +93,11 @@
             for (const s of (v.list || [])) if (s.id) { try { await pushStudent(s, me); } catch (e) { failed = failed || e; console.warn('student push failed', s.id, e); } }
             if (Cloud.role !== 'student') for (const id of removedStudents(v.list || [])) await db.collection('students').doc(id).delete().catch(() => {});
           } else if (key === 'learnhub.staff' && Cloud.role !== 'student') {
-            const m = v.master; if (m && m.uid) await db.collection('staff').doc(m.uid).set(clean({ id: m.uid, name: m.name, avatar: m.avatar, colour: m.colour, prefs: m.prefs || null, archived: m.archived || [], role: 'master', login: m.login || '', email: m.email || '', notes: m.notes || null }), { merge: true });
-            for (const t of (v.teachers || [])) await db.collection('staff').doc(t.id).set(clean({ id: t.id, name: t.name, avatar: t.avatar, colour: t.colour, prefs: t.prefs || null, archived: t.archived || [], role: 'teacher', login: t.login || '', createdAt: t.createdAt || now(), notes: t.notes || null }), { merge: true });
+            const m = v.master, recs = [];
+            if (m && m.uid) recs.push({ id: m.uid, name: m.name, avatar: m.avatar, colour: m.colour, prefs: m.prefs || null, archived: m.archived || [], role: 'master', login: m.login || '', email: m.email || '', notes: m.notes || null });
+            for (const t of (v.teachers || [])) recs.push({ id: t.id, name: t.name, avatar: t.avatar, colour: t.colour, prefs: t.prefs || null, archived: t.archived || [], role: 'teacher', login: t.login || '', createdAt: t.createdAt || now(), notes: t.notes || null });
+            for (const r of recs) { if (Cloud.role !== 'master' && r.id !== me.uid) continue;   // a teacher only ever writes their own record
+              try { await pushStaff(r); } catch (e) { failed = failed || e; console.warn('staff push failed', r.id, e); } }
           } else if (key === 'learnhub.sections' && Cloud.role !== 'student') {
             for (const sec of (v.list || [])) await db.collection('sections').doc(sec.id).set(clean(Object.assign({}, sec, { updatedAt: now() })));
             for (const id of removedSections(v.list || [])) await db.collection('sections').doc(id).delete().catch(() => {});
@@ -115,6 +118,17 @@
     } finally { inFlightCount = 0; updateWaiting(); }
     if (failed) { Cloud.lastError = describe(failed); setStatus('error', Cloud.lastError); }
     else { Cloud.lastError = ''; Cloud.lastConfirmed = now(); setStatus(Cloud.online ? 'synced' : 'offline'); }
+  }
+  /** Staff records: same idea as students — only the fields that changed since the copy we last saw. */
+  const seenStaff = {};
+  async function pushStaff(r) {
+    const prev = seenStaff[r.id], ref = db.collection('staff').doc(r.id);
+    if (!prev) { const full = clean(r); await ref.set(full, { merge: true }); seenStaff[r.id] = full; return; }
+    const args = [], next = Object.assign({}, prev);
+    for (const k of new Set([...Object.keys(r), ...Object.keys(prev)])) { if (k === 'createdAt' || J(prev[k]) === J(r[k])) continue; args.push(FP(k), r[k] === undefined || r[k] === null ? null : clean(r[k])); next[k] = clean(r[k]); }
+    if (!args.length) return;
+    try { await ref.update(...args); } catch (e) { if (e && e.code === 'not-found') await ref.set(clean(r), { merge: true }); else throw e; }
+    seenStaff[r.id] = next;
   }
   /** Read a student's profile straight from the cloud (never the cache) and apply it here.
       Used by the Save button to prove the change landed. Returns the cloud copy. */
@@ -200,7 +214,13 @@
   }
   function applyStaff(docs) {
     const staff = { master: null, teachers: [] };
-    docs.forEach(d => { const t = d.data(); if (t.role === 'master') staff.master = Object.assign({ pin: '' }, t, { uid: t.id, id: 'master' }); else staff.teachers.push(Object.assign({ pin: '' }, t)); });   // the master keeps the local id 'master'; its Firebase uid is in .uid
+    const cur = lsGet('learnhub.staff') || { master: null, teachers: [] };
+    const localOf = id => (cur.master && cur.master.uid === id) ? cur.master : (cur.teachers || []).find(t => t.id === id);
+    docs.forEach(d => { const t = d.data(); t.id = t.id || d.id; seenStaff[t.id] = clean(t);
+      // my own notes typed on this device but not yet confirmed by the cloud must not be wiped by an older copy
+      const loc = localOf(t.id); const newer = loc && loc.notes && loc.notes.updatedAt && (!t.notes || !t.notes.updatedAt || loc.notes.updatedAt > t.notes.updatedAt);
+      if (newer && Cloud.user && t.id === Cloud.user.uid) { t.notes = loc.notes; setTimeout(() => { pending['learnhub.staff'] = lsGet('learnhub.staff'); lastSeen['learnhub.staff'] = ''; flush(); }, 0); }
+      if (t.role === 'master') staff.master = Object.assign({ pin: '' }, t, { uid: t.id, id: 'master' }); else staff.teachers.push(Object.assign({ pin: '' }, t)); });   // the master keeps the local id 'master'; its Firebase uid is in .uid
     lsSet('learnhub.staff', staff); reloadStores('staff');
   }
   function applySections(docs) {
@@ -285,7 +305,7 @@
     }
   }
   auth.onAuthStateChanged(async user => {
-    stopListening(); Object.keys(seenStudents).forEach(k => delete seenStudents[k]);
+    stopListening(); Object.keys(seenStudents).forEach(k => delete seenStudents[k]); Object.keys(seenStaff).forEach(k => delete seenStaff[k]);
     if (!user) { Cloud.user = null; Cloud.role = null; Cloud.ready = true; setStatus('signed-out'); readyResolve(); emit('auth'); return; }
     try {
       if (idleExpired()) { await auth.signOut(); return; }

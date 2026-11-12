@@ -184,7 +184,7 @@
     save() { save(KEY_STAFF, this.data); },
     /** Sticky notes for the signed-in teacher (private to that teacher, synced to their devices). */
     get notes() { const rec = this.current ? (this.currentId === 'master' ? this.master : this.teachers.find(t => t.id === this.currentId)) : null; return rec ? (rec.notes || null) : null; },
-    setNotes(notes) { const rec = this.currentId === 'master' ? this.master : this.teachers.find(t => t.id === this.currentId); if (!rec) return; rec.notes = notes; this.save(); },
+    setNotes(notes) { const rec = this.currentId === 'master' ? this.master : this.teachers.find(t => t.id === this.currentId); if (!rec) return; notes.updatedAt = new Date().toISOString(); rec.notes = notes; this.save(); },
     get master() { return this.data.master; },
     setMaster(name, email, pin) { this.data.master = Object.assign({ avatar: '🧑‍🏫', colour: '#1f5f8b' }, this.data.master || {}, { name, email, pin }); this.save(); },
     get teachers() { return this.data.teachers || (this.data.teachers = []); },
