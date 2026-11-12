@@ -841,3 +841,13 @@ button.who { font: inherit; border: none; background: var(--surface-2); cursor: 
 .who-avatar.big { width: 52px; height: 52px; font-size: 1.8rem; }
 .account-actions { display: grid; gap: 0.5rem; }
 .account-actions .btn { width: 100%; justify-content: flex-start; }
+
+/* ---------- desk: wood theme ---------- */
+:root { --wood: #e3c79a; --wood-2: #d9b885; --wood-dark: #5a3a1c; }
+body[data-page="desk"] { background: repeating-linear-gradient(90deg, var(--wood) 0 38px, var(--wood-2) 38px 40px), var(--wood); }
+body[data-page="desk"] .topbar { border-bottom: 4px solid var(--wood-dark); box-shadow: 0 2px 0 rgba(90,58,28,0.25); }
+body[data-page="desk"] .stat, body[data-page="desk"] .desk-fold, body[data-page="desk"] .plan-banner { border: 3px solid var(--wood-dark); box-shadow: 2px 3px 0 rgba(90,58,28,0.35); }
+body[data-page="desk"] .page-head .muted, body[data-page="desk"] .stat .l { color: #4a3420; }
+body[data-page="desk"] h1 { color: #2e1d0f; }
+body[data-page="desk"] .desk-fold > summary:hover { background: #fbf4e6; }
+body[data-contrast="high"][data-page="desk"], body[data-contrast="inverted"][data-page="desk"] { background: var(--bg); }   /* accessibility modes keep their own backgrounds */

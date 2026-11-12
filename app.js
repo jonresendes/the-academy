@@ -284,6 +284,7 @@
     } else Students.setCurrent(Cloud.role === 'master' ? 'staff:master' : 'staff:' + uid);
     sessionStorage.setItem('learnhub.entered', '1'); renderWho(); goHome();
   }
+  function possessive(n) { n = String(n || '').trim(); return n + (/s$/i.test(n) ? '\u2019' : '\u2019s'); }
   function deskName() { return Students.current && Students.current.isStaff ? "Teacher's Desk" : 'Student Desk'; }
   /** Sections the signed-in student is enrolled in (active first). */
   function mySections() { const me = Students.current; if (!me || me.isStaff) return []; return Sections.list.filter(sec => (sec.students || []).includes(me.id)).sort((a, b) => (a.archived ? 1 : 0) - (b.archived ? 1 : 0)); }
@@ -312,7 +313,8 @@
     const secCard = sec => { const c = findCourseAll(sec.courseId); if (!c) return ''; const pct = Students.enrolled(c.id) ? courseProgress(c) : 0;
       return '<div class="card section-card" style="--course:' + esc(c.color || '') + '"><div class="btn-row between"><div><span class="tag">' + (sec.archived ? '📦 archived' : 'Section') + '</span><h3 style="margin:0.3rem 0 0">' + esc(sec.name) + '</h3><div class="muted small">' + c.icon + ' ' + esc(c.title) + (sec.term ? ' · ' + esc(sec.term) : '') + (teacherName(sec) ? ' · ' + esc(teacherName(sec)) : '') + '</div></div><span class="tag ok">' + (pct ? pct + '%' : 'Start') + '</span></div>' +
         '<div class="btn-row" style="margin-top:0.75rem"><a class="btn" href="#/course/' + c.id + '">▶️ Open class</a><a class="btn secondary sm" href="#/grades/' + c.id + '">📊 Grades</a><a class="btn ghost sm" href="#/case/' + c.id + '">🏆 Display Case</a></div></div>'; };
-    app.innerHTML = '<div class="page-head"><div><h1>🎒 Student Desk</h1><p class="muted">Welcome back, ' + esc(s.name) + '! Your sections, your courses, and how you are doing.</p></div>' +
+    document.body.dataset.page = 'desk';
+    app.innerHTML = '<div class="page-head"><div><h1>🎒 ' + esc(possessive(s.name)) + ' Desk</h1><p class="muted">Welcome back, ' + esc(s.name) + '! Your sections, your courses, and how you are doing.</p></div>' +
       '<div class="btn-row"><a class="btn ghost" href="#/settings">⚙️ Settings</a></div></div>' +
       (Focus.enabled && Object.keys(Focus.data.courses).length ? '<div class="plan-banner">🎯 <strong>Focus Plan is on.</strong> Courses with a plan show only the pieces chosen for you.</div>' : '') +
       '<div class="case-stats"><div class="stat"><div class="n">' + mine.length + '</div><div class="l">Active class' + (mine.length === 1 ? '' : 'es') + '</div></div><div class="stat"><div class="n">🏅 ' + awards + ' / ' + total + '</div><div class="l">Awards</div></div><div class="stat"><div class="n">' + (avg === null ? '–' : avg + '%') + '</div><div class="l">Average best test</div></div><div class="stat"><div class="n">' + arch.length + '</div><div class="l">Archived</div></div></div>' +
@@ -334,6 +336,7 @@
     const s = Students.current;
     const secs = Sections.visible(s.staffId, false), archived = Sections.visible(s.staffId, true).filter(x => x.archived);
     const scope = studentsInScope();
+    document.body.dataset.page = 'desk';
     app.innerHTML = '<div class="page-head"><div><h1>🧑‍🏫 Teacher\'s Desk</h1><p class="muted">Welcome, ' + esc(s.name) + ' · ' + (s.role === 'master' ? 'Headmaster' : 'Teacher') + ' · ' + secs.length + ' active section' + (secs.length === 1 ? '' : 's') + ' · ' + scope.length + ' student' + (scope.length === 1 ? '' : 's') + '</p></div>' +
       '<div class="btn-row"><a class="btn secondary" href="#/settings">⚙️ Settings &amp; students</a></div></div>' +
       '<details class="card desk-fold"><summary class="class-summary"><span class="card-icon">🏫</span><span class="class-text"><h2>Sections</h2><span class="muted small">' + secs.length + ' active' + (archived.length ? ' · ' + archived.length + ' archived' : '') + '</span></span></summary><div class="class-body">' +
@@ -828,7 +831,8 @@
       sw('dictation', 'Dictation and voice recording', 'Show 🎤 dictate buttons on answers and 🎙️ record buttons on lessons and assignments.' + (Media.canDictate ? '' : ' (Dictation needs Chrome, Edge or Safari.)'), Settings.get('dictation') !== false) +
       '<div class="setting-row"><div><label>Read&amp;Write (Texthelp)</label><div class="help">The Read&amp;Write for Google Chrome extension works on this app as it is: every slide, question and assignment is real text, so hover-to-speak, dictionary, picture dictionary, highlighters and prediction all work. Tip: turn off the read-aloud buttons above to avoid two voices.</div></div><a class="btn secondary sm" href="https://chromewebstore.google.com/search/Read%26Write%20for%20Google%20Chrome" target="_blank" rel="noopener">Chrome Web Store</a></div>';
     const profile =
-      '<div class="setting-row"><div><label>Name</label><div class="help">Shown on the welcome screen and in the header.</div></div><div class="btn-row"><input class="text-input" id="meName" value="' + esc(me.name) + '" maxlength="30" style="max-width:220px"><button class="btn secondary sm" id="meNameSave">Save</button></div></div>' +
+      (staff ? '<div class="setting-row"><div><label>Name</label><div class="help">Shown on the welcome screen and in the header.</div></div><div class="btn-row"><input class="text-input" id="meName" value="' + esc(me.name) + '" maxlength="30" style="max-width:220px"><button class="btn secondary sm" id="meNameSave">Save</button></div></div>'
+             : '<div class="setting-row"><div><label>Name</label><div class="help">Your name is set by your teacher — ask them if it needs changing.</div></div><strong>' + esc(me.name) + '</strong></div>') +
       '<div class="setting-row"><div><label>My picture</label></div><div class="avatar-grid">' + (staff ? ['🧑‍🏫', '👩‍🏫', '👨‍🏫', '🦉', '📚', '🍎', '🌟', '🧭'] : Students.AVATARS).map(a => '<button class="avatar-pick' + (a === me.avatar ? ' on' : '') + '" data-avatar="' + a + '">' + a + '</button>').join('') + '</div></div>' +
       (Cloud.enabled
         ? '<div class="setting-row"><div><label>Account</label><div class="help">' + (staff ? 'Teacher ID <strong>' + esc((Staff.current || {}).login || '') + '</strong>. ' : 'Student number <strong>' + esc(me.number || '') + '</strong>. Your password is your birthday (DDMMYYYY). ') + (Cloud.keepSignedIn() ? 'You stay signed in on this device.' : 'You are signed out after ' + ((window.CLOUD_CONFIG || {}).idleMinutes || 30) + ' minutes without activity.') + '</div></div><div class="btn-row">' + (staff ? '<button class="btn secondary sm" id="changePw">Change password</button>' : '') + '<button class="btn ghost sm" id="signOutBtn">Sign out</button></div></div>'
@@ -1243,6 +1247,7 @@
   function route() {
     const parts = location.hash.replace(/^#\/?/, '').split('/').map(decodeURIComponent);
     window.scrollTo(0, 0);
+    delete document.body.dataset.page;
     window.LH.stopSpeaking();   // leaving a page stops any reading
     renderWho();
     document.querySelectorAll('.topnav a').forEach(a => a.classList.remove('active'));
