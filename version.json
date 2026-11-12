@@ -1,5 +1,5 @@
 {
- "version": "38",
- "date": "2026-11-11",
- "notes": "Profile sync fix: only changed fields are sent, students cannot overwrite teacher settings, profile version stamp on every screen"
+ "version": "40",
+ "date": "2026-11-12",
+ "notes": "Save is confirmed by reading the cloud copy back; stuck writes are reported with a cloud status line in Settings; writes are sent in order; one window at a time holds the offline cache"
 }

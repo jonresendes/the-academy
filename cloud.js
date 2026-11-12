@@ -31,7 +31,7 @@
   const app = fb.initializeApp(CFG.firebase);
   const auth = fb.auth();
   const db = fb.firestore();
-  try { db.enablePersistence({ synchronizeTabs: true }).catch(() => {}); } catch (e) {}
+  try { db.enablePersistence({ synchronizeTabs: false }).catch(() => {}); } catch (e) {}
   auth.setPersistence(fb.auth.Auth.Persistence.LOCAL).catch(() => {});
   const SD = CFG.studentDomain || 'students.the-academy.app', TD = CFG.staffDomain || 'staff.the-academy.app';
   const studentEmail = n => String(n).trim().toLowerCase().replace(/[^a-z0-9._-]/g, '') + '@' + SD;
@@ -61,40 +61,73 @@
     pending[key] = value;
     clearTimeout(flushTimer); flushTimer = setTimeout(flush, 300);
   };
-  /** Push everything waiting right now (Save buttons, sign-out, leaving the page). */
-  Cloud.flushNow = async function () { clearTimeout(flushTimer); await flush(); if (Cloud.lastError) throw new Error(Cloud.lastError); };
+  /** Push everything waiting right now (Save buttons, sign-out, leaving the page).
+      Resolves only when the cloud has CONFIRMED every write, including ones started earlier;
+      throws if a write failed or has not been confirmed within `waitMs`. */
+  let inFlight = null, inFlightCount = 0; Cloud.waiting = 0; Cloud.lastConfirmed = '';
+  Cloud.flushNow = async function (waitMs) {
+    clearTimeout(flushTimer);
+    const run = flush();
+    let timer; const timeout = new Promise((_, rej) => { timer = setTimeout(() => rej(new Error('stuck')), waitMs || 8000); });
+    try { await Promise.race([run, timeout]); }
+    catch (e) { if (e.message === 'stuck') throw new Error('The cloud has not confirmed this change yet (' + Cloud.waiting + ' waiting). Keep the app open and press Save again in a moment; if it keeps happening, close other open copies of The Academy on this device.'); throw e; }
+    finally { clearTimeout(timer); }
+    if (Cloud.lastError) throw new Error(Cloud.lastError);
+  };
   window.addEventListener('pagehide', () => { if (Object.keys(pending).length) flush(); });
   document.addEventListener('visibilitychange', () => { if (document.hidden && Object.keys(pending).length) flush(); });
-  async function flush() {
+  function updateWaiting() { Cloud.waiting = Object.keys(pending).length + inFlightCount; }
+  /** Writes are sent one batch at a time, in order; a new flush waits for the previous one. */
+  function flush() { const prev = inFlight || Promise.resolve(); inFlight = prev.then(doFlush, doFlush); return inFlight; }
+  async function doFlush() {
     const batch = Object.assign({}, pending); for (const k in batch) delete pending[k];
     const me = Cloud.user; if (!me) return;
+    const keys = Object.keys(batch); if (!keys.length) return;
+    inFlightCount = keys.length; updateWaiting(); setStatus('sending');
+    let failed = null;
     try {
-      for (const key of Object.keys(batch)) {
+      for (const key of keys) {
         const v = batch[key];
-        if (key === 'learnhub.students') {
-          for (const s of (v.list || [])) if (s.id) await pushStudent(s, me);
-          if (Cloud.role !== 'student') for (const id of removedStudents(v.list || [])) await db.collection('students').doc(id).delete().catch(() => {});
-        } else if (key === 'learnhub.staff' && Cloud.role !== 'student') {
-          const m = v.master; if (m && m.uid) await db.collection('staff').doc(m.uid).set(clean({ id: m.uid, name: m.name, avatar: m.avatar, colour: m.colour, prefs: m.prefs || null, archived: m.archived || [], role: 'master', login: m.login || '', email: m.email || '', notes: m.notes || null }), { merge: true });
-          for (const t of (v.teachers || [])) await db.collection('staff').doc(t.id).set(clean({ id: t.id, name: t.name, avatar: t.avatar, colour: t.colour, prefs: t.prefs || null, archived: t.archived || [], role: 'teacher', login: t.login || '', createdAt: t.createdAt || now(), notes: t.notes || null }), { merge: true });
-        } else if (key === 'learnhub.sections' && Cloud.role !== 'student') {
-          for (const sec of (v.list || [])) await db.collection('sections').doc(sec.id).set(clean(Object.assign({}, sec, { updatedAt: now() })));
-          for (const id of removedSections(v.list || [])) await db.collection('sections').doc(id).delete().catch(() => {});
-        } else if (key.startsWith('learnhub.progress.')) {
-          const sid = key.slice('learnhub.progress.'.length); if (sid === 'anon') continue;
-          if (Cloud.role === 'student' && sid !== me.uid) continue;
-          for (const cid of Object.keys(v || {})) await db.collection('progress').doc(sid + '__' + cid).set({ student: sid, course: cid, data: clean(v[cid]), updatedAt: now() });
-        } else if (key.startsWith('learnhub.focus.')) {
-          const sid = key.slice('learnhub.focus.'.length); if (sid === 'anon') continue;
-          if (Cloud.role === 'student' && sid !== me.uid) continue;
-          await db.collection('focus').doc(sid).set({ student: sid, data: clean(v), updatedAt: now() });
-        } else if (key === 'learnhub.settings' && Cloud.role !== 'student') {
-          await db.collection('settings').doc('global').set({ allowSelfSignup: v.allowSelfSignup !== false, colouringEvery: v.colouringEvery === undefined ? 'student' : v.colouringEvery, updatedAt: now() }, { merge: true });
-        }
+        try {
+          if (key === 'learnhub.students') {
+            for (const s of (v.list || [])) if (s.id) { try { await pushStudent(s, me); } catch (e) { failed = failed || e; console.warn('student push failed', s.id, e); } }
+            if (Cloud.role !== 'student') for (const id of removedStudents(v.list || [])) await db.collection('students').doc(id).delete().catch(() => {});
+          } else if (key === 'learnhub.staff' && Cloud.role !== 'student') {
+            const m = v.master; if (m && m.uid) await db.collection('staff').doc(m.uid).set(clean({ id: m.uid, name: m.name, avatar: m.avatar, colour: m.colour, prefs: m.prefs || null, archived: m.archived || [], role: 'master', login: m.login || '', email: m.email || '', notes: m.notes || null }), { merge: true });
+            for (const t of (v.teachers || [])) await db.collection('staff').doc(t.id).set(clean({ id: t.id, name: t.name, avatar: t.avatar, colour: t.colour, prefs: t.prefs || null, archived: t.archived || [], role: 'teacher', login: t.login || '', createdAt: t.createdAt || now(), notes: t.notes || null }), { merge: true });
+          } else if (key === 'learnhub.sections' && Cloud.role !== 'student') {
+            for (const sec of (v.list || [])) await db.collection('sections').doc(sec.id).set(clean(Object.assign({}, sec, { updatedAt: now() })));
+            for (const id of removedSections(v.list || [])) await db.collection('sections').doc(id).delete().catch(() => {});
+          } else if (key.startsWith('learnhub.progress.')) {
+            const sid = key.slice('learnhub.progress.'.length); if (sid === 'anon') continue;
+            if (Cloud.role === 'student' && sid !== me.uid) continue;
+            for (const cid of Object.keys(v || {})) await db.collection('progress').doc(sid + '__' + cid).set({ student: sid, course: cid, data: clean(v[cid]), updatedAt: now() });
+          } else if (key.startsWith('learnhub.focus.')) {
+            const sid = key.slice('learnhub.focus.'.length); if (sid === 'anon') continue;
+            if (Cloud.role === 'student' && sid !== me.uid) continue;
+            await db.collection('focus').doc(sid).set({ student: sid, data: clean(v), updatedAt: now() });
+          } else if (key === 'learnhub.settings' && Cloud.role !== 'student') {
+            await db.collection('settings').doc('global').set({ allowSelfSignup: v.allowSelfSignup !== false, colouringEvery: v.colouringEvery === undefined ? 'student' : v.colouringEvery, updatedAt: now() }, { merge: true });
+          }
+        } catch (e) { failed = failed || e; console.warn('cloud push failed', key, e); }
+        inFlightCount--; updateWaiting();
       }
-      Cloud.lastError = ''; setStatus(Cloud.online ? 'synced' : 'offline');
-    } catch (e) { console.warn('cloud push failed', e); Cloud.lastError = describe(e); setStatus('error', Cloud.lastError); }
+    } finally { inFlightCount = 0; updateWaiting(); }
+    if (failed) { Cloud.lastError = describe(failed); setStatus('error', Cloud.lastError); }
+    else { Cloud.lastError = ''; Cloud.lastConfirmed = now(); setStatus(Cloud.online ? 'synced' : 'offline'); }
   }
+  /** Read a student's profile straight from the cloud (never the cache) and apply it here.
+      Used by the Save button to prove the change landed. Returns the cloud copy. */
+  Cloud.verifyStudent = async function (id) {
+    const d = await db.collection('students').doc(id).get({ source: 'server' });
+    if (!d.exists) throw new Error('The cloud has no profile for this student.');
+    const doc = d.data(); doc.id = doc.id || d.id;
+    seenStudents[id] = clean(doc);
+    const cur = lsGet('learnhub.students') || { list: [], current: null };
+    const list = (cur.list || []).map(s => s.id === id ? doc : s);
+    lsSet('learnhub.students', { list, current: cur.current }); reloadStores('students');
+    return doc;
+  };
   const describe = e => e && e.code === 'permission-denied' ? 'The cloud refused the change (permission denied). Check the Firestore rules in the Firebase console.' : e && e.code === 'unavailable' ? 'The cloud is not reachable right now.' : (e && e.message) || String(e);
 
   /* ---------- student profiles: send only the fields that changed ----------

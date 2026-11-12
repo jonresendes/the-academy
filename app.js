@@ -116,8 +116,8 @@
     d.addEventListener('click', e => { if (e.target === d) close(); });
     d.querySelector('#acctClose').addEventListener('click', close);
     d.querySelector('#acctSettings').addEventListener('click', close);
-    d.querySelector('#acctSwitch').addEventListener('click', () => { close(); location.hash = '#/welcome'; });
-    d.querySelector('#acctSignOut').addEventListener('click', () => { if (!confirm('Sign out of The Academy on this device?')) return; close(); location.hash = '#/welcome'; });
+    d.querySelector('#acctSwitch').addEventListener('click', () => { close(); sessionStorage.setItem('learnhub.switch', '1'); location.hash = '#/welcome'; });
+    d.querySelector('#acctSignOut').addEventListener('click', () => { if (!confirm('Sign out of The Academy on this device?')) return; close(); sessionStorage.setItem('learnhub.switch', '1'); location.hash = '#/welcome'; });
   }
   const avatarHtml = (s, cls) => '<span class="' + (cls || 'who-avatar') + '" style="background:' + esc(s.colour) + '">' + s.avatar + '</span>';
 
@@ -286,6 +286,15 @@
   }
   /** "Profile v7 · saved 11 Nov, 11:38 p.m. by Mr. Resendes" — the same stamp on every device once they agree. */
   function profileStamp(s) { if (!s || !Cloud.enabled) return ''; const when = s.updatedAt ? new Date(s.updatedAt).toLocaleString([], { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) : ''; return '<span class="stamp" title="Every saved change raises the version number. If two screens show different numbers, the newer one has not reached the other yet.">Profile v' + (+s.rev || 0) + (when ? ' · saved ' + esc(when) : '') + (s.updatedBy ? ' by ' + esc(s.updatedBy) : '') + '</span>'; }
+  /** One line about the cloud connection, for Settings and the save bar. */
+  function cloudStatusHtml() {
+    if (!Cloud.enabled) return '';
+    const t = iso => iso ? new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
+    const st = Cloud.status, w = Cloud.waiting || 0;
+    const txt = st === 'error' ? '⚠️ Cloud error: ' + esc(Cloud.error || Cloud.lastError || '') : st === 'sending' || w ? '⏳ Sending to the cloud… (' + w + ' waiting)' : st === 'offline' ? '📴 Offline — changes wait on this device' : st === 'synced' ? '☁️ Cloud: synced' + (Cloud.lastConfirmed ? ' · last change confirmed ' + t(Cloud.lastConfirmed) : '') : '☁️ Cloud: ' + esc(st);
+    return '<p class="muted small cloud-status" data-cloud-status>' + txt + '</p>';
+  }
+  window.addEventListener('cloud:status', () => { document.querySelectorAll('[data-cloud-status]').forEach(el => { const n = document.createElement('div'); n.innerHTML = cloudStatusHtml(); if (n.firstChild) el.replaceWith(n.firstChild); }); });
   function possessive(n) { n = String(n || '').trim(); return n + (/s$/i.test(n) ? '\u2019' : '\u2019s'); }
   function deskName() { return Students.current && Students.current.isStaff ? "Teacher's Desk" : 'Student Desk'; }
   /** Sections the signed-in student is enrolled in (active first). */
@@ -840,7 +849,7 @@
         ? '<div class="setting-row"><div><label>Account</label><div class="help">' + (staff ? 'Teacher ID <strong>' + esc((Staff.current || {}).login || '') + '</strong>. ' : 'Student number <strong>' + esc(me.number || '') + '</strong>. Your password is your birthday (DDMMYYYY). ') + (Cloud.keepSignedIn() ? 'You stay signed in on this device.' : 'You are signed out after ' + ((window.CLOUD_CONFIG || {}).idleMinutes || 30) + ' minutes without activity.') + '</div></div><div class="btn-row">' + (staff ? '<button class="btn secondary sm" id="changePw">Change password</button>' : '') + '<button class="btn ghost sm" id="signOutBtn">Sign out</button></div></div>'
         : staff ? '<div class="setting-row"><div><label>Security</label><div class="help">Your 6-digit PIN signs you in from the welcome screen.</div></div><div class="btn-row"><button class="btn secondary sm" id="changePin">Change my PIN</button><a class="btn ghost sm" href="#/welcome">Sign out</a></div></div>'
              : '<div class="setting-row"><div><label>Switch profile</label><div class="help">Go back to the welcome screen.</div></div><a class="btn secondary sm" href="#/welcome">Welcome screen</a></div>');
-    let html = '<div class="page-head"><div><h1>⚙️ Settings</h1><p class="muted">' + (staff ? 'Your profile, your sections and your students.' : 'Your profile, how the app looks and reads, and your classes.') + '</p></div></div>';
+    let html = '<div class="page-head"><div><h1>⚙️ Settings</h1><p class="muted">' + (staff ? 'Your profile, your sections and your students.' : 'Your profile, how the app looks and reads, and your classes.') + '</p>' + cloudStatusHtml() + '</div></div>';
     if (!staff) {
       const classes = '<p class="muted small">Where you are working right now, and the level you start each class at. Archived classes are on your dashboard.</p>' +
         (courses().map(c => { const t = Students.trackFor(c.id); const prev = Students.previousLevel(c.id); const lv = Students.levelFor(c.id);
@@ -1082,8 +1091,19 @@
       }
       const s = Students.add(v); if (cur) { Students.setCourses(s.id, [cur.courseId]); Sections.enrol(cur.id, s.id, true); } sessionStorage.setItem('learnhub.studentOpen', s.id); pageSettings(); };
     on('[data-save-student]', 'click', async e => { const id = e.currentTarget.dataset.saveStudent, msg = app.querySelector('#saveMsg-' + id), b = e.currentTarget; b.disabled = true; b.textContent = 'Saving…';
-      try { if (Cloud.enabled) await Cloud.flushNow(); const st = app.querySelector('[data-student-open="' + id + '"] .row-stamp'); if (st) st.innerHTML = profileStamp(Students.byId(id)); msg.textContent = Cloud.enabled ? (Cloud.online ? '✓ Saved to the cloud ' + new Date().toLocaleTimeString() + ' — the student will see it on their next screen.' : '✓ Saved on this device; it will reach the cloud when you are back online.') : '✓ Saved.'; }
-      catch (err) { msg.textContent = 'Could not save: ' + err.message; }
+      const TEACH = ['level', 'courses', 'courseLevels', 'coursesLocked', 'accommodations', 'track', 'name'];
+      const snap = o => JSON.stringify(TEACH.map(k => o[k] === undefined ? null : o[k]));
+      try {
+        if (Cloud.enabled) {
+          const want = snap(Students.byId(id));
+          await Cloud.flushNow();
+          const doc = await Cloud.verifyStudent(id);               // read back from the server, never the cache
+          if (snap(doc) !== want) throw new Error('the cloud copy (Profile v' + (+doc.rev || 0) + ') does not match what you set here, so the change did not land. Check the cloud status at the top of Settings, then try again.');
+          msg.innerHTML = '✓ Confirmed by the cloud ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + ' · ' + profileStamp(doc) + ' — the student sees it on their next screen.';
+        } else msg.textContent = '✓ Saved.';
+        const st = app.querySelector('[data-student-open="' + id + '"] .row-stamp'); if (st) st.innerHTML = profileStamp(Students.byId(id));
+      }
+      catch (err) { msg.textContent = '⚠️ Not confirmed: ' + err.message; }
       b.disabled = false; b.textContent = '💾 Save changes'; });
     app.querySelectorAll('details.student-focus').forEach(d => d.addEventListener('toggle', () => sessionStorage.setItem('learnhub.focusOpen', d.open ? '1' : '0')));
     const fo = sessionStorage.getItem('learnhub.focusOpen'); if (fo === '1') app.querySelectorAll('details.student-focus').forEach(d => d.open = true);
@@ -1256,10 +1276,16 @@
     // A fresh open of the app always starts on the welcome screen; "Continue as …" is offered when a
     // profile was left signed in on this device. Once a tile is tapped the session proceeds normally.
     // every collapsible area starts closed when a screen is opened
-    Object.keys(sessionStorage).filter(k => /^learnhub\.(sg\.|studentOpen|workOpen|recOpen|mediaOpen|planOpen|sectionsOpen|focusOpen)/.test(k)).forEach(k => sessionStorage.removeItem(k));
+    // (a redraw of the same screen — a setting changed, data arrived from the cloud — keeps them as they are)
+    if (location.hash !== route.last) Object.keys(sessionStorage).filter(k => /^learnhub\.(sg\.|studentOpen|workOpen|recOpen|mediaOpen|planOpen|sectionsOpen|focusOpen)/.test(k)).forEach(k => sessionStorage.removeItem(k));
+    route.last = location.hash;
     if (Cloud.enabled) {
       if (!Cloud.ready) { app.innerHTML = '<div class="empty"><div class="signin-logo">🎓</div><p class="muted">Connecting…</p></div>'; return; }
-      if (parts[0] === 'welcome' || parts[0] === 'signin') { if (Cloud.user) Cloud.signOut(); return pageCloudSignIn(); }
+      if (parts[0] === 'welcome' || parts[0] === 'signin') {
+        // Only "Switch user" / "Sign out" from the account menu end a session. Landing here any other
+        // way (the phone's back button stepping through old history, a bookmark) just goes home.
+        if (Cloud.user && sessionStorage.getItem('learnhub.switch') !== '1') { location.replace(location.pathname + '#/'); return; }
+        sessionStorage.removeItem('learnhub.switch'); if (Cloud.user) Cloud.signOut(); return pageCloudSignIn(); }
       if (!Cloud.user) return pageCloudSignIn();
       if (!Students.current || !sessionStorage.getItem('learnhub.entered')) { enterCloudSession(); if (!Students.current) return; }
     } else if (parts[0] === 'signin' || parts[0] === 'welcome' || !Students.current || !sessionStorage.getItem('learnhub.entered')) return pageWelcome();

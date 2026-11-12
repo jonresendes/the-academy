@@ -86,7 +86,7 @@
      APP_VERSION is baked into this file; version.json on the site says what is published.
      Settings → Updates compares the two and offers a one-tap update (new service worker +
      cache clear + reload). The check also runs on load and hourly. */
-  const APP_VERSION = '38';
+  const APP_VERSION = '40';
   let latest = null;   // { version, date, notes } from the site, when newer
   async function checkForUpdate() {
     try {
@@ -210,15 +210,16 @@
     }
   }
   /** Go back one step: our own history first, then up the hierarchy. Returns false when already home. */
-  function back() {
+  function back(from, silent) {
     if (dialogOpen) { closeDialog(); return true; }
+    const here = from || current();
     let prev = stack.pop();
-    while (prev && (prev === current() || prev === '#/signin' || prev === '#/welcome')) prev = stack.pop();
-    if (!prev && current() !== '#/') prev = parentOf(current());
+    while (prev && (prev === here || prev === '#/signin' || prev === '#/welcome')) prev = stack.pop();
+    if (!prev && here !== '#/') prev = parentOf(here);
     if (!prev) return false;
     history.replaceState({ lh: 'guard' }, '', prev);
     lastRoute = prev;
-    window.dispatchEvent(new HashChangeEvent('hashchange'));
+    if (!silent) window.dispatchEvent(new HashChangeEvent('hashchange'));
     return true;
   }
   // header button — same behaviour as the phone's back button
@@ -232,7 +233,17 @@
     if (closing) return;
     // Only a real back press lands on our base entry; hash navigations made with
     // location.hash create their own entries and are handled by the browser.
-    if (!(e.state && e.state.lh === 'base')) return;
+    if (!(e.state && e.state.lh)) return;
+    if (e.state.lh === 'guard') {
+      // A page set location.hash directly (home, sign-in, "Open class"…), which gave the browser an
+      // extra history entry on top of our guard. Back has just popped it — the browser would now show
+      // whatever screen that entry replaced (often the sign-in page). Steer it up one level instead:
+      // the URL is rewritten before the browser's own hashchange fires, so the router sees our target.
+      const left = lastRoute, landed = current();
+      if (!back(left, true)) { history.replaceState({ lh: 'guard' }, '', '#/'); lastRoute = '#/'; }
+      if (current() === landed) window.dispatchEvent(new HashChangeEvent('hashchange'));   // same URL: no browser event will come
+      refreshBackBtn(); return;
+    }
     history.pushState({ lh: 'guard' }, '', current());   // re-arm the guard first
     if (back()) { refreshBackBtn(); return; }
     // already home: double-press to close

@@ -50,11 +50,13 @@ Since v32 the app runs on a Firebase project (`cloud-config.js`): accounts, rost
 
 **Students** are created by a teacher in Settings → Students (first name, student number, birthday) — this creates the login and enrols them in the selected section — or, if *Students may create their own profile* is on, by the student themselves (they then wait for a teacher to add them to a class). Wrong birthday? The student's row has **Fix birthday / reset password**.
 
-**Sessions.** Closing the app, the back button or a reload never signs anyone out. A device with *Keep me signed in* unticked signs the user out after `idleMinutes` (30) without activity. Settings → My profile has **Sign out**.
+**Sessions.** Closing the app, the back button or a reload never signs anyone out — only **Switch user** / **Sign out** on the name chip do (v39: the sign-in screen sends a signed-in user straight home, so stepping back through old history can't end a session). A device with *Keep me signed in* unticked signs the user out after `idleMinutes` (30) without activity. Settings → My profile has **Sign out**.
 
 **What syncs.** Profiles, levels, accommodations, Focus Plans, sections and rosters, every quiz/test score, award, assignment draft and hand-in, teacher grades and comments. Voice recordings and uploaded media stay on the device they were made on. Changes appear live on other open devices.
 
 **Profile sync (v38).** A device sends only the profile fields that changed since the last copy it received, never the whole record, so a phone holding an old copy (offline, or opened from cache) cannot put an old level or course list back over a newer one. A student's own account may only change its own fields (preferences, archived courses, avatar, quiz-driven level moves and logs); the level, course list, accommodations, track, name and number are teacher-only, enforced in `firestore.rules`. Every saved change raises the profile's **version** (`rev`) and stamps who saved it and when; the stamp shows on the student's desk, in their Settings → My profile, and under their name in the teacher's Students list. If two screens show different version numbers, the newer one has not reached the other yet — Settings → App status says whether that device is synced, offline or in error, and the Save button now reports a refused write instead of claiming success.
+
+**Is it really saved? (v40)** The student row's Save button now waits for the cloud to confirm every write that is in flight, then reads the profile straight back from the server and compares it with what you set; it says *✓ Confirmed by the cloud · Profile vN* only if they match, and otherwise *⚠️ Not confirmed* with the reason. Settings has a cloud status line (synced / sending, N waiting / offline / error). If writes keep waiting, another open copy of the app on the same phone (a Chrome tab plus the installed app) may be holding the cache — close the other copy. Writes go out one batch at a time in the order they were made.
 
 **Firestore layout:** `students/{uid}`, `staff/{uid}`, `meta/master`, `sections/{id}`, `progress/{uid}__{courseId}`, `focus/{uid}`, `settings/global`. Security rules: students read only their own documents and may update only their own fields of their profile; staff read/write everything; only the master manages staff. After changing `firestore.rules`, paste it again into Firestore → Rules → Publish.
 
@@ -78,6 +80,10 @@ Students: **Grades** in the top bar, or *My grades* on a class — the same row 
 ## Collapsible classes and units
 
 Classes on the home page, sections on the teacher dashboard, units on a course page and units on the Grades grids are all fold-outs. Every fold starts closed each time a screen is opened (nothing is remembered between screens).
+
+## Back button (phone and header ←)
+
+Back always goes **up one level** — slide → lesson → course → desk — whichever way you got there, and never to the sign-in screen. At the desk, a second press within two seconds asks whether to close the app. Collapsible areas (Settings groups, student rows, units) start closed each time a screen is opened, but stay as they are while that screen redraws — changing text size, overlay or any other setting keeps its group open.
 
 ## Installing on a phone or computer
 
