@@ -46,7 +46,7 @@ Since v32 the app runs on a Firebase project (`cloud-config.js`): accounts, rost
 
 **One-time set-up (already done for the-academy---learnhub):** Firebase console → Authentication → Email/Password enabled; Authorized domains includes `jonresendes.github.io`; Firestore database created; the web app's config pasted into `cloud-config.js`; the contents of `firestore.rules` pasted into Firestore → **Rules** → Publish.
 
-**Sign-in.** Students: student number + birthday as `DDMMYYYY` (12 January 2008 → `12012008`). Teachers: teacher ID + password. The first teacher to open the app sets up the **master account** (Teacher tab → *First teacher? Set up the master account*). The master adds other teachers in Settings → Teachers (name, teacher ID, password).
+**Sign-in.** Students: student number + birthday as `DDMMYYYY` (12 January 2008 → `12012008`). Teachers: teacher ID + password. The first teacher to open the app sets up the **Headmaster (admin) account** (Teacher tab → *First time here? Set up the Headmaster account*). The Headmaster adds other teachers in Settings → Teachers (name, teacher ID, password).
 
 **Students** are created by a teacher in Settings → Students (first name, student number, birthday) — this creates the login and enrols them in the selected section — or, if *Students may create their own profile* is on, by the student themselves (they then wait for a teacher to add them to a class). Wrong birthday? The student's row has **Fix birthday / reset password**.
 

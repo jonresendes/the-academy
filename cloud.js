@@ -285,15 +285,17 @@
   Cloud.createStaff = async ({ name, login, password, avatar, email }) => {
     login = String(login || '').trim(); if (!/^[A-Za-z0-9._-]{3,}$/.test(login)) throw new Error('Enter a teacher ID (letters and digits only).');
     if (String(password || '').length < 6) throw new Error('The password must be at least 6 characters.');
-    const meta = await db.collection('meta').doc('master').get();
-    const role = meta.exists ? 'teacher' : 'master';
-    if (role === 'teacher' && Cloud.role !== 'master') throw new Error('Only the master account can add teachers.');
+    let role;
+    try { const meta = await db.collection('meta').doc('master').get(); role = meta.exists ? 'teacher' : 'master'; }
+    catch (e) { role = Cloud.role === 'master' ? 'teacher' : 'master'; }     // not signed in: the rules hide meta/master; creation below fails safely if one exists
+    if (role === 'teacher' && Cloud.role !== 'master') throw new Error('Only the Headmaster can add teachers. If you are setting up for the first time and see this, a Headmaster account already exists — sign in with it.');
     const uid = await createAuthUser(staffEmail(login), password);
     const rec = clean({ id: uid, name: String(name).trim().slice(0, 40), role, login, email: email || '', avatar: avatar || '🧑‍🏫', colour: '#1f5f8b', archived: [], createdAt: now() });
     if (role === 'master') {
       // The first teacher writes their own record, then claims the master record (rules allow both only while no master exists).
       const sname = 'secondary-' + Date.now(); const sec = fb.initializeApp(CFG.firebase, sname);
       try { await sec.auth().signInWithEmailAndPassword(staffEmail(login), password); const sdb = sec.firestore(); await sdb.collection('staff').doc(uid).set(rec); await sdb.collection('meta').doc('master').set({ uid, name: rec.name, at: now() }); await sec.auth().signOut(); }
+      catch (e) { try { await sec.auth().signOut(); } catch (x) {} throw new Error(/permission|insufficient/i.test(e.message) ? 'A Headmaster account already exists — sign in with it, and add yourself as a teacher from Settings → Teachers.' : friendly(e)); }
       finally { setTimeout(() => sec.delete().catch(() => {}), 500); }
     } else await db.collection('staff').doc(uid).set(rec);   // the signed-in master writes the teacher's record
     return rec;

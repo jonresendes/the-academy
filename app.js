@@ -211,7 +211,7 @@
                  : field('siUser', 'Teacher ID', 'text', 'Teacher ID') + field('siPass', 'Password', 'password', 'Password')) +
         '<label class="chk" style="margin-top:0.5rem"><input type="checkbox" id="siKeep"' + (keep ? ' checked' : '') + '> Keep me signed in on this device <span class="muted small">(untick on shared computers)</span></label>' +
         '<div class="btn-row" style="margin-top:0.75rem"><button class="btn lg" id="siGo"' + (st.busy ? ' disabled' : '') + '>' + (st.busy ? 'Signing in…' : 'Sign in') + '</button>' +
-        (student && canSelf ? '<button class="btn ghost" id="siSignup">New student? Create an account</button>' : '') + (!student ? '<button class="btn ghost" id="siFirstTeacher" hidden>First teacher? Set up the master account</button>' : '') + '</div></div>';
+        (student && canSelf ? '<button class="btn ghost" id="siSignup">New student? Create an account</button>' : '') + (!student ? '<button class="btn ghost" id="siFirstTeacher">🎓 First time here? Set up the Headmaster (admin) account</button>' : '') + '</div></div>';
     }
     app.innerHTML = '<div class="signin"><div class="signin-head"><div class="signin-logo">🎓</div><h1>Welcome to The Academy</h1><p class="muted">' + (student ? 'Sign in with your student number and your birthday.' : 'Teachers sign in with their teacher ID and password.') + '</p></div>' +
       (st.msg ? '<div class="signin-msg' + (st.msgOk ? ' ok' : '') + '">' + esc(st.msg) + '</div>' : '') + form +
@@ -237,13 +237,13 @@
       catch (e) { fail(e.message); }
     });
     // first-ever teacher: offer master set-up when no master exists yet
-    const ft = app.querySelector('#siFirstTeacher'); if (ft) Cloud.hasMaster().then(has => { if (!has) { ft.hidden = false; ft.addEventListener('click', () => { st.signup = 'master'; pageMasterSetup(); }); } }).catch(() => {});
+    const ft = app.querySelector('#siFirstTeacher'); if (ft) ft.addEventListener('click', () => { st.signup = 'master'; pageMasterSetup(); });
     const first = app.querySelector('#siUser, #suNumber'); if (first) first.focus();
   }
   function pageMasterSetup() {
-    app.innerHTML = '<div class="signin"><div class="signin-head"><div class="signin-logo">🎓</div><h1>Set up the master account</h1><p class="muted">The first teacher becomes the master account: it adds other teachers, creates sections and sees every student.</p></div>' +
+    app.innerHTML = '<div class="signin"><div class="signin-head"><div class="signin-logo">🎓</div><h1>Set up the Headmaster account</h1><p class="muted">The Headmaster is the admin account: it adds teachers, creates sections and sees every student. It can only be created once — after that, teachers are added by the Headmaster in Settings → Teachers.</p></div>' +
       '<div class="card signin-card"><label class="signin-field">Your name<input class="text-input" id="mName" maxlength="40" placeholder="e.g. Ms Patel"></label><label class="signin-field">Teacher ID (what you will sign in with)<input class="text-input" id="mLogin" placeholder="e.g. jresendes"></label><label class="signin-field">Password (at least 6 characters)<input class="text-input" id="mPass" type="password"></label><label class="signin-field">School e-mail (optional)<input class="text-input" id="mEmail" placeholder="name@school.ca"></label>' +
-      '<div class="btn-row" style="margin-top:0.75rem"><button class="btn lg" id="mGo">Create master account</button><button class="btn ghost" id="mBack">Cancel</button></div><p class="muted small" id="mMsg"></p></div></div>';
+      '<div class="btn-row" style="margin-top:0.75rem"><button class="btn lg" id="mGo">Create Headmaster account</button><button class="btn ghost" id="mBack">Cancel</button></div><p class="muted small" id="mMsg"></p></div></div>';
     app.querySelector('#mBack').addEventListener('click', () => { signinState.signup = false; pageCloudSignIn(); });
     app.querySelector('#mGo').addEventListener('click', async () => {
       const g = id => app.querySelector(id).value.trim(); const msg = app.querySelector('#mMsg');
