@@ -1,70 +1,181 @@
 rules_version = '2';
+// The Academy · LearnHub — security rules, v43 (free-plan edition: no Cloud Functions).
+// Paste the whole file into Firebase console → Firestore Database → Rules → Publish.
+//
+// The idea in one paragraph: being signed in is not enough. A caller must have a staff record or a
+// student record to read anything. A student reads and writes only their own records. A teacher
+// reads and writes only students whose access list (`teachers`, on the student's record) holds the
+// teacher's id — a teacher can put themselves on that list (that is what adding a student to a
+// section does) and take themselves off, but can never touch anyone else's entry. Grades sit in
+// their own records, which a student can read and never write. The Headmaster (the account named
+// in meta/master) can do everything.
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
     function isStaff() { return signedIn() && exists(/databases/$(database)/documents/staff/$(request.auth.uid)); }
+    function isStudent() { return signedIn() && exists(/databases/$(database)/documents/students/$(request.auth.uid)); }
+    function known() { return isStaff() || isStudent(); }
     function isMaster() { return signedIn() && exists(/databases/$(database)/documents/meta/master) && get(/databases/$(database)/documents/meta/master).data.uid == request.auth.uid; }
     function noMasterYet() { return !exists(/databases/$(database)/documents/meta/master); }
+    // May the caller manage this student? The Headmaster, or a teacher on the student's access list.
+    function teaches(sid) { return isMaster() || (isStaff() && request.auth.uid in get(/databases/$(database)/documents/students/$(sid)).data.teachers); }
+    function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
 
-    // There is ONE Headmaster. The record can only be created while none exists (first-time set-up);
-    // afterwards only the Headmaster may change it.
+    // ----- who is the Headmaster -----
     match /meta/master {
-      allow read: if signedIn();
+      allow read: if known();
+      // create: first-time set-up only
       allow create: if signedIn() && noMasterYet() && request.resource.data.uid == request.auth.uid;
       allow update, delete: if isMaster();
     }
-    // Which sign-in a teacher ID uses now. The sign-in screen looks one ID up before anyone is signed in,
-    // so a single record may be fetched by anyone; only the Headmaster can list or change them.
-    match /logins/{login} {
-      allow get: if true;
-      allow list: if isMaster();
+    // Which data version the project is on (written by the Headmaster's app after the one-time upgrade).
+    match /meta/config {
+      allow read: if known();
       allow write: if isMaster();
     }
-    // Staff records: the master creates them (the very first teacher creates their own while
-    // no master exists yet); a teacher may update their own; the master manages everyone.
-    match /staff/{uid} {
-      allow read: if signedIn();
-      allow create: if isMaster() || (signedIn() && request.auth.uid == uid && noMasterYet());
-      allow update: if isMaster() || (isStaff() && request.auth.uid == uid);
+    // Which sign-in a teacher ID uses now (after a password reset). The sign-in screen looks one ID up
+    // before anyone is signed in.
+    match /logins/{login} {
+      allow get: if true;
+      allow list, write: if isMaster();
+    }
+
+    // ----- staff -----
+    // The public part of a staff record (name, picture, teacher ID). Students see it for their teachers' names.
+    match /staff/{sid} {
+      allow read: if known();
+      allow create: if isMaster() || (signedIn() && request.auth.uid == sid && noMasterYet());
+      allow update: if isMaster() || (isStaff() && request.auth.uid == sid && !changed().hasAny(['id', 'role', 'login']));
       allow delete: if isMaster();
     }
-    // Student profiles: the student and all staff can read; staff write anything; a student may
-    // create their own profile (self sign-up) and afterwards change only their own fields —
-    // never the level, course list, accommodations, track, name or number a teacher set.
+    // A teacher's sticky notes: that teacher. (The Headmaster's app moves them when it resets that teacher's password.)
+    match /staffNotes/{sid} {
+      allow read, write: if isMaster() || (isStaff() && request.auth.uid == sid);
+    }
+    // A teacher's e-mail address: that teacher and the Headmaster.
+    match /staffPrivate/{sid} {
+      allow read, write: if isMaster() || (isStaff() && request.auth.uid == sid);
+    }
+
+    // ----- students -----
+    // What a student may change about themselves. Never the level, course list, accommodations, track, name or number.
     function studentOwnFields() {
       return ['prefs', 'archived', 'suggestions', 'lessonLevels', 'levelLog', 'courseLevels', 'avatar', 'colour', 'rev', 'updatedAt', 'updatedBy'];
     }
-    match /students/{uid} {
-      allow read: if signedIn() && (isStaff() || request.auth.uid == uid);
-      allow create: if signedIn() && (isStaff() || request.auth.uid == uid);
-      allow update: if isStaff() || (signedIn() && request.auth.uid == uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(studentOwnFields()));
-      allow delete: if isStaff();
+    // A picture is one emoji and a colour is a colour — never markup.
+    function tidyOwnFields() {
+      return (!changed().hasAny(['avatar']) || (request.resource.data.avatar is string && request.resource.data.avatar.size() <= 16 && !request.resource.data.avatar.matches('(?s).*[<>].*')))
+          && (!changed().hasAny(['colour']) || (request.resource.data.colour is string && request.resource.data.colour.matches('^#[0-9a-fA-F]{3,8}$')));
     }
-    // Sections: every signed-in user can read (students need their roster); only staff write.
+    // The access list may change only by the caller's own id being added or taken away.
+    function onlyOwnEntryChanges() {
+      return request.resource.data.teachers is list
+          && request.resource.data.teachers.removeAll([request.auth.uid]) == resource.data.teachers.removeAll([request.auth.uid]);
+    }
+    // Self sign-up, only while the school's switch is saved as on: a plain profile with nothing granted.
+    function selfSignupOpen() { return get(/databases/$(database)/documents/settings/global).data.allowSelfSignup == true; }
+    function plainNewProfile() {
+      return request.resource.data.keys().hasOnly(['id', 'name', 'createdAt', 'avatar', 'colour', 'level', 'courseLevels', 'courses', 'coursesLocked', 'accommodations', 'prefs', 'suggestions', 'track', 'archived', 'levelLog', 'lessonLevels', 'number', 'dob', 'teachers', 'updatedAt', 'updatedBy', 'rev'])
+          && request.resource.data.name is string && request.resource.data.name.size() <= 40 && !request.resource.data.name.matches('(?s).*[<>].*')
+          && request.resource.data.number is string && request.resource.data.number.size() <= 40
+          && request.resource.data.avatar is string && request.resource.data.avatar.size() <= 16 && !request.resource.data.avatar.matches('(?s).*[<>].*')
+          && request.resource.data.level == 2
+          && request.resource.data.courses is list && request.resource.data.courses.size() == 0
+          && request.resource.data.teachers is list && request.resource.data.teachers.size() == 0
+          && request.resource.data.track.size() == 0 && request.resource.data.courseLevels.size() == 0
+          && request.resource.data.coursesLocked == false
+          && request.resource.data.accommodations.size() == 3 && request.resource.data.accommodations['reduce'] == false && request.resource.data.accommodations['simplify'] == false && request.resource.data.accommodations['chunk'] == false;
+    }
+    match /students/{sid} {
+      allow get: if signedIn() && (request.auth.uid == sid || isMaster() || (isStaff() && request.auth.uid in resource.data.teachers));
+      allow list: if signedIn() && (isMaster() || (isStaff() && request.auth.uid in resource.data.teachers));
+      // A teacher adds a student (and is the only one on the new access list), or a student signs themselves up.
+      allow create: if signedIn() && request.resource.data.teachers is list && (
+                       isMaster()
+                    || (isStaff() && request.resource.data.teachers == [request.auth.uid])
+                    || (request.auth.uid == sid && selfSignupOpen() && plainNewProfile()));
+      // The Headmaster: anything.
+      // A teacher who has this student: anything but the id and number; of the access list, only their own entry.
+      // A teacher who does not have this student yet: may add themselves and nothing else.
+      // The student: their own fields.
+      allow update: if signedIn() && (
+                       (isMaster() && request.resource.data.teachers is list)
+                    || (isStaff() && request.auth.uid in resource.data.teachers && onlyOwnEntryChanges() && !changed().hasAny(['id', 'number']))
+                    || (isStaff() && changed().hasOnly(['teachers']) && onlyOwnEntryChanges())
+                    || (request.auth.uid == sid && changed().hasOnly(studentOwnFields()) && tidyOwnFields()));
+      allow delete: if signedIn() && (isMaster() || (isStaff() && request.auth.uid in resource.data.teachers));
+    }
+    // Name, number and picture of every student, so a teacher can add an existing student to a section. Staff only.
+    match /directory/{sid} {
+      allow read: if isStaff();
+      // a student who signs themselves up leaves a card so a teacher can find them
+      allow create: if signedIn() && (request.auth.uid == sid || teaches(sid));
+      allow update, delete: if signedIn() && teaches(sid);
+    }
+
+    // ----- sections -----
+    // A teacher sees and changes their own sections; a student sees the sections they are in.
     match /sections/{id} {
-      allow read: if signedIn();
-      allow write: if isStaff();
+      allow read: if signedIn() && (isMaster() || (isStaff() && resource.data.teacherId == request.auth.uid) || request.auth.uid in resource.data.students);
+      allow create: if isMaster() || (isStaff() && request.resource.data.teacherId == request.auth.uid);
+      allow update: if isMaster() || (isStaff() && resource.data.teacherId == request.auth.uid && request.resource.data.teacherId == request.auth.uid);
+      allow delete: if isMaster() || (isStaff() && resource.data.teacherId == request.auth.uid);
     }
-    // Progress and assignment work: the owner or staff.
-    match /progress/{id} {
-      allow read: if signedIn() && (isStaff() || resource.data.student == request.auth.uid);
-      allow create: if signedIn() && (isStaff() || request.resource.data.student == request.auth.uid);
-      allow update: if signedIn() && (isStaff() || resource.data.student == request.auth.uid);
-      allow delete: if isStaff();
+
+    // ----- a student's work (slides read, quiz and test results, assignment text, awards) -----
+    // One record per student and course, named <student>__<course>. The owner and their teachers.
+    match /progress/{pid} {
+      // asking for a record that does not exist reveals nothing
+      allow get: if isStaff() && resource == null;
+      allow read: if signedIn() && (isMaster() || resource.data.student == request.auth.uid || teaches(resource.data.student));
+      allow create: if signedIn() && pid == request.resource.data.student + '__' + request.resource.data.course
+                    && (request.resource.data.student == request.auth.uid || teaches(request.resource.data.student));
+      allow update: if signedIn() && request.resource.data.student == resource.data.student && request.resource.data.course == resource.data.course
+                    && (resource.data.student == request.auth.uid || teaches(resource.data.student));
+      allow delete: if signedIn() && teaches(resource.data.student);
     }
-    match /focus/{uid} {
-      allow read: if signedIn() && (isStaff() || request.auth.uid == uid);
-      allow write: if isStaff();
+    // ----- teacher grades and comments -----
+    // Kept apart from the student's work so that a student can read them but never write them.
+    match /grades/{gid} {
+      allow get: if isStaff() && resource == null;
+      allow read: if signedIn() && (isMaster() || resource.data.student == request.auth.uid || teaches(resource.data.student));
+      allow create: if signedIn() && gid == request.resource.data.student + '__' + request.resource.data.course && teaches(request.resource.data.student);
+      allow update: if signedIn() && request.resource.data.student == resource.data.student && request.resource.data.course == resource.data.course && teaches(resource.data.student);
+      allow delete: if signedIn() && teaches(resource.data.student);
     }
-    // "Found a problem?" reports (text + screenshot): anyone signed in may send one under their own
-    // account; only the Headmaster can read, resolve or delete them.
+    // ----- Focus Plans -----
+    match /focus/{sid} {
+      allow read: if signedIn() && (request.auth.uid == sid || teaches(sid));
+      allow write: if signedIn() && teaches(sid);
+    }
+
+    // ----- "Found a problem?" reports -----
+    // Anyone with a profile may send one under their own account, in the expected shape and size;
+    // only the Headmaster can read, resolve or delete them.
     match /issues/{id} {
-      allow create: if signedIn() && request.resource.data.by == request.auth.uid;
+      allow create: if known() && request.resource.data.by == request.auth.uid
+                    && request.resource.data.keys().hasOnly(['id', 'by', 'name', 'role', 'number', 'page', 'title', 'text', 'shot', 'at', 'status', 'version', 'screen', 'agent'])
+                    && request.resource.data.text is string && request.resource.data.text.size() <= 2000
+                    && request.resource.data.shot is string && request.resource.data.shot.size() <= 750000
+                    && (request.resource.data.shot == '' || request.resource.data.shot.matches('^data:image/jpeg;base64,[A-Za-z0-9+/=]*$'))
+                    && request.resource.data.status == 'open';
       allow read, update, delete: if isMaster();
     }
+
+    // ----- shared options -----
+    // Not secret (two switches). The sign-in screen reads it before anyone is signed in, to know whether to offer "I'm new".
     match /settings/global {
-      allow read: if signedIn();
+      allow read: if true;
       allow write: if isStaff();
+    }
+
+    // ----- change log -----
+    // Staff apps add a line when they create, remove or take on a student or change an account.
+    // Lines cannot be edited or removed by anyone; only the Headmaster can read them.
+    match /audit/{id} {
+      allow create: if isStaff() && request.resource.data.by == request.auth.uid;
+      allow read: if isMaster();
+      allow update, delete: if false;
     }
   }
 }

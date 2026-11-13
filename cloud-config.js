@@ -17,6 +17,8 @@ window.CLOUD_CONFIG = {
   /* Sign-in identities are turned into e-mail addresses for Firebase Auth. Nobody receives mail at them. */
   studentDomain: "students.the-academy.app",
   staffDomain: "staff.the-academy.app",
-  /* Minutes of inactivity before a student is signed out on a shared device (0 = never). */
-  idleMinutes: 30
+  /* Minutes of inactivity before anyone is signed out on a device where "Keep me signed in" is not ticked (0 = never). */
+  idleMinutes: 30,
+  /* A teacher or the Headmaster with "Keep me signed in" ticked is still signed out after this many idle minutes (0 = never). */
+  staffIdleMinutes: 720
 };

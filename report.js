@@ -13,6 +13,9 @@
 (function () {
   const KEY = 'learnhub.issues', MAX_SHOT = 700000;
   const esc = s => String(s === undefined || s === null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  /** The screenshot of a stored report, only if it really is a JPEG picture (anything else is dropped, never put into the page). */
+  const safeShot = v => (typeof v === 'string' && v.length < 800000 && /^data:image\/jpeg;base64,[A-Za-z0-9+\/=]+$/.test(v)) ? v : '';
+  const safePage = v => (typeof v === 'string' && /^#\/[\w\-\/.:%]*$/.test(v)) ? v : '#/';
   const cloud = () => !!(window.Cloud && Cloud.enabled);
   const me = () => (window.Students && Students.current) || null;
   const isMaster = () => { const s = me(); return !!(s && s.role === 'master'); };
@@ -71,7 +74,7 @@
     const d = document.createElement('div'); d.id = 'reportBox'; d.className = 'learn-overlay report-overlay'; d.setAttribute('role', 'dialog'); d.setAttribute('aria-modal', 'true'); d.setAttribute('aria-label', 'Report a problem');
     d.innerHTML = '<div class="learn-card report-card"><h2>🐞 Report a problem</h2>' +
       '<p class="muted small">This goes to the Headmaster. Say what went wrong and what you expected to happen.</p>' +
-      (shot ? '<figure class="report-shot"><img src="' + shot + '" alt="Screenshot of the page you were on"><figcaption class="muted small">Screenshot of <strong>' + esc(title || page) + '</strong></figcaption></figure>' +
+      (shot ? '<figure class="report-shot"><img src="' + esc(safeShot(shot)) + '" alt="Screenshot of the page you were on"><figcaption class="muted small">Screenshot of <strong>' + esc(title || page) + '</strong></figcaption></figure>' +
               '<label class="chk"><input type="checkbox" id="reportInclude" checked> Send this screenshot with my report</label>'
             : '<p class="report-note">⚠️ ' + esc(shotErr || 'The screenshot could not be taken.') + ' You can still describe the problem and send it.</p>') +
       '<label class="report-label" for="reportText">What is the problem?</label>' +
@@ -105,9 +108,9 @@
   /* ---------- Headmaster: Settings → Reported problems ---------- */
   let cache = null, filter = 'open';
   async function load() {
-    if (!cloud()) { cache = lsGet(); return cache; }
+    if (!cloud()) { cache = lsGet().map(i => Object.assign(i, { id: String(i.id || ''), shot: safeShot(i.shot) })); return cache; }
     const q = await Cloud.db.collection('issues').get();
-    cache = q.docs.map(d => Object.assign({ id: d.id }, d.data())).sort((a, b) => String(b.at).localeCompare(String(a.at)));
+    cache = q.docs.map(d => Object.assign({}, d.data(), { id: d.id })).map(i => Object.assign(i, { shot: safeShot(i.shot) })).sort((a, b) => String(b.at).localeCompare(String(a.at)));
     return cache;
   }
   async function patch(id, change) {
@@ -115,17 +118,17 @@
     else { let all = lsGet(); all = change === null ? all.filter(i => i.id !== id) : all.map(i => i.id === id ? Object.assign(i, change) : i); lsSet(all); }
   }
   const when = iso => iso ? new Date(iso).toLocaleString([], { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
-  const fileName = i => 'problem-' + String(i.at || '').slice(0, 10) + '-' + String(i.name || 'user').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-' + i.id.slice(-4) + '.jpg';
+  const fileName = i => 'problem-' + String(i.at || '').slice(0, 10).replace(/[^0-9-]/g, '') + '-' + String(i.name || 'user').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-' + String(i.id).slice(-4).replace(/[^a-z0-9]/gi, '') + '.jpg';
   function listHtml() {
     if (!cache) return '<p class="muted small">Loading…</p>';
     const open = cache.filter(i => i.status !== 'resolved'), shown = filter === 'open' ? open : filter === 'resolved' ? cache.filter(i => i.status === 'resolved') : cache;
     return '<div class="report-bar"><div class="seg">' + [['open', 'Open (' + open.length + ')'], ['resolved', 'Resolved (' + (cache.length - open.length) + ')'], ['all', 'All (' + cache.length + ')']].map(o => '<button data-issue-filter="' + o[0] + '" class="' + (filter === o[0] ? 'on' : '') + '">' + o[1] + '</button>').join('') + '</div><button class="btn ghost sm" data-issue-refresh>↻ Refresh</button></div>' +
       (shown.length ? shown.map(i => '<article class="issue' + (i.status === 'resolved' ? ' resolved' : '') + '">' +
-        (i.shot ? '<a class="issue-shot" href="' + i.shot + '" data-issue-view="' + esc(i.id) + '" title="Open the full screenshot"><img src="' + i.shot + '" alt="Screenshot sent with this report" loading="lazy"></a>' : '<div class="issue-shot none muted small">No screenshot</div>') +
+        (i.shot ? '<a class="issue-shot" href="' + esc(safeShot(i.shot)) + '\" data-issue-view="' + esc(i.id) + '" title="Open the full screenshot"><img src="' + esc(safeShot(i.shot)) + '\" alt="Screenshot sent with this report" loading="lazy"></a>' : '<div class="issue-shot none muted small">No screenshot</div>') +
         '<div class="issue-main"><div class="issue-head"><strong>' + esc(i.name || 'Unknown') + '</strong> <span class="tag">' + esc(i.role || '') + (i.number ? ' · #' + esc(i.number) : '') + '</span> <span class="tag ' + (i.status === 'resolved' ? 'ok' : 'accent') + '">' + (i.status === 'resolved' ? '✓ Resolved' : 'Open') + '</span></div>' +
-        '<div class="muted small">' + esc(when(i.at)) + ' · page <a href="' + esc(i.page || '#/') + '">' + esc(i.title || i.page || '') + '</a> <span class="issue-tech">(' + esc(i.page || '') + (i.version ? ' · v' + esc(i.version) : '') + (i.screen ? ' · ' + esc(i.screen) : '') + ')</span></div>' +
+        '<div class="muted small">' + esc(when(i.at)) + ' · page <a href="' + esc(safePage(i.page)) + '">' + esc(i.title || i.page || '') + '</a> <span class="issue-tech">(' + esc(i.page || '') + (i.version ? ' · v' + esc(i.version) : '') + (i.screen ? ' · ' + esc(i.screen) : '') + ')</span></div>' +
         '<p class="issue-text">' + esc(i.text) + '</p>' +
-        '<div class="btn-row">' + (i.shot ? '<a class="btn secondary sm" href="' + i.shot + '" download="' + esc(fileName(i)) + '">💾 Save screenshot</a>' : '') +
+        '<div class="btn-row">' + (i.shot ? '<a class="btn secondary sm" href="' + esc(safeShot(i.shot)) + '\" download="' + esc(fileName(i)) + '">💾 Save screenshot</a>' : '') +
         '<button class="btn secondary sm" data-issue-status="' + esc(i.id) + '">' + (i.status === 'resolved' ? '↩ Reopen' : '✓ Mark resolved') + '</button><button class="btn ghost sm hm-danger" data-issue-del="' + esc(i.id) + '">🗑️ Delete</button></div></div></article>').join('')
         : '<p class="muted small">' + (filter === 'open' ? 'No open problems. 🎉' : 'Nothing here.') + '</p>');
   }
@@ -141,7 +144,7 @@
   }
   function viewer(i) {
     const d = document.createElement('div'); d.className = 'learn-overlay report-overlay'; d.setAttribute('data-html2canvas-ignore', 'true');
-    d.innerHTML = '<div class="learn-card report-view"><img src="' + i.shot + '" alt="Screenshot sent by ' + esc(i.name) + '"><div class="btn-row" style="margin-top:0.75rem"><a class="btn" href="' + i.shot + '" download="' + esc(fileName(i)) + '">💾 Save screenshot</a><button class="btn ghost" data-close>Close</button></div></div>';
+    d.innerHTML = '<div class="learn-card report-view"><img src="' + esc(safeShot(i.shot)) + '\" alt="Screenshot sent by ' + esc(i.name) + '"><div class="btn-row" style="margin-top:0.75rem"><a class="btn" href="' + esc(safeShot(i.shot)) + '\" download="' + esc(fileName(i)) + '">💾 Save screenshot</a><button class="btn ghost" data-close>Close</button></div></div>';
     document.body.appendChild(d); const close = () => d.remove();
     d.addEventListener('click', e => { if (e.target === d) close(); }); d.querySelector('[data-close]').addEventListener('click', close);
   }

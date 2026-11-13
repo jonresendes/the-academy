@@ -24,6 +24,7 @@
   const KEY_STUDENTS = 'learnhub.students';
   const KEY_PROGRESS = 'learnhub.progress';   // + '.' + studentId
   const KEY_FOCUS = 'learnhub.focus';         // + '.' + studentId
+  const KEY_GRADES = 'learnhub.grades';       // + '.' + studentId — teacher grades, kept apart from the student's own work
 
   const PREF_KEYS = ['fontScale', 'font', 'dyslexia', 'contrast', 'tint', 'motion', 'readAloud', 'dictation'];
   const DEFAULT_PREFS = {
@@ -111,9 +112,18 @@
     update(id, patch) { const s = this.byId(id); if (!s) return; Object.assign(s, patch); if (s.isStaff) this.saveStaff(s); this.save(); if (s === this.current) Settings.apply(); },
     /** Persist name / avatar / prefs / archived of a staff profile back to its record. */
     saveStaff(s) { const rec = s.staffId === 'master' ? Staff.master : Staff.teachers.find(t => t.id === s.staffId); if (rec) { rec.name = s.name; rec.avatar = s.avatar; rec.colour = s.colour; rec.prefs = s.prefs; rec.archived = s.archived; Staff.save(); } },
+    /** Staff only, cloud mode: name / number / picture of every student, for "Add an existing student" (held by cloud.js in memory, never stored). */
+    get directory() { return (window.Cloud && window.Cloud.directory) || []; },
+    set directory(v) { if (window.Cloud) window.Cloud.directory = v || []; },
     removeStudent(id) {
+      const cloud = window.Cloud && window.Cloud.enabled && window.Cloud.user;
       this.data.list = this.data.list.filter(s => s.id !== id);
-      remove(KEY_PROGRESS + '.' + id); remove(KEY_FOCUS + '.' + id);
+      if (cloud) {   // cloud.js removes the profile, work, grades and directory card; the roster entries go here
+        [KEY_PROGRESS, KEY_FOCUS, KEY_GRADES].forEach(k => { try { localStorage.removeItem(k + '.' + id); } catch (e) {} });
+        this.directory = (this.directory || []).filter(s => s.id !== id);
+        let touched = false; Sections.list.forEach(sec => { if ((sec.students || []).includes(id)) { sec.students = sec.students.filter(x => x !== id); touched = true; } }); if (touched) Sections.save();
+        window.Cloud.removeStudent(id).catch(e => alert('The student could not be removed from the cloud: ' + e.message + '\nThey will reappear here; try again in a moment.'));
+      } else { remove(KEY_PROGRESS + '.' + id); remove(KEY_FOCUS + '.' + id); try { localStorage.removeItem(KEY_GRADES + '.' + id); } catch (e) {} }
       if (this.data.current === id) this.data.current = null;
       this.save(); Progress.load(); Focus.load();
     },
@@ -302,12 +312,27 @@
     resetFor(studentId) { remove(KEY_PROGRESS + '.' + studentId); if (Students.current && Students.current.id === studentId) this.load(); },
     /** Write another student's progress (teacher: grades, notes). */
     saveFor(studentId, data) { save(KEY_PROGRESS + '.' + studentId, data); if (Students.current && Students.current.id === studentId) this.load(); },
+    /* Teacher grades live in their own record ('learnhub.grades.<student>' → grades/<student>__<course> in the cloud),
+       which the student can read but never write:  { [courseId]: { [unitId]: { [lessonIdx]: { [n]: { score, max, note, by, at } } } } } */
+    grades(studentId) { return load(KEY_GRADES + '.' + studentId, {}); },
+    /** A student's progress with the teacher's grades laid over it (as work[lesson][n].grade), for the Grades pages and exports.
+        A "grade" found inside the student's own record is ignored: only the teacher's record counts. */
+    graded(studentId) {
+      const me = Students.current;
+      const data = JSON.parse(JSON.stringify(me && me.id === studentId ? this.data : this.peek(studentId)));
+      Object.keys(data).forEach(c => Object.keys(data[c] || {}).forEach(u => { const work = data[c][u] && data[c][u].work; if (work && typeof work === 'object') Object.keys(work).forEach(l => Object.keys(work[l] || {}).forEach(n => { if (work[l][n] && typeof work[l][n] === 'object') delete work[l][n].grade; })); }));
+      const g = this.grades(studentId);
+      Object.keys(g).forEach(c => Object.keys(g[c] || {}).forEach(u => Object.keys(g[c][u] || {}).forEach(l => Object.keys(g[c][u][l] || {}).forEach(n => {
+        const gr = g[c][u][l][n]; if (!gr || typeof gr !== 'object') return;
+        const unit = (data[c] = data[c] || {})[u] = data[c][u] || {}; unit.work = unit.work || {}; const wl = unit.work[l] = unit.work[l] || {};
+        (wl[n] = wl[n] || { text: '', done: false }).grade = gr; }))));
+      return data;
+    },
     /** Teacher grade on an assignment: { score, max, note, by, at }. Works for any student. */
     setGrade(studentId, courseId, unitId, lessonIdx, n, grade) {
-      const data = this.peek(studentId); const c = data[courseId] = data[courseId] || {}; const u = c[unitId] = c[unitId] || {};
-      u.work = u.work || {}; const wl = u.work[lessonIdx] = u.work[lessonIdx] || {}; const w = wl[n] = wl[n] || { text: '', done: false };
-      if (grade === null) delete w.grade; else w.grade = Object.assign({}, w.grade || {}, grade, { at: new Date().toISOString() });
-      this.saveFor(studentId, data);
+      const g = this.grades(studentId); const u = (g[courseId] = g[courseId] || {})[unitId] = g[courseId][unitId] || {}; const wl = u[lessonIdx] = u[lessonIdx] || {};
+      if (grade === null) delete wl[n]; else wl[n] = Object.assign({}, wl[n] || {}, grade, { at: new Date().toISOString() });
+      save(KEY_GRADES + '.' + studentId, g);
     }
   };
 

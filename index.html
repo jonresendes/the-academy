@@ -2,6 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <!-- Only this site's own scripts may run (plus Google sign-in for the optional Drive export): injected markup cannot execute. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://accounts.google.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; connect-src 'self' https://*.googleapis.com https://accounts.google.com; frame-src 'self' blob: https://docs.google.com https://drive.google.com https://www.youtube-nocookie.com https://www.youtube.com https://accounts.google.com; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#2c3a8f">
   <meta name="mobile-web-app-capable" content="yes">
@@ -47,9 +50,10 @@
   <script src="glc2o.js"></script>      <!-- GLC2O Career Studies (5 units) — loads after colouring.js -->
 
   <!-- ===== CLOUD (Firebase) — accounts and live sync; set enabled:false in cloud-config.js for device-only mode ===== -->
-  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <!-- Firebase SDK 10.14.1, served from this site (copied from the official npm package) so no outside script is trusted. -->
+  <script src="firebase-app-compat.js"></script>
+  <script src="firebase-auth-compat.js"></script>
+  <script src="firebase-firestore-compat.js"></script>
   <script src="cloud-config.js"></script>
   <script src="cloud.js"></script>
 

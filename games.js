@@ -438,7 +438,7 @@
           if (!cards.length) return then();
           const c = cards[cardIdx % cards.length]; cardIdx++;
           const host = ctx.host.querySelector('.learn-card-host');
-          host.innerHTML = '<div class="learn-overlay"><div class="learn-card">' + (c.visual ? '<div class="slide-visual">' + c.visual + '</div>' : '') +
+          host.innerHTML = '<div class="learn-overlay"><div class="learn-card">' + (c.visual ? '<div class="slide-visual">' + esc(c.visual) + '</div>' : '') +
             '<div class="btn-row between"><h2>' + esc(c.title) + '</h2>' + speakBtn(c.title + '. ' + String(c.body).replace(/[*#-]/g, ''), '.learn-card') + '</div>' +
             '<div class="slide-body">' + window.LH.md(c.body) + '</div>' +
             '<div class="btn-row" style="justify-content:flex-end;margin-top:1rem"><button class="btn success" id="learnOk">Got it — keep colouring 🎨</button></div></div></div>';

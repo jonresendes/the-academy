@@ -170,9 +170,9 @@
     if (!host) return;
     const el = document.createElement('div');
     el.className = 'toast';
-    el.innerHTML = '<div class="t-icon">' + award.icon + '</div><div><div class="t-title">' +
+    el.innerHTML = '<div class="t-icon">' + window.LH.esc(award.icon) + '</div><div><div class="t-title">' +
       ({ badge: 'Badge earned', medal: 'Medal earned', trophy: 'Trophy earned' }[award.tier] || 'Award earned') +
-      '</div><div class="t-name">' + award.name + '</div></div>';
+      '</div><div class="t-name">' + window.LH.esc(award.name) + '</div></div>';
     host.appendChild(el);
     setTimeout(() => el.remove(), 5000);
   }

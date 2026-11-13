@@ -26,7 +26,8 @@ report.js       "Found a problem?" button: screenshot + message to the Headmaste
 html2canvas.min.js   screenshot library (MIT), loaded only when the button is pressed
 opendyslexic-400.woff2 / opendyslexic-700.woff2   dyslexia-friendly font (SIL OFL, see opendyslexic-LICENSE.txt)
 cloud-config.js Firebase project settings (public identifiers)
-cloud.js        Firebase sign-in + live sync layer
+cloud.js        Firebase sign-in + live sync layer, account management, access lists, the v43 data upgrade
+firebase-app-compat.js / -auth- / -firestore-   Firebase SDK 10.14.1, served from this site
 firestore.rules security rules to paste into the Firebase console
 sw.js           service worker (offline cache) — bump VERSION on every deploy
 manifest.json   app name, colours and icons for installing
@@ -47,13 +48,13 @@ You can also just open `index.html` locally — it works from a file:// URL too.
 
 Since v32 the app runs on a Firebase project (`cloud-config.js`): accounts, rosters, progress, assignment work and teacher grades live in Firestore and follow people to any device. If Firebase can't be loaded (no internet on first open, or `enabled: false`), the app runs in the older device-only mode.
 
-**One-time set-up (already done for the-academy---learnhub):** Firebase console → Authentication → Email/Password enabled; Authorized domains includes `jonresendes.github.io`; Firestore database created; the web app's config pasted into `cloud-config.js`; the contents of `firestore.rules` pasted into Firestore → **Rules** → Publish.
+**One-time set-up (already done for the-academy---learnhub):** Firebase console → Authentication → Email/Password enabled; Authorized domains includes `jonresendes.github.io`; Firestore database created; the web app's config pasted into `cloud-config.js`; the contents of `firestore.rules` pasted into Firestore → **Rules** → Publish. (*Enable create (sign-up)* in Authentication → Settings must stay **on**: teachers' browsers create the student sign-ins.)
 
 **Sign-in.** Students: student number + birthday as `DDMMYYYY` (12 January 2008 → `12012008`). Teachers: teacher ID + password. There is **one Headmaster (admin) account**. The sign-in screen no longer offers to create one (v42); on a brand-new Firebase project open `…/#/setup` once to create it, and the cloud refuses a second. The Headmaster adds other teachers in the **Teachers** tab (below).
 
 **Students** are created by a teacher in Settings → Students (first name, student number, birthday) — this creates the login and enrols them in the selected section — or, if *Students may create their own profile* is on, by the student themselves (they then wait for a teacher to add them to a class). Wrong birthday? The student's row has **Fix birthday / reset password**.
 
-**Sessions.** Closing the app, the back button or a reload never signs anyone out — only **Switch user** / **Sign out** on the name chip do (v39: the sign-in screen sends a signed-in user straight home, so stepping back through old history can't end a session). A device with *Keep me signed in* unticked signs the user out after `idleMinutes` (30) without activity. Settings → My profile has **Sign out**.
+**Sessions.** Closing the app, the back button or a reload never signs anyone out — only **Switch user** / **Sign out** on the name chip do (v39: the sign-in screen sends a signed-in user straight home, so stepping back through old history can't end a session). A device with *Keep me signed in* unticked signs the user out after `idleMinutes` (30) without activity; a staff session with it ticked ends after `staffIdleMinutes` (720). Signing out empties the device (v43). Settings → My profile has **Sign out**.
 
 **What syncs.** Profiles, levels, accommodations, Focus Plans, sections and rosters, every quiz/test score, award, assignment draft and hand-in, teacher grades and comments. Voice recordings and uploaded media stay on the device they were made on. Changes appear live on other open devices.
 
@@ -61,23 +62,53 @@ Since v32 the app runs on a Firebase project (`cloud-config.js`): accounts, rost
 
 **Is it really saved? (v40)** The student row's Save button now waits for the cloud to confirm every write that is in flight, then reads the profile straight back from the server and compares it with what you set; it says *✓ Confirmed by the cloud · Profile vN* only if they match, and otherwise *⚠️ Not confirmed* with the reason. Settings has a cloud status line (synced / sending, N waiting / offline / error). If writes keep waiting, another open copy of the app on the same phone (a Chrome tab plus the installed app) may be holding the cache — close the other copy. Writes go out one batch at a time in the order they were made.
 
-**Firestore layout:** `students/{uid}`, `staff/{uid}`, `meta/master`, `logins/{teacherId}`, `issues/{id}`, `sections/{id}`, `progress/{uid}__{courseId}`, `focus/{uid}`, `settings/global`. Security rules: students read only their own documents and may update only their own fields of their profile; staff read/write everything; only the master manages staff. After changing `firestore.rules`, paste it again into Firestore → Rules → Publish.
+**Firestore layout:** `students/{uid}`, `staff/{uid}`, `meta/master`, `logins/{teacherId}`, `issues/{id}`, `sections/{id}`, `progress/{uid}__{courseId}`, `focus/{uid}`, `settings/global`. See the v43 section below for the current layout and rules.
+
+## Security update (v43) — scoped access, protected grades, nothing left on devices
+
+v43 answers the v42 security review (project doc `security-privacy-audit-v42.md`). It runs on Firebase's free plan: there are no Cloud Functions. The security rules decide what each account may read and write, and the app keeps the supporting records in step. Putting it live is three steps — see `DEPLOY.md`. Passwords, names and teacher IDs of existing accounts are not changed.
+
+**Being signed in is no longer enough.** Every read needs a staff record or a student record. Sign-ins are still made from the browser (a teacher adding a student, the Headmaster adding a teacher), so a stranger can still create a bare sign-in — but it can read nothing and write nothing. Self sign-up works only while the school's switch is saved as on, and then only creates a plain profile (level 2, no courses, nobody's student).
+
+**A teacher receives only their own students.** Every student record carries `teachers`, the staff who have that student. A teacher's app adds its own id when a student goes onto one of its rosters (and takes it off when they leave the last one); the rules let a teacher change only their own entry. The Headmaster's app keeps the lists in step with the rosters. *Add an existing student* picks from a staff-only directory (name, number, picture); the full record arrives a moment later. A teacher fetches a student's work for the courses of the sections that student is in.
+
+**Grades are the teacher's.** Grades and comments moved from the student's own record to `grades/{student}__{course}`, which a student can read but not write.
+
+**Private things are private.** Teacher notes live in `staffNotes/{uid}` and e-mail addresses in `staffPrivate/{uid}`. Students no longer download either.
+
+**Nothing stays on a shared device.** Signing out — or being signed out by the idle timer — empties the app's local storage and the offline database, then reloads. (One exception: a student whose last changes could not be sent keeps the offline queue of their own work until they next sign in.) A staff session with *Keep me signed in* still ends after `staffIdleMinutes` (12 hours) idle. A teacher's own course preview progress now stays on the device.
+
+**Stored text is never run as code.** Every value read from the cloud is escaped where it is drawn; screenshots in problem reports must be real JPEG pictures; links must be web addresses; raw slide markup is only taken from the course files. A Content-Security-Policy in `index.html` allows scripts from this site only, and the Firebase SDK is served from this folder (`firebase-*-compat.js`, v10.14.1).
+
+**The one-time data upgrade** runs by itself the first time the Headmaster signs in on v43: access lists on every student, grades moved to their own records, notes and e-mail moved to private records, directory cards. Until then teachers see a notice and no students. *Settings → 🔐 Security → Run the data upgrade again* repeats it safely.
+
+**Settings → 🔐 Security (Headmaster)** also has the **change log**: who added or removed students and teachers, reset a password, or took a student onto their roster. Lines cannot be edited or deleted.
+
+**Passwords.** New or changed staff passwords need 10 characters and are typed into a masked box. Resetting a teacher's password still gives them a fresh sign-in behind the same teacher ID (a browser cannot change someone else's password); their record, notes, sections and students move to it.
+
+**Exports** no longer contain birthdays or PINs, and CSV cells cannot be read as spreadsheet formulas. Importing a file is for device-only mode.
+
+**Firestore layout (v43):** `students/{uid}` (+ `teachers`), `directory/{uid}`, `staff/{uid}` (public part), `staffNotes/{uid}`, `staffPrivate/{uid}`, `sections/{id}`, `progress/{uid}__{course}`, `grades/{uid}__{course}`, `focus/{uid}`, `issues/{id}`, `settings/global`, `meta/master`, `meta/config`, `logins/{teacherId}`, `audit/{id}`. The rules are in `firestore.rules`: paste into Firestore → Rules → Publish.
+
+**What a server would add** (if the project ever moves to the pay-as-you-go plan; a server edition was built and is kept in the project notes): sign-up closed to the outside altogether; access lists and the change log written by the server instead of by each teacher's app (today a teacher can take any student onto their own list, which is how adding to a section works, and the log relies on the app writing its line); old sign-ins deleted automatically; password resets without a new sign-in.
+
+**Still open** (decisions rather than code): students sign in with number + birthday; staff have no second sign-in factor; quiz and test scores and the level history are written by the student's own browser, so a determined student can still alter those; answer keys ship inside the course files; voice recordings and uploaded media stay in the browser they were made in; unused sign-ins are cleared by hand (Firebase console, or `unused-signins.py`).
 
 ## Headmaster, Teachers tab, dyslexia-friendly text and problem reports (v42)
 
 **Who is the Headmaster.** The account named in `meta/master` (the same record the security rules trust) is the Headmaster, whatever role is written on its staff record; if that record says `teacher` the app corrects it at sign-in. A Headmaster session is marked by a gold line across the top of the header, a **👑 Headmaster** badge on the name chip, a banner at the top of Settings and an *Account type* row in Settings → My profile. A teacher's *Account type* row names the Headmaster on record and, under *This should be the Headmaster account?*, gives the Firebase console step to move the role (set `meta/master.uid`).
 
 **Teachers tab** (top menu, Headmaster only; the same panel is in Settings → Teachers):
-- **Add a teacher** — name, teacher ID (sign-in name, 3+ letters/digits), password (6+), optional school e-mail, optional first section.
+- **Add a teacher** — name, teacher ID (sign-in name, 3+ letters/digits), password (10+), optional school e-mail, optional first section.
 - **Teacher profiles** — one fold-out per teacher: change name and e-mail; see their sections; move a section to another teacher or back to the Headmaster; assign an existing section; create a new section for them; open a section's roster to add an existing student, create a new student (first name, number, birthday) or remove one from the section.
-- **Reset password** — a browser cannot change someone else's password, so the teacher gets a fresh sign-in behind the same teacher ID: their record, notes and sections move to it and the old password stops working. `logins/{teacherId}` records which sign-in address the ID uses now; the sign-in screen looks it up.
-- **Remove teacher** — deletes the staff record (their sign-in then opens nothing); their sections and students are kept and pass to the Headmaster. The same teacher ID can be given out again.
+- **Reset password** — a browser cannot change someone else's password, so the teacher gets a fresh sign-in (10+ characters) behind the same teacher ID: their record, notes, sections and students move to it and the old password stops working. `logins/{teacherId}` records which sign-in address the ID uses now; the sign-in screen looks it up.
+- **Remove teacher** — deletes the staff record (their sign-in then opens nothing) and takes them off every student's access list; their sections and students are kept and pass to the Headmaster. The same teacher ID can be given out again.
 
 **Dyslexia-friendly text** — Settings → Accessibility (students) / My accessibility (teachers): a switch that shows the whole app in OpenDyslexic with extra room between words and lines and no italics. It is a per-person preference (`prefs.dyslexia`) that follows the account; the font files are in the repo and cached for offline use.
 
 **Found a problem?** — a button in the bottom-left corner of every page for anyone signed in. It takes a picture of the screen, opens a box showing the picture (with a tick-box to leave it out) and a place to describe the problem, and sends both to the Headmaster. **Settings → 🐞 Reported problems** (Headmaster only) lists them — who, when, which page, app version, the message and the screenshot — with *Save screenshot* (downloads a JPEG), *Mark resolved / Reopen*, *Delete*, and Open / Resolved / All filters. Reports live in `issues/{id}`; the screenshot is a JPEG shrunk to fit inside the record. Embedded Google files and videos appear blank in a screenshot.
 
-**Rules changed in v42** — `firestore.rules` gains `logins/{id}` and `issues/{id}`. Paste it into Firestore → Rules → Publish, or password resets and problem reports are refused.
+**Rules changed in v43** — paste `firestore.rules` into Firestore → Rules → Publish before uploading the app (see DEPLOY.md).
 
 ## Desks, Sections and Grades (v34)
 

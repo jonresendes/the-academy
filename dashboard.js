@@ -43,18 +43,18 @@
     let cells = '';
     lessons.forEach(l => { const as = assignmentsFor(l); const hasQ = lessonQuestions(unit, l._idx).length > 0;
       if (hasQ) cells += qCell(quiz[l._idx]);
-      as.forEach(a => cells += aCell((work[l._idx] || {})[a._idx], editable, 'data-grade="' + sid + '" data-c="' + course.id + '" data-u="' + unit.id + '" data-l="' + l._idx + '" data-n="' + a._idx + '"')); });
+      as.forEach(a => cells += aCell((work[l._idx] || {})[a._idx], editable, 'data-grade="' + esc(sid) + '" data-c="' + esc(course.id) + '" data-u="' + esc(unit.id) + '" data-l="' + esc(l._idx) + '" data-n="' + esc(a._idx) + '"')); });
     return cells + tCell(u) + '<td class="d-cell none">' + Object.keys(u.earned || {}).length + '</td>';
   }
   function bindGrades(courseId) {
     app.querySelectorAll('.grade-in').forEach(inp => {
-      const save = () => { const d = inp.dataset; const v = inp.value.trim(); const cur = ((Progress.peek(d.grade)[d.c] || {})[d.u] || {}); const w = ((cur.work || {})[d.l] || {})[d.n] || {}; const max = (w.grade && w.grade.max) || DEFAULT_MAX;
+      const save = () => { const d = inp.dataset; const v = inp.value.trim(); const cur = ((Progress.graded(d.grade)[d.c] || {})[d.u] || {}); const w = ((cur.work || {})[d.l] || {})[d.n] || {}; const max = (w.grade && w.grade.max) || DEFAULT_MAX;
         if (v === '') Progress.setGrade(d.grade, d.c, d.u, +d.l, +d.n, null); else Progress.setGrade(d.grade, d.c, d.u, +d.l, +d.n, { score: +v, max, by: (Staff.current || {}).name || 'teacher' });
         inp.classList.add('saved'); setTimeout(() => inp.classList.remove('saved'), 800); };
       inp.addEventListener('change', save);
       inp.addEventListener('keydown', e => { if (e.key === 'Enter') { inp.blur(); } });
     });
-    app.querySelectorAll('.grade-note-btn').forEach(b => b.addEventListener('click', () => { const d = b.dataset; const cur = ((Progress.peek(d.note)[d.c] || {})[d.u] || {}); const w = ((cur.work || {})[d.l] || {})[d.n] || {}; const g = w.grade || {};
+    app.querySelectorAll('.grade-note-btn').forEach(b => b.addEventListener('click', () => { const d = b.dataset; const cur = ((Progress.graded(d.note)[d.c] || {})[d.u] || {}); const w = ((cur.work || {})[d.l] || {})[d.n] || {}; const g = w.grade || {};
       const v = prompt('Comment for the student (leave empty to remove):', g.note || ''); if (v === null) return;
       Progress.setGrade(d.note, d.c, d.u, +d.l, +d.n, { score: g.score === undefined ? null : g.score, max: g.max || DEFAULT_MAX, note: v.trim(), by: (Staff.current || {}).name || 'teacher' });
       b.classList.toggle('has', !!v.trim()); b.title = v.trim() || 'Add a comment'; }));
@@ -83,10 +83,10 @@
     const tables = course.units.map((un, ui) => {
       const lessons = un.lessons.map((l, i) => Object.assign({ _idx: i }, l));
       const rows = students.map(s => {
-        const prog = Progress.peek(s.id); const u = (prog[course.id] || {})[un.id] || {};
+        const prog = Progress.graded(s.id); const u = (prog[course.id] || {})[un.id] || {};
         const t = Students.trackFor(course.id, s);
         const lvl = t ? '<span class="tag">Mod · ' + ({ k2: 'K–2', g35: '3–5', g68: '6–8' }[t.band]) + '</span>' : '<span class="tag">L' + Students.levelFor(course.id, s) + '</span>';
-        return '<tr><td class="d-name"><a href="#/settings" data-open-student="' + s.id + '">' + s.avatar + ' ' + esc(s.name) + '</a>' + (s.number ? '<div class="muted small">#' + esc(s.number) + '</div>' : '') + '</td><td>' + lvl + '</td>' + rowCells(course, un, lessons, u, true, s.id) + '</tr>';
+        return '<tr><td class="d-name"><a href="#/settings" data-open-student="' + esc(s.id) + '">' + esc(s.avatar) + ' ' + esc(s.name) + '</a>' + (s.number ? '<div class="muted small">#' + esc(s.number) + '</div>' : '') + '</td><td>' + lvl + '</td>' + rowCells(course, un, lessons, u, true, s.id) + '</tr>';
       }).join('');
       return '<details class="card unit-grid"' + (ui === 0 ? ' open' : '') + '><summary class="unit-summary"><h2 style="margin:0">' + (/^unit\s*\d/i.test(un.title) ? '' : 'Unit ' + (ui + 1) + ' · ') + esc(un.title) + '</h2><span class="fold-hint">' + lessons.length + ' lessons · tap to open</span></summary><div class="d-wrap"><table class="dash">' + headers(un, lessons, false) + rows + '</table></div></details>';
     }).join('');
@@ -105,12 +105,13 @@
     const all = window.LearnHub.courses.filter(c => Students.enrolled(c.id) && !Students.isArchived(c.id));
     const list = courseId ? all.filter(c => c.id === courseId) : all;
     document.documentElement.style.setProperty('--course', 'var(--primary)');
+    const graded = Progress.graded(me.id);   // my own work with my teacher's grades laid over it
     app.innerHTML = '<div class="page-head"><div><h1>📊 Grades</h1><p class="muted">Your quiz and test scores, what you have handed in, and the grades your teacher has given.</p></div>' +
       (courseId ? '<a class="btn secondary" href="#/grades">All classes</a>' : '') + '</div>' +
       '<p class="small muted">Quiz and test cells: <span class="d-key top">85%+</span> <span class="d-key pass">70–84%</span> <span class="d-key low">below 70%</span> · assignments: <strong>✓</strong> handed in, <strong>✎</strong> draft, <strong>–</strong> not started · a grade like <strong>8/10</strong> was given by your teacher.</p>' +
       (list.length ? list.map(c => {
         Settings.activeCourse = c.id;
-        const units = unitsFor(c).map((un, ui) => { const lessons = lessonsFor(un); const u = Progress.unit(c.id, un.id);
+        const units = unitsFor(c).map((un, ui) => { const lessons = lessonsFor(un); const u = (graded[c.id] || {})[un.id] || {};
           const notes = []; lessons.forEach(l => assignmentsFor(l).forEach(a => { const w = ((u.work || {})[l._idx] || {})[a._idx]; if (w && w.grade && w.grade.note) notes.push('<li><strong>' + esc(a.title) + ':</strong> ' + esc(w.grade.note) + '</li>'); }));
           return '<details class="card unit-grid"><summary class="unit-summary"><h3 style="margin:0">' + (/^unit\s*\d/i.test(un.title) ? '' : 'Unit ' + (c.units.indexOf(un) + 1) + ' · ') + esc(un.title) + '</h3><span class="fold-hint">' + (u.testBest ? 'test ' + u.testBest + '% · ' : '') + 'tap to open</span></summary><div class="d-wrap"><table class="dash">' + headers(un, lessons, true) + '<tr><td class="d-name">' + c.icon + ' ' + esc(c.title) + '</td>' + rowCells(c, un, lessons, u, false, me.id) + '</tr></table></div>' + (notes.length ? '<div class="small" style="margin-top:0.5rem"><strong>Teacher comments</strong><ul>' + notes.join('') + '</ul></div>' : '') + '</details>'; }).join('');
         return '<section class="class-grades" style="--course:' + esc(c.color || '') + '"><h2>' + c.icon + ' ' + esc(c.title) + '</h2>' + units + '</section>';

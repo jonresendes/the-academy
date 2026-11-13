@@ -86,7 +86,7 @@
      APP_VERSION is baked into this file; version.json on the site says what is published.
      Settings → Updates compares the two and offers a one-tap update (new service worker +
      cache clear + reload). The check also runs on load and hourly. */
-  const APP_VERSION = '42';
+  const APP_VERSION = '43';
   let latest = null;   // { version, date, notes } from the site, when newer
   async function checkForUpdate() {
     try {

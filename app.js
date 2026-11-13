@@ -15,7 +15,7 @@
      #/settings                 Settings (collapsible groups; teacher tools in a teacher session)
    ========================================================= */
 (function () {
-  const { L, esc, md, speakBtn, slidesFor, questionsFor, termsFor, findCourse, findUnit, normalize, shuffle, byLevel, LEVELS, LEVEL_NAMES, LEVEL_DESC, unitsFor, lessonsFor, focusFor, catsOf, allTermKeys, markSeen, accom, assessmentCount, assessmentOrder, lessonQuestions, assignmentsFor, lessonAt } = window.LH;
+  const { L, esc, safeUrl, num, md, speakBtn, slidesFor, questionsFor, termsFor, findCourse, findUnit, normalize, shuffle, byLevel, LEVELS, LEVEL_NAMES, LEVEL_DESC, unitsFor, lessonsFor, focusFor, catsOf, allTermKeys, markSeen, accom, assessmentCount, assessmentOrder, lessonQuestions, assignmentsFor, lessonAt } = window.LH;
   const app = document.getElementById('app');
   const allCourses = () => window.LearnHub.courses || [];
   /** Courses the signed-in student is enrolled in (every course when no list is set). */
@@ -51,7 +51,7 @@
     const f = focusFor(unit);
     const goals = f && f.goals && f.goals.length ? f.goals : ['study', 'testPass', 'games3'];
     const u = Progress.unit(course.id, unit.id);
-    const items = goals.map(g => { const done = !!u.earned[g + ':' + unit.id]; const [icon, label] = GOAL_LABELS[g] || ['⭐', g];
+    const items = goals.map(g => { const done = !!u.earned[g + ':' + unit.id]; const [icon, label] = GOAL_LABELS[g] || ['⭐', esc(g)];
       return '<li class="' + (done ? 'done' : '') + '">' + icon + ' ' + label + (done ? ' <span class="tag ok">Done</span>' : '') + '</li>'; });
     const n = goals.filter(g => u.earned[g + ':' + unit.id]).length;
     return '<div class="goals"><div class="goals-head">' + (f ? '🎯 My goals' : '🎯 Goals') + ' <span class="tag">' + n + ' / ' + goals.length + '</span></div><ul>' + items.join('') + '</ul></div>';
@@ -100,7 +100,7 @@
     const s = Students.current;
     const hm = !!(s && s.role === 'master');
     document.body.dataset.role = !s ? '' : hm ? 'master' : s.isStaff ? 'teacher' : 'student';   // the Headmaster session is marked in the header
-    el.innerHTML = s ? '<button class="who' + (hm ? ' who-master' : '') + '" type="button" id="whoBtn" title="' + (hm ? 'Signed in as the Headmaster (admin)' : 'Account') + '"><span class="who-avatar" style="background:' + esc(s.colour) + '">' + s.avatar + '</span><span class="who-name">' + esc(s.name) + (s.isStaff && !hm ? ' <span class="muted small">(teacher)</span>' : '') + '</span>' + (hm ? '<span class="role-badge" aria-label="Headmaster">👑<span class="role-badge-text"> Headmaster</span></span>' : '') + '<span class="who-switch">▾</span></button>' : '';
+    el.innerHTML = s ? '<button class="who' + (hm ? ' who-master' : '') + '" type="button" id="whoBtn" title="' + (hm ? 'Signed in as the Headmaster (admin)' : 'Account') + '"><span class="who-avatar" style="background:' + esc(s.colour) + '">' + esc(s.avatar) + '</span><span class="who-name">' + esc(s.name) + (s.isStaff && !hm ? ' <span class="muted small">(teacher)</span>' : '') + '</span>' + (hm ? '<span class="role-badge" aria-label="Headmaster">👑<span class="role-badge-text"> Headmaster</span></span>' : '') + '<span class="who-switch">▾</span></button>' : '';
     setNavRoles();
     const b = el.querySelector('#whoBtn'); if (b) b.addEventListener('click', accountMenu);
   }
@@ -124,7 +124,7 @@
     d.querySelector('#acctSwitch').addEventListener('click', () => { close(); sessionStorage.setItem('learnhub.switch', '1'); location.hash = '#/welcome'; });
     d.querySelector('#acctSignOut').addEventListener('click', () => { if (!confirm('Sign out of The Academy on this device?')) return; close(); sessionStorage.setItem('learnhub.switch', '1'); location.hash = '#/welcome'; });
   }
-  const avatarHtml = (s, cls) => '<span class="' + (cls || 'who-avatar') + '" style="background:' + esc(s.colour) + '">' + s.avatar + '</span>';
+  const avatarHtml = (s, cls) => '<span class="' + (cls || 'who-avatar') + '" style="background:' + esc(s.colour) + '">' + esc(s.avatar) + '</span>';
 
   /* ---------- pages ---------- */
 
@@ -139,11 +139,11 @@
     const staffTiles = (Staff.master ? [{ id: 'staff:master', name: Staff.master.name, avatar: Staff.master.avatar || '🧑‍🏫', colour: Staff.master.colour || '#1f5f8b', role: 'Master' }] : [])
       .concat(Staff.teachers.map(t => ({ id: 'staff:' + t.id, name: t.name, avatar: t.avatar || '🧑‍🏫', colour: t.colour || '#1f5f8b', role: 'Teacher' })));
     const canAdd = Settings.get('allowSelfSignup') !== false || !students.length;
-    const tile = (p, extra) => '<button class="student-tile" data-welcome="' + p.id + '" style="--tile:' + esc(p.colour) + '">' + avatarHtml(p, 'tile-avatar') + '<span class="tile-name">Welcome, ' + esc(p.name) + '</span>' + (extra ? '<span class="tag">' + extra + '</span>' : '') + '</button>';
+    const tile = (p, extra) => '<button class="student-tile" data-welcome="' + esc(p.id) + '" style="--tile:' + esc(p.colour) + '">' + avatarHtml(p, 'tile-avatar') + '<span class="tile-name">Welcome, ' + esc(p.name) + '</span>' + (extra ? '<span class="tag">' + extra + '</span>' : '') + '</button>';
     let form = '';
     if (welcomeState.pinFor) {
       const p = staffTiles.find(x => x.id === welcomeState.pinFor);
-      form = '<div class="card signin-add"><h3>' + (p ? p.avatar + ' ' + esc(p.name) : 'Teacher') + '</h3><p class="muted small">Enter your 6-digit PIN.</p><div class="btn-row"><input class="text-input pin-input" id="staffPin" type="password" inputmode="numeric" maxlength="6" placeholder="PIN" autocomplete="off"><button class="btn" id="staffGo">Sign in</button><button class="btn ghost" id="welcomeCancel">Cancel</button></div></div>';
+      form = '<div class="card signin-add"><h3>' + (p ? esc(p.avatar) + ' ' + esc(p.name) : 'Teacher') + '</h3><p class="muted small">Enter your 6-digit PIN.</p><div class="btn-row"><input class="text-input pin-input" id="staffPin" type="password" inputmode="numeric" maxlength="6" placeholder="PIN" autocomplete="off"><button class="btn" id="staffGo">Sign in</button><button class="btn ghost" id="welcomeCancel">Cancel</button></div></div>';
     } else if (welcomeState.mode === 'student') {
       const TINTS = [['none', 'None'], ['cream', 'Cream'], ['blue', 'Pale blue'], ['green', 'Pale green'], ['rose', 'Rose'], ['yellow', 'Yellow'], ['grey', 'Grey'], ['peach', 'Peach'], ['lavender', 'Lavender']];
       form = '<div class="card signup"><div class="btn-row between"><h3>New student</h3><button class="btn ghost sm" id="welcomeCancel">✕</button></div>' +
@@ -156,7 +156,7 @@
         '<label>Colour overlay <select class="text-input" id="suTint">' + TINTS.map(t => '<option value="' + t[0] + '">' + t[1] + '</option>').join('') + '</select></label>' +
         '<label class="chk"><input type="checkbox" id="suRead" checked> Read-aloud buttons</label><label class="chk"><input type="checkbox" id="suDictate" checked> Dictation and voice recording</label></div></div>' +
         '<div class="plan-section"><div class="plan-label">Level of learning</div><p class="muted small" style="margin:0 0 0.4rem">Where you will start. You can move up or down later as you go.</p><div class="level-cards compact">' + [1, 2, 3, 4].map(l => '<button type="button" class="level-card' + (l === 2 ? ' on' : '') + '" data-su-level="' + l + '"><h3>Level ' + l + ' · ' + LEVEL_NAMES[l] + '</h3><p>' + LEVEL_DESC[l] + '</p></button>').join('') + '</div></div>' +
-        '<div class="plan-section"><div class="plan-label">Your classes</div>' + allCourses().map(c => '<label class="chk course-line"><span><input type="checkbox" data-su-course="' + c.id + '" checked> ' + c.icon + ' ' + esc(c.title) + '</span><span class="muted small">' + esc(c.subtitle || '') + '</span></label>').join('') + '</div>' +
+        '<div class="plan-section"><div class="plan-label">Your classes</div>' + allCourses().map(c => '<label class="chk course-line"><span><input type="checkbox" data-su-course="' + esc(c.id) + '" checked> ' + c.icon + ' ' + esc(c.title) + '</span><span class="muted small">' + esc(c.subtitle || '') + '</span></label>').join('') + '</div>' +
         '<div class="btn-row" style="margin-top:1rem"><button class="btn lg" id="suCreate">Create my profile</button></div></div>';
     } else if (welcomeState.mode === 'teacher') {
       form = '<div class="card signup"><div class="btn-row between"><h3>New teacher</h3><button class="btn ghost sm" id="welcomeCancel">✕</button></div>' +
@@ -168,7 +168,7 @@
         '<div class="btn-row" style="margin-top:1rem"><button class="btn lg" id="tCreate">Create teacher profile</button></div></div>';
     }
     app.innerHTML = '<div class="signin"><div class="signin-head"><div class="signin-logo">🎓</div><h1>Welcome to The Academy</h1><p class="muted">' + (cont ? 'Welcome back! Continue, or pick another name.' : students.length || staffTiles.length ? 'Tap your name to sign in.' : 'Create the first profile to get started.') + '</p></div>' +
-      (!welcomeState.mode && !welcomeState.pinFor ? ((cont ? '<button class="continue-tile" data-welcome="' + cont.id + '" style="--tile:' + esc(cont.colour) + '">' + avatarHtml(cont, 'tile-avatar') + '<span><span class="tile-name">Continue as ' + esc(cont.name) + '</span><span class="muted small">Pick up where you left off</span></span><span class="continue-arrow">→</span></button>' : '') +(students.length ? '<div class="student-grid">' + students.map(p => tile(p)).join('') + '</div>' : '') +
+      (!welcomeState.mode && !welcomeState.pinFor ? ((cont ? '<button class="continue-tile" data-welcome="' + esc(cont.id) + '" style="--tile:' + esc(cont.colour) + '">' + avatarHtml(cont, 'tile-avatar') + '<span><span class="tile-name">Continue as ' + esc(cont.name) + '</span><span class="muted small">Pick up where you left off</span></span><span class="continue-arrow">→</span></button>' : '') +(students.length ? '<div class="student-grid">' + students.map(p => tile(p)).join('') + '</div>' : '') +
         (staffTiles.length ? '<div class="student-grid staff-grid">' + staffTiles.map(p => tile(p, p.role)).join('') + '</div>' : '') +
         '<div class="card signin-add"><h3>New here?</h3><div class="btn-row">' + (canAdd ? '<button class="btn" data-mode="student">🎒 I\'m a student</button>' : '') + '<button class="btn secondary" data-mode="teacher">🧑‍🏫 I\'m a teacher</button></div>' + (canAdd ? '' : '<p class="muted small" style="margin:0.5rem 0 0">Students are added by their teacher on this device.</p>') + '</div>') : form) + '</div>';
     // bindings
@@ -226,7 +226,7 @@
     const st = signinState, student = st.mode === 'student';
     const keep = Cloud.keepSignedIn();
     const canSelf = Settings.get('allowSelfSignup') !== false;
-    const field = (id, label, type, ph, extra) => '<label class="signin-field">' + label + '<input class="text-input" id="' + id + '" type="' + type + '" placeholder="' + ph + '" autocomplete="off" ' + (extra || '') + '></label>';
+    const field = (id, label, type, ph, extra) => '<label class="signin-field">' + label + '<input class="text-input" id="' + esc(id) + '" type="' + type + '" placeholder="' + ph + '" autocomplete="off" ' + (extra || '') + '></label>';
     let form;
     if (st.signup && student) {
       form = '<div class="card signin-card"><div class="btn-row between"><h3>Create my student account</h3><button class="btn ghost sm" id="siBack">✕</button></div>' +
@@ -268,7 +268,7 @@
   }
   function pageMasterSetup() {
     app.innerHTML = '<div class="signin"><div class="signin-head"><div class="signin-logo">🎓</div><h1>Set up the Headmaster account</h1><p class="muted">The Headmaster is the admin account: it adds teachers, creates sections and sees every student. There is only one, and it can only be created while none exists — after that, teachers are added by the Headmaster in the Teachers tab.</p></div>' +
-      '<div class="card signin-card"><label class="signin-field">Your name<input class="text-input" id="mName" maxlength="40" placeholder="e.g. Ms Patel"></label><label class="signin-field">Teacher ID (what you will sign in with)<input class="text-input" id="mLogin" placeholder="e.g. jresendes"></label><label class="signin-field">Password (at least 6 characters)<input class="text-input" id="mPass" type="password"></label><label class="signin-field">School e-mail (optional)<input class="text-input" id="mEmail" placeholder="name@school.ca"></label>' +
+      '<div class="card signin-card"><label class="signin-field">Your name<input class="text-input" id="mName" maxlength="40" placeholder="e.g. Ms Patel"></label><label class="signin-field">Teacher ID (what you will sign in with)<input class="text-input" id="mLogin" placeholder="e.g. jresendes"></label><label class="signin-field">Password (at least 10 characters)<input class="text-input" id="mPass" type="password"></label><label class="signin-field">School e-mail (optional)<input class="text-input" id="mEmail" placeholder="name@school.ca"></label>' +
       '<div class="btn-row" style="margin-top:0.75rem"><button class="btn lg" id="mGo">Create Headmaster account</button><button class="btn ghost" id="mBack">Cancel</button></div><p class="muted small" id="mMsg"></p></div></div>';
     app.querySelector('#mBack').addEventListener('click', () => { signinState.signup = false; location.hash = '#/signin'; pageCloudSignIn(); });
     app.querySelector('#mGo').addEventListener('click', async () => {
@@ -276,6 +276,45 @@
       try { msg.textContent = 'Creating…'; const rec = await Cloud.createMaster({ name: g('#mName'), login: g('#mLogin'), password: app.querySelector('#mPass').value, email: g('#mEmail') }); await Cloud.signInStaff(rec.login, app.querySelector('#mPass').value, true); signinState.signup = false; enterCloudSession(); }
       catch (e) { msg.textContent = e.message; msg.style.color = 'var(--danger)'; }
     });
+  }
+  /** A small box that asks for one or more passwords without showing them on screen. Resolves to { key: value } or null. */
+  function askPasswords(title, help, fields) {
+    return new Promise(resolve => {
+      const d = document.createElement('div'); d.className = 'learn-overlay'; d.setAttribute('role', 'dialog'); d.setAttribute('aria-modal', 'true'); d.setAttribute('aria-label', title);
+      d.innerHTML = '<form class="learn-card" style="max-width:420px;text-align:left"><h2 style="margin-top:0">🔑 ' + esc(title) + '</h2>' + (help ? '<p class="muted small">' + esc(help) + '</p>' : '') +
+        fields.map((f, i) => '<label class="signin-field" style="display:block;margin:0.5rem 0">' + esc(f.label) + '<input class="text-input" type="password" autocomplete="' + (f.key === 'old' ? 'current-password' : 'new-password') + '" data-pw="' + i + '"></label>').join('') +
+        '<label class="chk small"><input type="checkbox" data-pw-show> Show what I type</label><p class="small" data-pw-msg role="alert" style="color:var(--danger);min-height:1.2em"></p>' +
+        '<div class="btn-row"><button class="btn" type="submit">OK</button><button class="btn ghost" type="button" data-pw-cancel>Cancel</button></div></form>';
+      document.body.appendChild(d);
+      const inputs = [...d.querySelectorAll('[data-pw]')], done = v => { d.remove(); resolve(v); };
+      d.querySelector('[data-pw-show]').addEventListener('change', e => inputs.forEach(i => i.type = e.target.checked ? 'text' : 'password'));
+      d.querySelector('[data-pw-cancel]').addEventListener('click', () => done(null));
+      d.addEventListener('keydown', e => { if (e.key === 'Escape') done(null); });
+      d.querySelector('form').addEventListener('submit', e => { e.preventDefault(); const out = {};
+        for (let i = 0; i < fields.length; i++) { const v = inputs[i].value; if (!v) { d.querySelector('[data-pw-msg]').textContent = 'Fill in every box.'; inputs[i].focus(); return; }
+          if (fields[i].min && v.length < fields[i].min) { d.querySelector('[data-pw-msg]').textContent = 'The new password must be at least ' + fields[i].min + ' characters.'; inputs[i].focus(); return; } out[fields[i].key] = v; }
+        done(out); });
+      setTimeout(() => inputs[0] && inputs[0].focus(), 30);
+    });
+  }
+  /* ---------- Headmaster: Settings → Security ---------- */
+  const secUI = { msg: '', orphans: null, log: null };
+  function securityHtml() {
+    const o = secUI.orphans, when = t => { const d = new Date(t); return isNaN(d) ? '' : d.toLocaleString([], { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }); };
+    return '<p class="muted small">A teacher only receives the students on their own rosters, grades can only be written by staff, and nothing is left on a device after sign-out.</p>' +
+      (secUI.msg ? '<p class="small" role="status"><strong>' + esc(secUI.msg) + '</strong></p>' : '') +
+      '<h3>Unused sign-ins</h3><p class="muted small">When a student or teacher is removed, or a teacher\'s password is reset, the old sign-in stays in Firebase but has no record behind it, so it opens nothing. To clear them out: Firebase console → Authentication → Users → ⋮ → Delete account (or run <code>unused-signins.py</code> in Google Cloud Shell, which lists them for you). A removed student\'s number cannot be given out again until its old sign-in is deleted.</p>' +
+      '<h3 style="margin-top:1rem">Change log</h3><p class="muted small">Who added or removed students and teachers, reset a password, or took a student onto their roster. Each staff device writes its own lines; they cannot be edited or deleted afterwards.</p>' +
+      '<div class="btn-row"><button class="btn secondary sm" id="secLog">Show the latest 50</button></div>' +
+      (secUI.log ? (secUI.log.length ? '<div class="d-wrap"><table class="dash"><tr><th>When</th><th>Who</th><th>What</th><th>Record</th><th>Fields</th></tr>' + secUI.log.map(a => { const who = a.byName || (Students.byId(a.by) || Staff.teachers.find(t => t.id === a.by) || (Staff.master && Staff.master.uid === a.by ? Staff.master : null) || {}).name || a.by || a.byRole || '';
+          const what = Students.byId(a.target) || Staff.teachers.find(t => t.id === a.target) || Sections.byId(a.target) || Students.byId(String(a.target || '').split('__')[0]);
+          return '<tr><td>' + esc(when(a.at)) + '</td><td>' + esc(who) + '</td><td>' + esc(a.action) + '</td><td>' + esc(what ? what.name : (a.detail && a.detail.name) || a.target || '') + '</td><td class="muted">' + esc(((a.detail && a.detail.fields) || []).join(', ')) + '</td></tr>'; }).join('') + '</table></div>' : '<p class="small muted">Nothing logged yet.</p>') : '') +
+      '<h3 style="margin-top:1rem">Data upgrade</h3><p class="muted small">Runs by itself the first time the Headmaster signs in on version 43. Safe to run again if a teacher cannot see their students.</p><div class="btn-row"><button class="btn ghost sm" id="secMigrate">Run the data upgrade again</button></div>';
+  }
+  function bindSecurity() {
+    const go = (id, label, fn) => { const b = app.querySelector(id); if (b) b.addEventListener('click', async () => { b.disabled = true; b.textContent = label; sessionStorage.setItem('learnhub.sg.security', '1'); try { await fn(); } catch (e) { secUI.msg = '⚠️ ' + e.message; } pageSettings(); }); };
+    go('#secLog', 'Loading…', async () => { secUI.msg = ''; secUI.log = await Cloud.auditLog(50); });
+    go('#secMigrate', 'Working…', async () => { const r = await Cloud.runMigration(); secUI.msg = 'Data upgrade finished: ' + r.students + ' students, ' + r.progress + ' work records, ' + r.staff + ' staff records checked.'; });
   }
   /** After Firebase says who we are: make storage.js's "current profile" match and go home. */
   function enterCloudSession() {
@@ -337,10 +376,10 @@
       '<details class="card desk-fold"><summary class="class-summary"><span class="card-icon">📚</span><span class="class-text"><h2>Courses</h2><span class="muted small">' + mine.length + ' active' + (others.length && !s.coursesLocked ? ' · ' + others.length + ' to join' : '') + (arch.length ? ' · ' + arch.length + ' archived' : '') + '</span></span></summary><div class="class-body">' +
       (mine.length ? '<div class="class-list">' + mine.map(c => courseCard(c, true)).join('') + '</div>' : '<p class="muted">No active classes. ' + (others.length ? 'Join one below.' : (Cloud.enabled ? 'Your teacher adds you to a class; it appears here as soon as they do.' : '')) + '</p>') +
       (others.length && !s.coursesLocked ? '<details class="other-courses"><summary>➕ Join a new class (' + others.length + ')</summary><div class="grid" style="margin-top:1rem">' + others.map(c =>
-        '<div class="card course-card" style="--course:' + esc(c.color || '') + '"><div class="card-icon">' + c.icon + '</div><h2>' + esc(c.title) + '</h2><p class="muted">' + esc(c.subtitle || '') + '</p><button class="btn secondary sm" data-join="' + c.id + '">＋ Join this class</button></div>').join('') + '</div></details>'
+        '<div class="card course-card" style="--course:' + esc(c.color || '') + '"><div class="card-icon">' + c.icon + '</div><h2>' + esc(c.title) + '</h2><p class="muted">' + esc(c.subtitle || '') + '</p><button class="btn secondary sm" data-join="' + esc(c.id) + '">＋ Join this class</button></div>').join('') + '</div></details>'
         : (others.length ? '<p class="muted small" style="margin-top:1.5rem">Your class list is set by your teacher.</p>' : '')) +
       (arch.length ? '<details class="other-courses"><summary>📦 Archived classes (' + arch.length + ')</summary><div class="grid" style="margin-top:1rem">' + arch.map(c =>
-        '<div class="card course-card" style="--course:' + esc(c.color || '') + '"><div class="card-icon">' + c.icon + '</div><h2>' + esc(c.title) + '</h2><p class="muted">' + esc(c.subtitle || '') + '</p><div class="btn-row"><a class="btn secondary sm" href="#/course/' + c.id + '">Open</a><button class="btn ghost sm" data-unarchive="' + c.id + '">Bring back</button></div></div>').join('') + '</div></details>' : '') +
+        '<div class="card course-card" style="--course:' + esc(c.color || '') + '"><div class="card-icon">' + c.icon + '</div><h2>' + esc(c.title) + '</h2><p class="muted">' + esc(c.subtitle || '') + '</p><div class="btn-row"><a class="btn secondary sm" href="#/course/' + c.id + '">Open</a><button class="btn ghost sm" data-unarchive="' + esc(c.id) + '">Bring back</button></div></div>').join('') + '</div></details>' : '') +
       '</div></details>';
     app.querySelectorAll('[data-join]').forEach(b => b.addEventListener('click', () => { Students.setCourses(s.id, mine.map(c => c.id).concat(arch.map(c => c.id)).concat(b.dataset.join)); pageHome(); }));
     app.querySelectorAll('[data-unarchive]').forEach(b => b.addEventListener('click', () => { Students.archiveCourse(s.id, b.dataset.unarchive, false); pageHome(); }));
@@ -365,8 +404,8 @@
   function teacherSectionCard(sec) {
     const c = findCourseAll(sec.courseId); const roster = (sec.students || []).map(id => Students.byId(id)).filter(Boolean);
     return '<details class="card class-fold section-card" style="--course:' + esc(c ? c.color || '' : '') + '"><summary class="class-summary"><span class="card-icon">' + (c ? c.icon : '🏫') + '</span><span class="class-text"><h2>' + esc(sec.name) + '</h2><span class="muted small">' + (c ? esc(c.title) : '') + (sec.term ? ' · ' + esc(sec.term) : '') + (sec.archived ? ' · 📦 archived' : '') + '</span></span><span class="btn-row class-tags"><span class="tag">' + roster.length + ' student' + (roster.length === 1 ? '' : 's') + '</span></span></summary>' +
-      '<div class="class-body">' + (roster.length ? '<div class="roster">' + roster.map(st => '<span class="roster-chip">' + st.avatar + ' ' + esc(st.name) + (st.number ? ' <span class="muted small">#' + esc(st.number) + '</span>' : '') + '</span>').join('') + '</div>' : '<p class="muted small">No students yet — add them in Settings → Students.</p>') +
-      '<div class="btn-row" style="margin-top:0.6rem"><a class="btn" href="#/dashboard" data-section="' + sec.id + '">📊 Grades</a>' + (c ? '<a class="btn secondary sm" href="#/course/' + c.id + '">📚 Open the course</a>' : '') + '<a class="btn secondary sm" href="#/settings" data-section="' + sec.id + '" data-open-group="students">👥 Students</a>' + (c ? '<a class="btn ghost sm" href="#/print/' + c.id + '/' + c.units[0].id + '/unit">🖨️ Print unit 1</a>' : '') + '</div></div></details>';
+      '<div class="class-body">' + (roster.length ? '<div class="roster">' + roster.map(st => '<span class="roster-chip">' + esc(st.avatar) + ' ' + esc(st.name) + (st.number ? ' <span class="muted small">#' + esc(st.number) + '</span>' : '') + '</span>').join('') + '</div>' : '<p class="muted small">No students yet — add them in Settings → Students.</p>') +
+      '<div class="btn-row" style="margin-top:0.6rem"><a class="btn" href="#/dashboard" data-section="' + esc(sec.id) + '">📊 Grades</a>' + (c ? '<a class="btn secondary sm" href="#/course/' + c.id + '">📚 Open the course</a>' : '') + '<a class="btn secondary sm" href="#/settings" data-section="' + esc(sec.id) + '" data-open-group="students">👥 Students</a>' + (c ? '<a class="btn ghost sm" href="#/print/' + c.id + '/' + c.units[0].id + '/unit">🖨️ Print unit 1</a>' : '') + '</div></div></details>';
   }
   /* ----- Teacher notes: sticky notes, private to the signed-in teacher ----- */
   const NOTE_COLOURS = ['yellow', 'pink', 'blue', 'green', 'orange', 'purple'];
@@ -379,7 +418,7 @@
   function notesFoldHtml() {
     const n = notesData(); const used = n.items.slice(0, n.count).filter(x => (x.title || x.text).trim());
     return '<details class="card desk-fold notes-fold"><summary class="class-summary"><span class="card-icon">📝</span><span class="class-text"><h2>Notes</h2><span class="muted small">' + (used.length ? used.length + ' note' + (used.length === 1 ? '' : 's') + ' with something on them' : 'your sticky notes — only you see them') + '</span></span></summary><div class="class-body">' +
-      (used.length ? '<div class="sticky-grid preview">' + used.slice(0, 4).map((x, i) => '<a class="sticky ' + x.colour + '" href="#/notes">' + (x.title ? '<strong>' + esc(x.title) + '</strong>' : '') + '<span class="sticky-text">' + esc(x.text.slice(0, 120)) + (x.text.length > 120 ? '…' : '') + '</span></a>').join('') + '</div>' : '<p class="muted small">Nothing written yet.</p>') +
+      (used.length ? '<div class="sticky-grid preview">' + used.slice(0, 4).map((x, i) => '<a class="sticky ' + (NOTE_COLOURS.includes(x.colour) ? x.colour : 'yellow') + '" href="#/notes">' + (x.title ? '<strong>' + esc(x.title) + '</strong>' : '') + '<span class="sticky-text">' + esc(x.text.slice(0, 120)) + (x.text.length > 120 ? '…' : '') + '</span></a>').join('') + '</div>' : '<p class="muted small">Nothing written yet.</p>') +
       '<div class="btn-row" style="margin-top:0.75rem"><a class="btn" href="#/notes">📝 Open my notes</a></div></div></details>';
   }
   function pageNotes() {
@@ -389,7 +428,7 @@
     app.innerHTML = crumbs([{ label: deskName(), href: '#/' }, { label: 'Notes' }]) +
       '<div class="page-head"><div><h1>📝 My notes</h1><p class="muted">Sticky notes for ' + esc(me.name) + ' — reminders, to-dos, things to say to a class. Only you can see them, on every device you sign in on. Each note saves itself as you type.</p></div>' +
       '<div class="btn-row"><span class="muted small">Number of notes</span><div class="seg">' + [4, 6, 8, 10].map(k => '<button data-notes-count="' + k + '" class="' + (n.count === k ? 'on' : '') + '">' + k + '</button>').join('') + '</div></div></div>' +
-      '<div class="sticky-grid">' + n.items.slice(0, n.count).map((x, i) => '<div class="sticky ' + x.colour + '" data-note="' + i + '"><div class="sticky-top"><input class="sticky-title" data-note-title="' + i + '" placeholder="Title" maxlength="40" value="' + esc(x.title) + '"><span class="sticky-tools">' + NOTE_COLOURS.map(c => '<button class="sticky-dot ' + c + (x.colour === c ? ' on' : '') + '" data-note-colour="' + i + '" data-c="' + c + '" title="' + c + '"></button>').join('') + '<button class="sticky-clear" data-note-clear="' + i + '" title="Clear this note">✕</button></span></div>' +
+      '<div class="sticky-grid">' + n.items.slice(0, n.count).map((x, i) => '<div class="sticky ' + (NOTE_COLOURS.includes(x.colour) ? x.colour : 'yellow') + '" data-note="' + i + '"><div class="sticky-top"><input class="sticky-title" data-note-title="' + i + '" placeholder="Title" maxlength="40" value="' + esc(x.title) + '"><span class="sticky-tools">' + NOTE_COLOURS.map(c => '<button class="sticky-dot ' + c + (x.colour === c ? ' on' : '') + '" data-note-colour="' + i + '" data-c="' + c + '" title="' + c + '"></button>').join('') + '<button class="sticky-clear" data-note-clear="' + i + '" title="Clear this note">✕</button></span></div>' +
         '<textarea class="sticky-body" data-note-text="' + i + '" placeholder="Write here…">' + esc(x.text) + '</textarea><div class="sticky-foot muted small" data-note-saved="' + i + '">' + (x.at ? 'saved ' + new Date(x.at).toLocaleString() : '') + '</div></div>').join('') + '</div>';
     let timer = null, dirty = -1;
     const persist = (i, msg) => { timer = null; dirty = -1; n.items[i].at = new Date().toISOString(); Staff.setNotes({ count: n.count, items: n.items }); const f = app.querySelector('[data-note-saved="' + i + '"]'); if (f) f.textContent = msg || ('saved ' + new Date().toLocaleTimeString()); };
@@ -605,15 +644,16 @@
     const slots = (lesson.media || []).filter(m => String(m.slide) === String(key));
     if (!slots.length) return '';
     return slots.map(m => {
+      m = Object.assign({}, m, { src: safeUrl(m.src), url: safeUrl(m.url) });   // typed by a person: only http(s) links and uploaded files are shown
       if (m.src) {
         const cap = esc(m.title) + (m.source ? ' <span class="muted">· ' + esc(m.source) + '</span>' : '');
         const g = googleEmbed(m.src);
         if (g) return '<div class="media-google' + (g.tall ? ' tall' : '') + '">' + (g.embed ? '<iframe src="' + esc(g.embed) + '" title="' + esc(m.title) + '" allowfullscreen loading="lazy"></iframe>' : '<p class="small muted">This short link opens in a new tab.</p>') +
           '<div class="btn-row between"><span class="small muted">' + g.icon + ' ' + esc(m.title) + (m.source ? ' · ' + esc(m.source) : '') + '</span><a class="btn secondary sm" href="' + esc(g.open) + '" target="_blank" rel="noopener">' + g.icon + ' Open in ' + g.label + '</a></div></div>';
         if (/^idb:/.test(m.src)) { const id = esc(m.src.slice(4));
-          if (m.type === 'video') return '<figure class="media-fig"><video controls data-idb="' + id + '" style="max-width:100%;max-height:420px;border-radius:10px"></video><figcaption>' + cap + '</figcaption></figure>';
-          if (m.type === 'audio') return '<figure class="media-fig"><audio controls data-idb="' + id + '"></audio><figcaption>' + cap + '</figcaption></figure>';
-          return '<figure class="media-fig"><img data-idb="' + id + '" alt="' + esc(m.title) + '"><figcaption>' + cap + '</figcaption></figure>'; }
+          if (m.type === 'video') return '<figure class="media-fig"><video controls data-idb="' + esc(id) + '" style="max-width:100%;max-height:420px;border-radius:10px"></video><figcaption>' + cap + '</figcaption></figure>';
+          if (m.type === 'audio') return '<figure class="media-fig"><audio controls data-idb="' + esc(id) + '"></audio><figcaption>' + cap + '</figcaption></figure>';
+          return '<figure class="media-fig"><img data-idb="' + esc(id) + '" alt="' + esc(m.title) + '"><figcaption>' + cap + '</figcaption></figure>'; }
         if (m.type === 'image') return '<figure class="media-fig"><img src="' + esc(m.src) + '" alt="' + esc(m.title) + '" loading="lazy"><figcaption>' + cap + '</figcaption></figure>';
         if (m.type === 'audio') return '<figure class="media-fig"><audio controls src="' + esc(m.src) + '"></audio><figcaption>' + cap + '</figcaption></figure>';
         if (m.type === 'video' && /\.(mp4|webm|mov|m4v)(\?|$)/i.test(m.src)) return '<figure class="media-fig"><video controls src="' + esc(m.src) + '" style="max-width:100%;max-height:420px;border-radius:10px"></video><figcaption>' + cap + '</figcaption></figure>';
@@ -654,7 +694,7 @@
         '<div class="page-head"><div><span class="tag">Lesson ' + (pos + 1) + ' of ' + lessons.length + '</span><h1 style="margin-top:0.4rem">📖 ' + esc(lesson.title) + '</h1><p class="muted">' + esc(unit.title) + '</p></div>' +
         '<div class="btn-row">' + Print.button('#/print/' + course.id + '/' + unit.id + '/slides/' + lessonIdx, 'Print slides') + '<a class="btn ghost" href="#/lesson/' + course.id + '/' + unit.id + '/' + lessonIdx + '">✕ Lesson page</a></div></div>' +
         '<div class="lesson-tabs">' + lessons.map(les => '<a href="#/study/' + course.id + '/' + unit.id + '/' + les._idx + '" class="' + (les._idx === lessonIdx ? 'active' : '') + (lessonDone(les._idx) ? ' done' : '') + '">' + esc(les.title) + '</a>').join('') + '</div>' +
-        '<div class="slide">' + (s.visual ? '<div class="slide-visual">' + s.visual + '</div>' : '') +
+        '<div class="slide">' + (s.visual ? '<div class="slide-visual">' + esc(s.visual) + '</div>' : '') +
         '<div class="slide-read"><div class="btn-row between"><h2>' + esc(L(s.title)) + '</h2>' + speakBtn(L(s.title) + '. ' + String(LH.body(s)).replace(/[*#-]/g, ''), '.slide-read') + '</div>' +
         '<div class="slide-body">' + md(LH.body(s)) + (s.html ? L(s.html) : '') + '</div></div>' + mediaHtml(lesson, s) +
         (i === slides.length - 1 && Settings.get('dictation') !== false && Media.canRecord ? '<div class="plan-section"><div class="plan-label">🎙️ Voice note — say what you learned (optional)</div><div data-recorder="' + esc(Students.current.id + '/' + course.id + '/' + unit.id + '/' + lessonIdx + '/note') + '" data-label="Record a voice note"></div></div>' : '') +
@@ -868,7 +908,7 @@
       const classes = '<p class="muted small">Where you are working right now, and the level you start each class at. Archived classes are on your dashboard.</p>' +
         (courses().map(c => { const t = Students.trackFor(c.id); const prev = Students.previousLevel(c.id); const lv = Students.levelFor(c.id);
           return '<div class="course-line"><label>' + c.icon + ' ' + esc(c.title) + '</label>' + (t ? '<span class="tag">Modified · ' + ({ k2: 'K–2', g35: 'Grades 3–5', g68: 'Grades 6–8' }[t.band]) + ' (set by your teacher)</span>' :
-            '<span class="btn-row"><span class="tag">Level ' + lv + ' · ' + LEVEL_NAMES[lv] + '</span>' + (prev && prev !== lv ? '<button class="btn ghost sm" data-revert="' + c.id + '">↩ back to Level ' + prev + '</button>' : '') + '</span>') + '</div>'; }).join('') || '<p class="muted">No classes yet.</p>') +
+            '<span class="btn-row"><span class="tag">Level ' + lv + ' · ' + LEVEL_NAMES[lv] + '</span>' + (prev && prev !== lv ? '<button class="btn ghost sm" data-revert="' + esc(c.id) + '">↩ back to Level ' + prev + '</button>' : '') + '</span>') + '</div>'; }).join('') || '<p class="muted">No classes yet.</p>') +
         '<div class="plan-section"><div class="plan-label">Level of learning (default for new classes)</div><div class="level-cards compact">' + [1, 2, 3, 4].map(l => '<button class="level-card ' + (me.level === l ? 'on' : '') + '" data-me-level="' + l + '"><h3>Level ' + l + ' · ' + LEVEL_NAMES[l] + '</h3><p>' + LEVEL_DESC[l] + '</p></button>').join('') + '</div><p class="muted small" style="margin:0.4rem 0 0">Within a class you move up one level after 85%+ on a quiz, or back down when a quiz lands below your level\'s band.</p></div>' +
         '<div class="plan-section"><div class="plan-label">Accommodations' + (me.accommodations && (me.accommodations.reduce || me.accommodations.simplify || me.accommodations.chunk) ? '' : ' (none)') + '</div><p class="muted small" style="margin:0">' + [['reduce', 'Reduction — fewer questions'], ['simplify', 'Complexity — simpler answer choices'], ['chunk', 'Chunking — matching in small parts']].filter(x => me.accommodations && me.accommodations[x[0]]).map(x => '✓ ' + x[1]).join(' · ') + (me.accommodations && (me.accommodations.reduce || me.accommodations.simplify || me.accommodations.chunk) ? '' : 'Your teacher can turn these on for quizzes and tests.') + '</p></div>';
       html += group('profile', '👤 My profile', esc(me.name), profile()) +
@@ -881,7 +921,7 @@
       html += group('profile', '👤 My profile', esc(me.name) + ' · ' + (me.role === 'master' ? 'Headmaster' : 'teacher'), profile()) +
         group('sections', '🏫 Sections', Sections.visible(me.staffId, false).length + ' active', sectionsHtml()) +
         group('students', '👥 Students', 'levels · accommodations &amp; modifications · courses · Focus Plan · work', studentsPanelHtml()) +
-        (me.role === 'master' ? group('teachers', '🧑‍🏫 Teachers', 'add a teacher · ' + Staff.teachers.length + ' profile' + (Staff.teachers.length === 1 ? '' : 's') + ' · sections · students · reset · remove', teachersHtml()) + group('issues', '🐞 Reported problems', 'screenshots and messages from the Found a problem? button', '<div id="issuesList"><p class="muted small">Loading…</p></div>') + group('drive', '☁️ Google Drive &amp; exports', '', driveHtml()) : '') +
+        (me.role === 'master' ? group('teachers', '🧑‍🏫 Teachers', 'add a teacher · ' + Staff.teachers.length + ' profile' + (Staff.teachers.length === 1 ? '' : 's') + ' · sections · students · reset · remove', teachersHtml()) + group('issues', '🐞 Reported problems', 'screenshots and messages from the Found a problem? button', '<div id="issuesList"><p class="muted small">Loading…</p></div>') + (Cloud.enabled ? group('security', '🔐 Security', 'unused sign-ins · change log · data upgrade', securityHtml()) : '') + group('drive', '☁️ Google Drive &amp; exports', '', driveHtml()) : '') +
         group('media', '🖼️ Media checklist', 'images and videos to add', mediaChecklistHtml()) +
         group('options', '🎛️ Class options', 'colouring breaks · welcome screen', '<h3>🎨 Colouring page learning breaks</h3>' +
           seg('colouringEvery', 'Show a learning card every…', 'How many areas the student colours before a lesson card appears. "Student chooses" lets them pick inside the game.', [['student', 'Student chooses'], [1, '1'], [3, '3'], [5, '5'], [10, '10'], [0, 'Off']], Settings.get('colouringEvery')) +
@@ -907,8 +947,11 @@
     on('#changePin', () => { const v = (prompt('New 6-digit PIN:') || '').trim(); if (!/^\d{6}$/.test(v)) { if (v) alert('The PIN must be exactly 6 digits.'); return; } if (Staff.unlock(v)) return alert('That PIN is already in use.'); if (me.role === 'master') { Staff.setMaster(Staff.master.name, Staff.master.email, v); Settings.set('guardianPin', v); } else Staff.updateTeacher(me.staffId, { pin: v }); alert('PIN changed.'); });
     on('#resetBtn', () => { if (confirm('Erase all of ' + me.name + '\'s progress and awards on this device?')) { Progress.reset(); pageSettings(); } });
     on('#signOutBtn', () => { Cloud.signOut(); });
-    on('#changePw', async () => { const o = prompt('Current password:'); if (o === null) return; const n = prompt('New password (at least 6 characters):'); if (!n) return; try { await Cloud.changeMyPassword(o, n); alert('Password changed.'); } catch (e) { alert(e.message); } });
-    if (staff) { bindSections(); bindStudentsPanel(); bindTeachers(); bindDrive(); bindFocusPlan(false); bindLessonSearch(); const ps = app.querySelector('#planStudent'); if (ps) ps.addEventListener('change', () => { sessionStorage.setItem('learnhub.planStudent', ps.value); pageSettings(); }); }
+    on('#changePw', async () => { const min = Cloud.MIN_STAFF_PASSWORD || 10;
+      const v = await askPasswords('Change my password', '', [{ key: 'old', label: 'Current password' }, { key: 'pw', label: 'New password (at least ' + min + ' characters)', min }, { key: 'again', label: 'Type the new one once more' }]); if (!v) return;
+      if (v.pw !== v.again) return alert('The two new passwords did not match. Nothing was changed.');
+      try { await Cloud.changeMyPassword(v.old, v.pw); alert('Password changed.'); } catch (e) { alert(e.message); } });
+    if (staff) { bindSections(); bindStudentsPanel(); bindTeachers(); bindDrive(); bindSecurity(); bindFocusPlan(false); bindLessonSearch(); const ps = app.querySelector('#planStudent'); if (ps) ps.addEventListener('change', () => { sessionStorage.setItem('learnhub.planStudent', ps.value); pageSettings(); }); }
   }
 
   /* ----- Sections (classes) ----- */
@@ -920,16 +963,16 @@
     const teachers = Staff.teachers;
     return '<div class="btn-row between"><h3 style="margin:0">🏫 Sections</h3><a class="btn secondary sm" href="#/dashboard">📊 Open the dashboard</a></div><p class="muted small">A section is one class: a course, a teacher and a roster. Pick the section you are working with — the Students list below follows it. Archive a section at the end of term and bring it back any time.</p>' +
       '<div class="search-row" style="grid-template-columns:1fr auto auto"><select class="text-input" id="sectionSelect"><option value=""' + (!cur ? ' selected' : '') + '>' + (Staff.isMaster ? 'All students on this device' : 'All my students') + '</option>' +
-        mine.map(sec => '<option value="' + sec.id + '"' + (cur && cur.id === sec.id ? ' selected' : '') + '>' + esc(sec.name) + (sec.term ? ' · ' + esc(sec.term) : '') + ' (' + (sec.students || []).length + ')</option>').join('') +
-        (archived.length ? '<optgroup label="Archived">' + archived.map(sec => '<option value="' + sec.id + '"' + (cur && cur.id === sec.id ? ' selected' : '') + '>📦 ' + esc(sec.name) + (sec.term ? ' · ' + esc(sec.term) : '') + '</option>').join('') + '</optgroup>' : '') + '</select>' +
-        (cur ? '<button class="btn ghost sm" data-section-archive="' + cur.id + '">' + (cur.archived ? '📤 Retrieve' : '📦 Archive') + '</button>' : '<span></span>') +
+        mine.map(sec => '<option value="' + esc(sec.id) + '"' + (cur && cur.id === sec.id ? ' selected' : '') + '>' + esc(sec.name) + (sec.term ? ' · ' + esc(sec.term) : '') + ' (' + (sec.students || []).length + ')</option>').join('') +
+        (archived.length ? '<optgroup label="Archived">' + archived.map(sec => '<option value="' + esc(sec.id) + '"' + (cur && cur.id === sec.id ? ' selected' : '') + '>📦 ' + esc(sec.name) + (sec.term ? ' · ' + esc(sec.term) : '') + '</option>').join('') + '</optgroup>' : '') + '</select>' +
+        (cur ? '<button class="btn ghost sm" data-section-archive="' + esc(cur.id) + '">' + (cur.archived ? '📤 Retrieve' : '📦 Archive') + '</button>' : '<span></span>') +
         '<button class="btn secondary sm" id="sectionsToggle">' + (open ? '▾ Hide' : '＋ New section') + '</button></div>' +
       (cur ? '<div class="small" style="margin:0.5rem 0 0">✏️ Classroom shell: <strong>' + Overlay.countChanges(cur, cur.courseId) + '</strong> customisation' + (Overlay.countChanges(cur, cur.courseId) === 1 ? '' : 's') + ' · <a href="#/course/' + cur.courseId + '">open the course to customise</a>' +
-        (Sections.list.filter(x => x.id !== cur.id && x.courseId === cur.courseId && x.overlay).length ? ' · <select class="text-input" id="ovCopyFrom" style="max-width:280px;display:inline-block"><option value="">copy customisations from…</option>' + Sections.list.filter(x => x.id !== cur.id && x.courseId === cur.courseId && x.overlay).map(x => '<option value="' + x.id + '">' + esc(x.name) + (x.term ? ' · ' + esc(x.term) : '') + '</option>').join('') + '</select>' : '') +
+        (Sections.list.filter(x => x.id !== cur.id && x.courseId === cur.courseId && x.overlay).length ? ' · <select class="text-input" id="ovCopyFrom" style="max-width:280px;display:inline-block"><option value="">copy customisations from…</option>' + Sections.list.filter(x => x.id !== cur.id && x.courseId === cur.courseId && x.overlay).map(x => '<option value="' + esc(x.id) + '">' + esc(x.name) + (x.term ? ' · ' + esc(x.term) : '') + '</option>').join('') + '</select>' : '') +
         (Overlay.countChanges(cur, cur.courseId) ? ' · <button class="btn ghost sm" id="ovReset">Reset to the program</button>' : '') + '</div>' : '') +
       (cur ? '<p class="small muted" style="margin:0.4rem 0 0">' + (cur.archived ? '📦 Archived section — ' : '') + 'Course: <strong>' + esc((findCourseAll(cur.courseId) || { title: cur.courseId }).title) + '</strong>' + (cur.teacherId ? ' · Teacher: ' + esc((teachers.find(t => t.id === cur.teacherId) || { name: '?' }).name) : Staff.isMaster ? ' · no teacher assigned' : '') + ' · ' + (cur.students || []).length + ' student' + ((cur.students || []).length === 1 ? '' : 's') + '</p>' : '') +
-      (open ? '<div class="plan-unit" style="margin-top:0.6rem"><div class="plan-label">New section</div><div class="search-row" style="grid-template-columns:1fr 1fr 1fr' + (Staff.isMaster ? ' 1fr' : '') + ' auto"><input class="text-input" id="secName" placeholder="Name, e.g. HRF3O Period 2"><select class="text-input" id="secCourse">' + allCourses().map(c => '<option value="' + c.id + '">' + c.icon + ' ' + esc(c.title) + '</option>').join('') + '</select><input class="text-input" id="secTerm" placeholder="Term, e.g. Fall 2026">' +
-        (Staff.isMaster ? '<select class="text-input" id="secTeacher"><option value="">Teacher: me (master)</option>' + teachers.map(t => '<option value="' + t.id + '">' + esc(t.name) + '</option>').join('') + '</select>' : '') + '<button class="btn" id="secCreate">Create</button></div></div>' : '');
+      (open ? '<div class="plan-unit" style="margin-top:0.6rem"><div class="plan-label">New section</div><div class="search-row" style="grid-template-columns:1fr 1fr 1fr' + (Staff.isMaster ? ' 1fr' : '') + ' auto"><input class="text-input" id="secName" placeholder="Name, e.g. HRF3O Period 2"><select class="text-input" id="secCourse">' + allCourses().map(c => '<option value="' + esc(c.id) + '">' + c.icon + ' ' + esc(c.title) + '</option>').join('') + '</select><input class="text-input" id="secTerm" placeholder="Term, e.g. Fall 2026">' +
+        (Staff.isMaster ? '<select class="text-input" id="secTeacher"><option value="">Teacher: me (master)</option>' + teachers.map(t => '<option value="' + esc(t.id) + '">' + esc(t.name) + '</option>').join('') + '</select>' : '') + '<button class="btn" id="secCreate">Create</button></div></div>' : '');
   }
   function bindSections() {
     const sid = Staff.current.id;
@@ -949,7 +992,7 @@
     const ts = Staff.teachers.slice().sort((a, b) => String(a.name).localeCompare(String(b.name)));
     const openT = sessionStorage.getItem('learnhub.teacherOpen') || '', openS = sessionStorage.getItem('learnhub.tSecOpen') || '';
     const courseTitle = sec => (findCourseAll(sec.courseId) || { title: sec.courseId }).title;
-    const courseOpts = allCourses().map(c => '<option value="' + c.id + '">' + c.icon + ' ' + esc(c.title) + '</option>').join('');
+    const courseOpts = allCourses().map(c => '<option value="' + esc(c.id) + '">' + c.icon + ' ' + esc(c.title) + '</option>').join('');
     const owner = sec => sec.teacherId ? (teacherName(sec) || 'no teacher') : 'Headmaster';
     const free = Sections.list.filter(sec => !sec.teacherId && !sec.archived);
     const date = iso => iso ? new Date(iso).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' }) : '';
@@ -960,9 +1003,9 @@
         ? '<div class="hm-grid">' +
             fld('Name', '<input class="text-input" id="hmName" maxlength="40" placeholder="e.g. Ms Patel" autocomplete="off">') +
             fld('Teacher ID <span class="muted">(what they sign in with)</span>', '<input class="text-input" id="hmLogin" placeholder="e.g. mpatel" autocomplete="off" autocapitalize="off" spellcheck="false">') +
-            fld('Password <span class="muted">(at least 6 characters)</span>', '<input class="text-input" id="hmPass" type="password" autocomplete="new-password">') +
+            fld('Password <span class="muted">(at least 10 characters)</span>', '<input class="text-input" id="hmPass" type="password" autocomplete="new-password">') +
             fld('School e-mail <span class="muted">(optional)</span>', '<input class="text-input" id="hmEmail" type="email" placeholder="name@school.ca" autocomplete="off">') +
-            fld('First section <span class="muted">(optional)</span>', '<select class="text-input" id="hmSec"><option value="">None yet — assign later</option>' + free.map(sec => '<option value="' + sec.id + '">' + esc(sec.name) + ' · ' + esc(courseTitle(sec)) + '</option>').join('') + '</select>') +
+            fld('First section <span class="muted">(optional)</span>', '<select class="text-input" id="hmSec"><option value="">None yet — assign later</option>' + free.map(sec => '<option value="' + esc(sec.id) + '">' + esc(sec.name) + ' · ' + esc(courseTitle(sec)) + '</option>').join('') + '</select>') +
           '</div><div class="btn-row" style="margin-top:0.6rem"><button class="btn" id="hmAdd">＋ Add teacher</button><label class="chk"><input type="checkbox" id="hmShow"> Show password</label></div>' +
           '<p class="small muted" id="hmMsg" style="margin:0.4rem 0 0">The teacher signs in on any device with this teacher ID and password, and can change the password in Settings → My profile.</p>'
         : '<div class="hm-grid">' + fld('Name', '<input class="text-input" id="hmName" maxlength="40" placeholder="e.g. Ms Patel">') + fld('6-digit PIN', '<input class="text-input pin-input" id="hmPass" inputmode="numeric" maxlength="6">') + '</div>' +
@@ -979,35 +1022,35 @@
           '<div class="plan-section"><div class="plan-label">Profile</div><div class="hm-grid">' +
             fld('Name', '<input class="text-input" id="hmEditName" maxlength="40" value="' + esc(t.name) + '">') +
             (cloud ? fld('School e-mail', '<input class="text-input" id="hmEditEmail" type="email" value="' + esc(t.email || '') + '" placeholder="name@school.ca">') : '') +
-            '</div><div class="btn-row" style="margin-top:0.5rem"><button class="btn secondary sm" data-t-save="' + t.id + '">💾 Save profile</button>' +
+            '</div><div class="btn-row" style="margin-top:0.5rem"><button class="btn secondary sm" data-t-save="' + esc(t.id) + '">💾 Save profile</button>' +
             '<span class="small muted">' + (cloud ? 'Teacher ID <strong>' + esc(t.login || '—') + '</strong> (cannot be changed)' : '') + (t.createdAt ? ' · added ' + esc(date(t.createdAt)) : '') + (t.passwordResetAt ? ' · password reset ' + esc(date(t.passwordResetAt)) : '') + '</span></div></div>' +
 
           '<div class="plan-section"><div class="plan-label">Sections (' + secs.length + ')</div>' +
             (secs.length ? secs.map(sec => {
               const sOpen = openS === sec.id, roster = Students.list.filter(s => (sec.students || []).includes(s.id)), rest = Students.list.filter(s => !(sec.students || []).includes(s.id));
               return '<div class="hm-sec' + (sOpen ? ' open' : '') + '"><div class="course-line"><label>🏫 ' + esc(sec.name) + ' <span class="muted small">' + esc(courseTitle(sec)) + (sec.term ? ' · ' + esc(sec.term) : '') + (sec.archived ? ' · 📦 archived' : '') + '</span></label><span class="btn-row">' +
-                '<button class="btn ghost sm" data-tsec-open="' + sec.id + '">' + (sOpen ? '▾' : '▸') + ' 👥 ' + roster.length + ' student' + (roster.length === 1 ? '' : 's') + '</button>' +
-                '<select class="text-input hm-move" data-sec-move="' + sec.id + '" aria-label="Move this section to another teacher"><option value="__keep">Move to…</option><option value="">Headmaster (me)</option>' + ts.filter(o => o.id !== t.id).map(o => '<option value="' + o.id + '">' + esc(o.name) + '</option>').join('') + '</select></span></div>' +
+                '<button class="btn ghost sm" data-tsec-open="' + esc(sec.id) + '">' + (sOpen ? '▾' : '▸') + ' 👥 ' + roster.length + ' student' + (roster.length === 1 ? '' : 's') + '</button>' +
+                '<select class="text-input hm-move" data-sec-move="' + esc(sec.id) + '" aria-label="Move this section to another teacher"><option value="__keep">Move to…</option><option value="">Headmaster (me)</option>' + ts.filter(o => o.id !== t.id).map(o => '<option value="' + esc(o.id) + '">' + esc(o.name) + '</option>').join('') + '</select></span></div>' +
                 (sOpen ? '<div class="hm-roster">' +
-                  (roster.length ? roster.map(s => '<div class="course-line"><label>' + avatarHtml(s) + ' ' + esc(s.name) + (s.number ? ' <span class="tag">#' + esc(s.number) + '</span>' : '') + '</label><button class="btn ghost sm" data-tsec-unenrol="' + s.id + '" data-sec="' + sec.id + '">Remove from section</button></div>').join('') : '<p class="muted small">No students in this section yet.</p>') +
+                  (roster.length ? roster.map(s => '<div class="course-line"><label>' + avatarHtml(s) + ' ' + esc(s.name) + (s.number ? ' <span class="tag">#' + esc(s.number) + '</span>' : '') + '</label><button class="btn ghost sm" data-tsec-unenrol="' + esc(s.id) + '" data-sec="' + esc(sec.id) + '">Remove from section</button></div>').join('') : '<p class="muted small">No students in this section yet.</p>') +
                   '<div class="hm-grid" style="margin-top:0.6rem">' +
-                    fld('Add a student who already has an account', '<select class="text-input" data-tsec-enrol="' + sec.id + '"><option value="">Choose a student…</option>' + rest.map(s => '<option value="' + s.id + '">' + esc(s.name) + (s.number ? ' (#' + esc(s.number) + ')' : '') + '</option>').join('') + '</select>') + '</div>' +
+                    fld('Add a student who already has an account', '<select class="text-input" data-tsec-enrol="' + esc(sec.id) + '"><option value="">Choose a student…</option>' + rest.map(s => '<option value="' + esc(s.id) + '">' + esc(s.name) + (s.number ? ' (#' + esc(s.number) + ')' : '') + '</option>').join('') + '</select>') + '</div>' +
                   '<div class="plan-label" style="margin-top:0.75rem">Or create a new student in this section</div><div class="hm-grid">' +
                     fld('First name', '<input class="text-input" id="hmStName" maxlength="30" autocomplete="off">') +
                     (cloud ? fld('Student number', '<input class="text-input" id="hmStNumber" inputmode="numeric" autocomplete="off">') + fld('Birthday <span class="muted">(their password)</span>', '<input class="text-input" id="hmStDob" type="date">') : '') +
-                  '</div><div class="btn-row" style="margin-top:0.5rem"><button class="btn secondary sm" data-tsec-newstudent="' + sec.id + '">＋ Add student</button><span class="small muted" id="hmStMsg"></span></div></div>' : '') + '</div>';
+                  '</div><div class="btn-row" style="margin-top:0.5rem"><button class="btn secondary sm" data-tsec-newstudent="' + esc(sec.id) + '">＋ Add student</button><span class="small muted" id="hmStMsg"></span></div></div>' : '') + '</div>';
             }).join('') : '<p class="muted small">No sections yet. Assign one below or create a new one.</p>') +
-            '<div class="hm-grid" style="margin-top:0.75rem">' + fld('Assign an existing section to ' + esc(t.name), '<select class="text-input" data-t-assign="' + t.id + '"><option value="">Choose a section…</option>' + others.map(sec => '<option value="' + sec.id + '">' + esc(sec.name) + ' · ' + esc(courseTitle(sec)) + ' (now: ' + esc(owner(sec)) + ')</option>').join('') + '</select>') + '</div>' +
+            '<div class="hm-grid" style="margin-top:0.75rem">' + fld('Assign an existing section to ' + esc(t.name), '<select class="text-input" data-t-assign="' + esc(t.id) + '"><option value="">Choose a section…</option>' + others.map(sec => '<option value="' + esc(sec.id) + '">' + esc(sec.name) + ' · ' + esc(courseTitle(sec)) + ' (now: ' + esc(owner(sec)) + ')</option>').join('') + '</select>') + '</div>' +
             '<div class="plan-label" style="margin-top:0.75rem">Or create a new section for ' + esc(t.name) + '</div><div class="hm-grid">' +
               fld('Section name', '<input class="text-input" id="hmSecName" placeholder="e.g. HRF3O Period 2" maxlength="60">') + fld('Course', '<select class="text-input" id="hmSecCourse">' + courseOpts + '</select>') + fld('Term', '<input class="text-input" id="hmSecTerm" placeholder="e.g. Fall 2026">') +
-            '</div><div class="btn-row" style="margin-top:0.5rem"><button class="btn secondary sm" data-t-newsec="' + t.id + '">＋ Create section</button></div></div>' +
+            '</div><div class="btn-row" style="margin-top:0.5rem"><button class="btn secondary sm" data-t-newsec="' + esc(t.id) + '">＋ Create section</button></div></div>' +
 
           '<div class="plan-section"><div class="plan-label">Account</div><div class="btn-row">' +
-            '<button class="btn secondary sm" data-t-reset="' + t.id + '">🔑 Reset ' + (cloud ? 'password' : 'PIN') + '</button>' +
-            '<button class="btn ghost sm hm-danger" data-t-remove="' + t.id + '">🗑️ Remove teacher</button></div>' +
+            '<button class="btn secondary sm" data-t-reset="' + esc(t.id) + '">🔑 Reset ' + (cloud ? 'password' : 'PIN') + '</button>' +
+            '<button class="btn ghost sm hm-danger" data-t-remove="' + esc(t.id) + '">🗑️ Remove teacher</button></div>' +
             '<p class="small muted" style="margin:0.4rem 0 0">' + (cloud ? 'Resetting gives ' + esc(t.name) + ' a new password behind the same teacher ID; the old password stops working. ' : '') + 'Removing a teacher keeps their sections and students — the sections pass to you until you assign them to someone else.</p></div></div>';
       }
-      return '<div class="student-row' + (isOpen ? ' open' : '') + '"><button class="student-head" data-t-open="' + t.id + '">' + avatarHtml({ avatar: t.avatar || '🧑‍🏫', colour: t.colour || '#1f5f8b' }) + '<span class="student-name">' + esc(t.name) + '</span>' +
+      return '<div class="student-row' + (isOpen ? ' open' : '') + '"><button class="student-head" data-t-open="' + esc(t.id) + '">' + avatarHtml({ avatar: t.avatar || '🧑‍🏫', colour: t.colour || '#1f5f8b' }) + '<span class="student-name">' + esc(t.name) + '</span>' +
         (cloud ? '<span class="tag">ID ' + esc(t.login || '—') + '</span>' : '') + '<span class="tag">' + secs.length + ' section' + (secs.length === 1 ? '' : 's') + '</span><span class="tag">' + ids.size + ' student' + (ids.size === 1 ? '' : 's') + '</span><span class="muted">' + (isOpen ? '▾' : '▸') + '</span></button>' + body + '</div>';
     }).join('');
 
@@ -1055,7 +1098,9 @@
     on('[data-t-reset]', 'click', async e => {
       const btn = e.currentTarget, t = teacher(btn.dataset.tReset);
       if (!cloud) { const p = (prompt('New 6-digit PIN for ' + t.name + ':') || '').trim(); if (!p) return; if (!/^\d{6}$/.test(p)) return alert('The PIN must be exactly 6 digits.'); if (Staff.unlock(p)) return alert('That PIN is already in use.'); Staff.updateTeacher(t.id, { pin: p }); return done(t.name + '\'s PIN was changed.'); }
-      const p = prompt('New password for ' + t.name + ' (at least 6 characters):'); if (p === null) return; if (p.length < 6) return alert('The password must be at least 6 characters.');
+      const min = Cloud.MIN_STAFF_PASSWORD || 10;
+      const v = await askPasswords('A new password for ' + t.name, 'Their teacher ID stays the same. Every device signed in to this account is signed out.', [{ key: 'pw', label: 'New password (at least ' + min + ' characters)', min }, { key: 'again', label: 'Type it once more' }]); if (!v) return;
+      if (v.pw !== v.again) return alert('Those did not match. Nothing was changed.'); const p = v.pw;
       btn.disabled = true; btn.textContent = 'Resetting…';
       try { const rec = await Cloud.resetStaffPassword(t.id, p); sessionStorage.setItem('learnhub.teacherOpen', rec.id); done(t.name + '\'s password was reset. Their teacher ID is still "' + rec.login + '"; the old password no longer works.'); }
       catch (err) { done('Could not reset the password: ' + err.message, false); }
@@ -1103,7 +1148,7 @@
       c.units.forEach((u, ui) => (u.lessons || []).forEach((l, li) => (l.media || []).forEach(m => { total++; if (m.src) filled++; else missing.push({ u, ui, l, li, m }); })));
       if (!total) return '';
       const open = sessionStorage.getItem('learnhub.mediaOpen') === c.id;
-      return '<div class="plan-course" style="--course:' + esc(c.color || '') + '"><button class="plan-course-head" data-media-open="' + c.id + '"><span>' + c.icon + ' ' + esc(c.title) + '</span><span class="tag' + (filled === total ? ' ok' : ' accent') + '">' + filled + ' of ' + total + ' slots filled</span><span class="muted">' + (open ? '▾' : '▸') + '</span></button>' +
+      return '<div class="plan-course" style="--course:' + esc(c.color || '') + '"><button class="plan-course-head" data-media-open="' + esc(c.id) + '"><span>' + c.icon + ' ' + esc(c.title) + '</span><span class="tag' + (filled === total ? ' ok' : ' accent') + '">' + filled + ' of ' + total + ' slots filled</span><span class="muted">' + (open ? '▾' : '▸') + '</span></button>' +
         (open ? '<div class="plan-units"><p class="small muted" style="margin:0.25rem 0 0.5rem">Printable list: <a href="media-guide-' + c.id + '.html" target="_blank" rel="noopener">media-guide-' + c.id + '.html</a> (if it has been uploaded with the app).</p>' +
           (missing.length ? missing.map(x => '<div class="media-row"><div><strong>Unit ' + (x.ui + 1) + ' · Lesson ' + (x.li + 1) + '</strong> · slide ' + (x.m.slide + 1) + ' · ' + (x.m.type === 'video' ? '🎬' : '🖼️') + ' ' + esc(x.m.title) + '</div><div class="small muted">' + esc(x.m.why) + ' — ' + esc(x.m.source) + (x.m.url ? ' · <a href="' + esc(x.m.url) + '" target="_blank" rel="noopener">open</a>' : x.m.search ? ' · search "' + esc(x.m.search) + '"' : '') + '</div></div>').join('') : '<p class="muted small">Every slot has media.</p>') + '</div>' : '') + '</div>';
     }).join('');
@@ -1123,7 +1168,8 @@
     const open = sessionStorage.getItem('learnhub.studentOpen');
     const list = studentsInScope();
     const cur = Sections.currentFor(Staff.current.id);
-    const others = cur ? Students.list.filter(s => !(cur.students || []).includes(s.id)) : [];
+    const pool = Cloud.enabled && !Staff.isMaster ? (Students.directory || []) : Students.list;   // a teacher holds only their own students; the directory lists who else can be added
+    const others = cur ? pool.filter(s => !(cur.students || []).includes(s.id)).sort((a, b) => String(a.name).localeCompare(String(b.name))) : [];
     const pending = list.filter(s => Object.keys(s.suggestions || {}).length);
     return '<h3>👥 Students' + (cur ? ' · ' + esc(cur.name) : '') + '</h3><p class="muted small">Each student has their own progress, awards and Focus Plan. Set the achievement level, accommodations or Modified band a student works at, choose which courses they see, review level changes and read or listen to their work.</p>' +
       '<div class="level-legend">' + [1, 2, 3, 4].map(l => '<span><strong>Level ' + l + ' · ' + LEVEL_NAMES[l] + '</strong> <span class="muted">' + LEVELS[l].band + ' · ' + LEVELS[l].short + '</span></span>').join('') + '</div>' +
@@ -1131,36 +1177,36 @@
       '<div class="student-list">' + list.map(s => {
         const isOpen = open === s.id, isMe = Students.current && Students.current.id === s.id;
         const sugg = Object.entries(s.suggestions || {});
-        return '<div class="student-row' + (isOpen ? ' open' : '') + '"><button class="student-head" data-student-open="' + s.id + '">' + avatarHtml(s) + '<span class="student-name">' + esc(s.name) + (isMe ? ' <span class="tag ok">signed in</span>' : '') + '</span>' +
+        return '<div class="student-row' + (isOpen ? ' open' : '') + '"><button class="student-head" data-student-open="' + esc(s.id) + '">' + avatarHtml(s) + '<span class="student-name">' + esc(s.name) + (isMe ? ' <span class="tag ok">signed in</span>' : '') + '</span>' +
           (s.number ? '<span class="tag">#' + esc(s.number) + '</span>' : '') + '<span class="tag">Level ' + s.level + ' · ' + LEVEL_NAMES[s.level] + '</span>' + (Array.isArray(s.courses) ? '<span class="tag">' + s.courses.length + ' course' + (s.courses.length === 1 ? '' : 's') + (s.coursesLocked ? ' 🔒' : '') + '</span>' : '<span class="tag">all courses</span>') +
           (sugg.length ? '<span class="tag accent">💡 ' + sugg.length + '</span>' : '') + '<span class="muted">' + (isOpen ? '▾' : '▸') + '</span>' + (Cloud.enabled ? '<span class="small muted row-stamp">' + profileStamp(s) + '</span>' : '') + '</button>' +
           (isOpen ? '<div class="student-body">' +
-            '<div class="save-bar"><span class="muted small" id="saveMsg-' + s.id + '">' + (Cloud.enabled ? 'Changes save automatically. Press Save to send them to the cloud right away.' : 'Changes save on this device as you make them.') + '</span><button class="btn sm" data-save-student="' + s.id + '">💾 Save changes</button></div>' +
-            (Cloud.enabled ? '<div class="plan-section"><div class="plan-label">🔑 Account</div><div class="course-line"><span>Student number <strong>' + esc(s.number || '—') + '</strong> · birthday <strong>' + esc(s.dob || '—') + '</strong> · password = birthday as DDMMYYYY' + (s.dob ? ' (<code>' + Cloud.dobPassword(s.dob) + '</code>)' : '') + '</span><span class="btn-row"><input class="text-input" type="date" data-fix-dob="' + s.id + '" style="max-width:170px" title="Correct birthday"><button class="btn ghost sm" data-fix-dob-go="' + s.id + '">Fix birthday / reset password</button></span></div></div>' : '') +
-            (sugg.length ? '<div class="plan-section"><div class="plan-label">💡 Suggested level changes (from test results)</div>' + sugg.map(([cid, g]) => { const c = findCourse(cid); return '<div class="suggestion"><span>' + (c ? c.icon + ' ' + esc(c.title) : esc(cid)) + ': <strong>Level ' + g.from + ' → Level ' + g.level + '</strong> <span class="muted small">(' + g.pct + '% on ' + esc(g.unit) + ', ' + new Date(g.at).toLocaleDateString() + ')</span></span><span class="btn-row"><button class="btn sm success" data-sugg-apply="' + s.id + '" data-c="' + cid + '" data-l="' + g.level + '">Apply</button><button class="btn sm ghost" data-sugg-dismiss="' + s.id + '" data-c="' + cid + '">Dismiss</button></span></div>'; }).join('') + '</div>' : '') +
-            '<div class="plan-section"><div class="plan-label">Default achievement level</div><div class="level-cards compact">' + [1, 2, 3, 4].map(l => '<button class="level-card ' + (s.level === l ? 'on' : '') + '" data-set-level="' + s.id + '" data-l="' + l + '"><h3>Level ' + l + ' · ' + LEVEL_NAMES[l] + '</h3><p>' + LEVEL_DESC[l] + '</p></button>').join('') + '</div></div>' +
+            '<div class="save-bar"><span class="muted small" id="saveMsg-' + s.id + '">' + (Cloud.enabled ? 'Changes save automatically. Press Save to send them to the cloud right away.' : 'Changes save on this device as you make them.') + '</span><button class="btn sm" data-save-student="' + esc(s.id) + '">💾 Save changes</button></div>' +
+            (Cloud.enabled ? '<div class="plan-section"><div class="plan-label">🔑 Account</div><div class="course-line"><span>Student number <strong>' + esc(s.number || '—') + '</strong> · birthday <strong>' + esc(s.dob || '—') + '</strong> · ' + (s.pwCustom ? 'has a password of their own (not the birthday)' : 'password = birthday as DDMMYYYY' + (s.dob ? ' (<code>' + esc(Cloud.dobPassword(s.dob)) + '</code>)' : '')) + '</span><span class="btn-row"><input class="text-input" type="date" data-fix-dob="' + esc(s.id) + '" style="max-width:170px" title="Correct birthday"><button class="btn ghost sm" data-fix-dob-go="' + esc(s.id) + '">Fix birthday / reset password</button></span></div></div>' : '') +
+            (sugg.length ? '<div class="plan-section"><div class="plan-label">💡 Suggested level changes (from test results)</div>' + sugg.map(([cid, g]) => { const c = findCourse(cid); return '<div class="suggestion"><span>' + (c ? c.icon + ' ' + esc(c.title) : esc(cid)) + ': <strong>Level ' + g.from + ' → Level ' + g.level + '</strong> <span class="muted small">(' + g.pct + '% on ' + esc(g.unit) + ', ' + new Date(g.at).toLocaleDateString() + ')</span></span><span class="btn-row"><button class="btn sm success" data-sugg-apply="' + esc(s.id) + '" data-c="' + esc(cid) + '" data-l="' + g.level + '">Apply</button><button class="btn sm ghost" data-sugg-dismiss="' + esc(s.id) + '" data-c="' + esc(cid) + '">Dismiss</button></span></div>'; }).join('') + '</div>' : '') +
+            '<div class="plan-section"><div class="plan-label">Default achievement level</div><div class="level-cards compact">' + [1, 2, 3, 4].map(l => '<button class="level-card ' + (s.level === l ? 'on' : '') + '" data-set-level="' + esc(s.id) + '" data-l="' + l + '"><h3>Level ' + l + ' · ' + LEVEL_NAMES[l] + '</h3><p>' + LEVEL_DESC[l] + '</p></button>').join('') + '</div></div>' +
             '<div class="plan-section"><div class="plan-label">Courses and level per course</div><p class="muted small" style="margin:0 0 0.5rem">Tick the courses this student sees. "Default" uses the level above; pick a number to set a different level for that course only.</p>' +
             allCourses().map(c => { const on = Students.enrolled(c.id, s); const cl = (s.courseLevels || {})[c.id] || '';
-              return '<div class="course-line' + (on ? '' : ' off') + '"><label><input type="checkbox" data-enrol="' + s.id + '" data-c="' + c.id + '"' + (on ? ' checked' : '') + '> ' + c.icon + ' ' + esc(c.title) + '</label>' +
-                (on ? '<div class="seg">' + [['', 'Default'], [1, '1'], [2, '2'], [3, '3'], [4, '4']].map(o => '<button data-course-level="' + s.id + '" data-c="' + c.id + '" data-v="' + o[0] + '" class="' + (String(cl) === String(o[0]) ? 'on' : '') + '">' + o[1] + '</button>').join('') + '</div>' : '') + '</div>'; }).join('') +
-            sw('', 'Lock the course list', 'On: the student cannot add courses from the home page.', s.coursesLocked, 'data-lock-courses="' + s.id + '"') + '</div>' +
+              return '<div class="course-line' + (on ? '' : ' off') + '"><label><input type="checkbox" data-enrol="' + esc(s.id) + '" data-c="' + esc(c.id) + '"' + (on ? ' checked' : '') + '> ' + c.icon + ' ' + esc(c.title) + '</label>' +
+                (on ? '<div class="seg">' + [['', 'Default'], [1, '1'], [2, '2'], [3, '3'], [4, '4']].map(o => '<button data-course-level="' + esc(s.id) + '" data-c="' + esc(c.id) + '" data-v="' + o[0] + '" class="' + (String(cl) === String(o[0]) ? 'on' : '') + '">' + o[1] + '</button>').join('') + '</div>' : '') + '</div>'; }).join('') +
+            sw('', 'Lock the course list', 'On: the student cannot add courses from the home page.', s.coursesLocked, 'data-lock-courses="' + esc(s.id) + '"') + '</div>' +
             '<div class="plan-section"><div class="plan-label">Modified program (not for credit)</div><p class="muted small" style="margin:0 0 0.4rem">Serves every lesson at a much earlier level, with its own questions and assignments. Standard = the Level 1–4 framework above.</p>' +
-            allCourses().filter(c => Students.enrolled(c.id, s)).map(c => { const t = Students.trackFor(c.id, s); return '<div class="course-line"><label>' + c.icon + ' ' + esc(c.title) + '</label><div class="seg">' + [['', 'Standard'], ['k2', 'K–2'], ['g35', 'Gr 3–5'], ['g68', 'Gr 6–8']].map(o => '<button data-track="' + s.id + '" data-c="' + c.id + '" data-v="' + o[0] + '" class="' + ((t ? t.band : '') === o[0] ? 'on' : '') + '">' + o[1] + '</button>').join('') + '</div></div>'; }).join('') + '</div>' +
+            allCourses().filter(c => Students.enrolled(c.id, s)).map(c => { const t = Students.trackFor(c.id, s); return '<div class="course-line"><label>' + c.icon + ' ' + esc(c.title) + '</label><div class="seg">' + [['', 'Standard'], ['k2', 'K–2'], ['g35', 'Gr 3–5'], ['g68', 'Gr 6–8']].map(o => '<button data-track="' + esc(s.id) + '" data-c="' + esc(c.id) + '" data-v="' + o[0] + '" class="' + ((t ? t.band : '') === o[0] ? 'on' : '') + '">' + o[1] + '</button>').join('') + '</div></div>'; }).join('') + '</div>' +
             levelHistoryHtml(s) +
             '<div class="plan-section"><div class="plan-label">Accommodations (quizzes and tests)</div>' +
-            sw('', 'Reduction', 'Fewer questions per quiz and test (about 60%).', (s.accommodations || {}).reduce, 'data-accom="reduce" data-s="' + s.id + '"') +
-            sw('', 'Complexity', 'Answer choices and word banks from one level down; no typed blanks.', (s.accommodations || {}).simplify, 'data-accom="simplify" data-s="' + s.id + '"') +
-            sw('', 'Chunking', 'Matching shown three pairs at a time; word banks of at most three.', (s.accommodations || {}).chunk, 'data-accom="chunk" data-s="' + s.id + '"') + '</div>' +
+            sw('', 'Reduction', 'Fewer questions per quiz and test (about 60%).', (s.accommodations || {}).reduce, 'data-accom="reduce" data-s="' + esc(s.id) + '"') +
+            sw('', 'Complexity', 'Answer choices and word banks from one level down; no typed blanks.', (s.accommodations || {}).simplify, 'data-accom="simplify" data-s="' + esc(s.id) + '"') +
+            sw('', 'Chunking', 'Matching shown three pairs at a time; word banks of at most three.', (s.accommodations || {}).chunk, 'data-accom="chunk" data-s="' + esc(s.id) + '"') + '</div>' +
             workHtml(s) + recordingsHtml(s) +
-            (cur ? '<div class="plan-section"><button class="btn ghost sm" data-unenrol="' + s.id + '" data-sec="' + cur.id + '">Remove from ' + esc(cur.name) + '</button></div>' : '') +
-            '<div class="plan-section btn-row"><button class="btn ghost sm" data-rename="' + s.id + '">Rename</button><button class="btn ghost sm" data-reset-student="' + s.id + '">Reset progress</button><button class="btn ghost sm" data-delete="' + s.id + '">Remove student</button></div>' +
+            (cur ? '<div class="plan-section"><button class="btn ghost sm" data-unenrol="' + esc(s.id) + '" data-sec="' + esc(cur.id) + '">Remove from ' + esc(cur.name) + '</button></div>' : '') +
+            '<div class="plan-section btn-row"><button class="btn ghost sm" data-rename="' + esc(s.id) + '">Rename</button><button class="btn ghost sm" data-reset-student="' + esc(s.id) + '">Reset progress</button><button class="btn ghost sm" data-delete="' + esc(s.id) + '">Remove student</button></div>' +
           '</div>' : '') + '</div>';
       }).join('') + '</div>' +
       (Cloud.enabled
         ? '<div class="plan-unit" style="margin-top:0.75rem"><div class="plan-label">＋ Add a new student' + (cur ? ' to ' + esc(cur.name) : '') + '</div><p class="muted small" style="margin:0 0 0.5rem">This creates the student\'s account. They sign in on any device with their student number and their birthday as the password (DDMMYYYY).</p><div class="search-row" style="grid-template-columns:1fr 1fr 1fr auto"><input class="text-input" id="teacherAddName" maxlength="30" placeholder="First name"><input class="text-input" id="teacherAddNumber" placeholder="Student number" inputmode="numeric"><input class="text-input" id="teacherAddDob" type="date" title="Birthday"><button class="btn secondary" id="teacherAdd">＋ Add student</button></div><p class="small muted" id="teacherAddMsg" style="margin:0.4rem 0 0"></p>' +
-          (cur && others.length ? '<select class="text-input" id="enrolExisting" style="max-width:300px;margin-top:0.5rem"><option value="">Add an existing student…</option>' + others.map(o => '<option value="' + o.id + '">' + o.avatar + ' ' + esc(o.name) + (o.number ? ' · ' + esc(o.number) : '') + '</option>').join('') + '</select>' : '') + '</div>'
+          (cur && others.length ? '<select class="text-input" id="enrolExisting" style="max-width:300px;margin-top:0.5rem"><option value="">Add an existing student…</option>' + others.map(o => '<option value="' + esc(o.id) + '">' + esc(o.avatar) + ' ' + esc(o.name) + (o.number ? ' · ' + esc(o.number) : '') + '</option>').join('') + '</select>' : '') + '</div>'
         : '<div class="btn-row" style="margin-top:0.75rem"><input class="text-input" id="teacherAddName" maxlength="30" placeholder="Add a new student by first name" style="max-width:280px"><button class="btn secondary" id="teacherAdd">＋ Add student' + (cur ? ' to ' + esc(cur.name) : '') + '</button>') +
-      (!Cloud.enabled && cur && others.length ? '<select class="text-input" id="enrolExisting" style="max-width:260px"><option value="">Add an existing student…</option>' + others.map(o => '<option value="' + o.id + '">' + o.avatar + ' ' + esc(o.name) + '</option>').join('') + '</select>' : '') + (Cloud.enabled ? '' : '</div>');
+      (!Cloud.enabled && cur && others.length ? '<select class="text-input" id="enrolExisting" style="max-width:260px"><option value="">Add an existing student…</option>' + others.map(o => '<option value="' + esc(o.id) + '">' + esc(o.avatar) + ' ' + esc(o.name) + '</option>').join('') + '</select>' : '') + (Cloud.enabled ? '' : '</div>');
   }
   function levelHistoryHtml(s) {
     const rows = [];
@@ -1168,13 +1214,13 @@
       if (!log.length && !Object.keys(ll).length) return;
       rows.push('<div class="work-item"><div class="work-head"><strong>' + c.icon + ' ' + esc(c.title) + '</strong> <span class="muted small">now Level ' + Students.levelFor(c.id, s) + '</span></div>' +
         (Object.keys(ll).length ? '<div class="small">Quizzes passed at: ' + Object.keys(ll).sort((a, b) => a - b).map(k => 'L' + (+k + 1) + ' → Level ' + ll[k].level + ' (' + ll[k].pct + '%)').join(' · ') + '</div>' : '') +
-        (log.length ? '<div class="small muted">' + log.slice(-6).map(e => new Date(e.at).toLocaleDateString() + ': Level ' + e.from + ' → ' + e.to + ' (' + e.by + (e.reason ? ', ' + e.reason : '') + (e.lesson !== undefined ? ', after lesson ' + (e.lesson + 1) : '') + (e.pct !== undefined ? ', ' + e.pct + '%' : '') + ')').join('<br>') + '</div>' : '') + '</div>');
+        (log.length ? '<div class="small muted">' + log.slice(-6).map(e => esc(new Date(e.at).toLocaleDateString()) + ': Level ' + num(e.from) + ' → ' + num(e.to) + ' (' + esc(e.by) + (e.reason ? ', ' + esc(e.reason) : '') + (e.lesson !== undefined ? ', after lesson ' + (num(e.lesson) + 1) : '') + (e.pct !== undefined ? ', ' + num(e.pct) + '%' : '') + ')').join('<br>') + '</div>' : '') + '</div>');
     });
     return '<div class="plan-section"><div class="plan-label">📈 Level history (for grading)</div>' + (rows.length ? rows.join('') : '<p class="muted small">No level changes or passed quizzes yet. Students are offered a move up after 85%+ on a quiz, or a move down when they score below their level\'s band; they can go back any time but never skip a level.</p>') + '</div>';
   }
   function recordingsHtml(s) {
     const open = sessionStorage.getItem('learnhub.recOpen') === s.id;
-    return '<div class="plan-section"><button class="btn ghost sm" data-rec-open="' + s.id + '">' + (open ? '▾' : '▸') + ' Voice recordings</button>' + (open ? '<div id="recList-' + s.id + '" class="small muted">Loading…</div>' : '') + '</div>';
+    return '<div class="plan-section"><button class="btn ghost sm" data-rec-open="' + esc(s.id) + '">' + (open ? '▾' : '▸') + ' Voice recordings</button>' + (open ? '<div id="recList-' + s.id + '" class="small muted">Loading…</div>' : '') + '</div>';
   }
   async function fillRecordings(s) {
     const host = app.querySelector('#recList-' + s.id); if (!host) return;
@@ -1191,7 +1237,7 @@
       Object.keys(u.work).forEach(li => Object.keys(u.work[li]).forEach(n => { const w = u.work[li][n]; if (!w || !w.text) return; const les = un.lessons[li]; const a = les && (les.assignments || [])[n];
         items.push({ course: c, unit: un, les, a, w, li, n }); })); }));
     const open = sessionStorage.getItem('learnhub.workOpen') === s.id;
-    return studentFocusHtml(s) + '<div class="plan-section"><button class="btn ghost sm" data-work-open="' + s.id + '">' + (open ? '▾' : '▸') + ' Assignment work (' + items.filter(x => x.w.done).length + ' handed in, ' + items.filter(x => !x.w.done).length + ' drafts)</button>' +
+    return studentFocusHtml(s) + '<div class="plan-section"><button class="btn ghost sm" data-work-open="' + esc(s.id) + '">' + (open ? '▾' : '▸') + ' Assignment work (' + items.filter(x => x.w.done).length + ' handed in, ' + items.filter(x => !x.w.done).length + ' drafts)</button>' +
       (open ? (items.length ? items.map(x => '<div class="work-item' + (x.w.done ? ' done' : '') + '"><div class="work-head"><strong>' + esc(x.a ? x.a.title : 'Assignment') + '</strong> <span class="muted small">' + x.course.icon + ' ' + esc(x.les ? x.les.title : '') + ' · ' + (x.w.done ? '✓ handed in' : 'draft') + ' · ' + new Date(x.w.at).toLocaleString() + '</span></div><div class="work-text">' + esc(x.w.text) + '</div></div>').join('') : '<p class="muted small">No written work yet.</p>') : '') + '</div>';
   }
   function bindStudentsPanel() {
@@ -1199,7 +1245,10 @@
     on('[data-track]', 'click', e => { const b = e.currentTarget; Students.setTrack(b.dataset.track, b.dataset.c, b.dataset.v || null); pageSettings(); });
     on('[data-rec-open]', 'click', e => { const id = e.currentTarget.dataset.recOpen; sessionStorage.setItem('learnhub.recOpen', sessionStorage.getItem('learnhub.recOpen') === id ? '' : id); pageSettings(); });
     on('[data-unenrol]', 'click', e => { const b = e.currentTarget; Sections.enrol(b.dataset.sec, b.dataset.unenrol, false); pageSettings(); });
-    const ex = app.querySelector('#enrolExisting'); if (ex) ex.addEventListener('change', () => { if (ex.value) { Sections.enrol(Sections.currentFor(Staff.current.id).id, ex.value, true); pageSettings(); } });
+    const ex = app.querySelector('#enrolExisting'); if (ex) ex.addEventListener('change', () => { if (ex.value) { const id = ex.value; Sections.enrol(Sections.currentFor(Staff.current.id).id, id, true);
+      // A teacher only receives a student's record once the server has seen them on the roster (a second or two): redraw when it arrives.
+      if (Cloud.enabled && !Students.byId(id)) { const arrived = e => { if (e.detail === 'students' && Students.byId(id)) { window.removeEventListener('cloud:change', arrived); if (/^#\/settings/.test(location.hash)) pageSettings(); } }; window.addEventListener('cloud:change', arrived); setTimeout(() => window.removeEventListener('cloud:change', arrived), 30000); }
+      pageSettings(); } });
     Students.list.forEach(s => { if (sessionStorage.getItem('learnhub.recOpen') === s.id && app.querySelector('#recList-' + s.id)) fillRecordings(s); });
     on('[data-accom]', 'click', e => { const b = e.currentTarget, s = Students.byId(b.dataset.s); s.accommodations = s.accommodations || {}; s.accommodations[b.dataset.accom] = !s.accommodations[b.dataset.accom]; Students.save(); pageSettings(); });
     on('[data-media-open]', 'click', e => { const id = e.currentTarget.dataset.mediaOpen; sessionStorage.setItem('learnhub.mediaOpen', sessionStorage.getItem('learnhub.mediaOpen') === id ? '' : id); pageSettings(); });
@@ -1237,13 +1286,13 @@
           if (snap(doc) !== want) throw new Error('the cloud copy (Profile v' + (+doc.rev || 0) + ') does not match what you set here, so the change did not land. Check the cloud status at the top of Settings, then try again.');
           msg.innerHTML = '✓ Confirmed by the cloud ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + ' · ' + profileStamp(doc) + ' — the student sees it on their next screen.';
         } else msg.textContent = '✓ Saved.';
-        const st = app.querySelector('[data-student-open="' + id + '"] .row-stamp'); if (st) st.innerHTML = profileStamp(Students.byId(id));
+        const st = app.querySelector('[data-student-open="' + esc(id) + '"] .row-stamp'); if (st) st.innerHTML = profileStamp(Students.byId(id));
       }
       catch (err) { msg.textContent = '⚠️ Not confirmed: ' + err.message; }
       b.disabled = false; b.textContent = '💾 Save changes'; });
     app.querySelectorAll('details.student-focus').forEach(d => d.addEventListener('toggle', () => sessionStorage.setItem('learnhub.focusOpen', d.open ? '1' : '0')));
     const fo = sessionStorage.getItem('learnhub.focusOpen'); if (fo === '1') app.querySelectorAll('details.student-focus').forEach(d => d.open = true);
-    on('[data-fix-dob-go]', 'click', async e => { const id = e.currentTarget.dataset.fixDobGo, s = Students.byId(id), inp = app.querySelector('[data-fix-dob="' + id + '"]'); if (!inp.value) return alert('Pick the correct birthday first.'); try { e.currentTarget.textContent = 'Updating…'; await Cloud.fixStudentBirthday(s, inp.value); alert('Done. ' + s.name + ' now signs in with ' + Cloud.dobPassword(inp.value) + '.'); pageSettings(); } catch (err) { alert(err.message); pageSettings(); } });
+    on('[data-fix-dob-go]', 'click', async e => { const id = e.currentTarget.dataset.fixDobGo, s = Students.byId(id), inp = app.querySelector('[data-fix-dob="' + esc(id) + '"]'); if (!inp.value) return alert('Pick the correct birthday first.'); try { e.currentTarget.textContent = 'Updating…'; await Cloud.fixStudentBirthday(s, inp.value); alert('Done. ' + s.name + ' now signs in with ' + Cloud.dobPassword(inp.value) + '.'); pageSettings(); } catch (err) { alert(err.message); pageSettings(); } });
     const b = app.querySelector('#teacherAdd'); if (b) b.addEventListener('click', add);
     const i = app.querySelector('#teacherAddName'); if (i) i.addEventListener('keydown', e => { if (e.key === 'Enter') add(); });
   }
@@ -1301,8 +1350,8 @@
     const hits = q ? unit.lessons.map((les, i) => ({ i, les, text: lessonText(les) })).filter(x => words.every(w => x.text.includes(w))) : [];
     const f = fp.unitEntry(course.id, unit.id);
     return '<div class="search-row">' +
-      '<select class="text-input" id="searchCourse">' + allCourses().map(c => '<option value="' + c.id + '"' + (c.id === course.id ? ' selected' : '') + '>' + c.icon + ' ' + esc(c.title) + '</option>').join('') + '</select>' +
-      '<select class="text-input" id="searchUnit">' + course.units.map(u => '<option value="' + u.id + '"' + (u.id === unit.id ? ' selected' : '') + '>' + esc(u.title) + '</option>').join('') + '</select>' +
+      '<select class="text-input" id="searchCourse">' + allCourses().map(c => '<option value="' + esc(c.id) + '"' + (c.id === course.id ? ' selected' : '') + '>' + c.icon + ' ' + esc(c.title) + '</option>').join('') + '</select>' +
+      '<select class="text-input" id="searchUnit">' + course.units.map(u => '<option value="' + esc(u.id) + '"' + (u.id === unit.id ? ' selected' : '') + '>' + esc(u.title) + '</option>').join('') + '</select>' +
       '<input class="text-input" id="searchQ" placeholder="Keyword, e.g. capital letter" value="' + esc(searchState.q) + '"><button class="btn" id="searchGo">Search</button></div>' +
       (q ? (hits.length
         ? '<div class="search-hits">' + hits.map(h => '<div class="search-hit"><span class="tag">Lesson ' + (h.i + 1) + '</span> <strong>' + esc(h.les.title) + '</strong><div class="muted small">' + esc(snippet(h.text, words[0])) + '</div></div>').join('') + '</div>' +
@@ -1345,15 +1394,15 @@
     const body = allCourses().map(c => {
       const entry = fp.courseEntry(c.id);
       const open = sessionStorage.getItem('learnhub.planOpen') === c.id;
-      return '<div class="plan-course" style="--course:' + esc(c.color || '') + '"><button class="plan-course-head" data-plan-open="' + c.id + '">' +
+      return '<div class="plan-course" style="--course:' + esc(c.color || '') + '"><button class="plan-course-head" data-plan-open="' + esc(c.id) + '">' +
         '<span>' + c.icon + ' ' + esc(c.title) + '</span><span class="tag' + (entry ? ' accent' : '') + '">' + (entry ? Object.keys(entry.units).length + ' of ' + c.units.length + ' units' : 'Whole course') + '</span><span class="muted">' + (open ? '▾' : '▸') + '</span></button>' +
         (open ? '<div class="plan-units">' + c.units.map(u => {
           const f = fp.unitEntry(c.id, u.id);
           const lessons = u.lessons.map((l, i) => ({ i, title: l.title }));
           const terms = allTermKeys(u), cats = catsOf(u);
           const inList = (field, v, all) => !f ? false : (f[field] === null || f[field] === undefined ? field !== 'goals' : f[field].some(x => String(x) === String(v)));
-          const T = (field, v, all, label) => chip(inList(field, v, all), 'data-plan-toggle="' + field + '" data-c="' + c.id + '" data-u="' + u.id + '" data-v="' + esc(v) + '"', label);
-          return '<div class="plan-unit' + (f ? ' on' : '') + '"><label class="plan-unit-head"><input type="checkbox" data-plan-unit="' + c.id + '" data-u="' + u.id + '"' + (f ? ' checked' : '') + dis + '> <strong>' + esc(u.title) + '</strong></label>' +
+          const T = (field, v, all, label) => chip(inList(field, v, all), 'data-plan-toggle="' + field + '" data-c="' + esc(c.id) + '" data-u="' + esc(u.id) + '" data-v="' + esc(v) + '"', label);
+          return '<div class="plan-unit' + (f ? ' on' : '') + '"><label class="plan-unit-head"><input type="checkbox" data-plan-unit="' + esc(c.id) + '" data-u="' + esc(u.id) + '"' + (f ? ' checked' : '') + dis + '> <strong>' + esc(u.title) + '</strong></label>' +
             (f ? '<div class="plan-section"><div class="plan-label">Lessons</div><div class="word-bank">' + lessons.map(l => T('lessons', l.i, lessons.map(x => x.i), l.title)).join('') + '</div></div>' +
                  (terms.length ? '<div class="plan-section"><div class="plan-label">Words to learn</div><div class="word-bank">' + terms.map(t => T('terms', t, terms, t)).join('') + '</div></div>' : '') +
                  (cats.length ? '<div class="plan-section"><div class="plan-label">Question topics</div><div class="word-bank">' + cats.map(k => T('cats', k, cats, k)).join('') + '</div></div>' : '') +
@@ -1387,7 +1436,7 @@
   function studentFocusHtml(s) {
     sessionStorage.setItem('learnhub.planStudent', s.id);
     const fp = Focus.forStudent(s.id); const on = fp && fp.enabled && Object.keys(fp.data ? fp.data.courses || {} : fp.courses || {}).length;
-    return '<details class="plan-section student-focus" data-student-focus="' + s.id + '"><summary class="plan-label" style="cursor:pointer">🎯 Focus Plan &amp; keyword search ' + (on ? '<span class="tag accent">on</span>' : '<span class="tag">off</span>') + ' <span class="muted small" style="font-weight:600;text-transform:none;letter-spacing:0">— tap to open</span></summary>' +
+    return '<details class="plan-section student-focus" data-student-focus="' + esc(s.id) + '"><summary class="plan-label" style="cursor:pointer">🎯 Focus Plan &amp; keyword search ' + (on ? '<span class="tag accent">on</span>' : '<span class="tag">off</span>') + ' <span class="muted small" style="font-weight:600;text-transform:none;letter-spacing:0">— tap to open</span></summary>' +
       '<div style="margin-top:0.5rem"><h3>🔍 Find lessons by keyword</h3><p class="muted small">Pick a unit and type a word or phrase. Lessons that mention it are listed in order; apply them and <strong>' + esc(s.name) + '</strong> sees only those lessons for that unit.</p>' + lessonSearchHtml() + '<div class="teacher-section">' + focusPlanHtml(false) + '</div></div></details>';
   }
   /** The student whose Focus Plan / lesson search a teacher is editing (defaults to the signed-in student). */
@@ -1396,13 +1445,14 @@
   function planPickerHtml() {
     const me = planStudent(), list = studentsInScope();
     if (list.length < 2) return '';
-    return '<div class="setting-row" style="padding-top:0"><div><label>Editing for</label><div class="help">The Focus Plan and keyword search below apply to this student.</div></div><select class="text-input" id="planStudent" style="max-width:260px">' + list.map(x => '<option value="' + x.id + '"' + (x.id === me.id ? ' selected' : '') + '>' + x.avatar + ' ' + esc(x.name) + (Students.current && Students.current.id === x.id ? ' (signed in)' : '') + '</option>').join('') + '</select></div>';
+    return '<div class="setting-row" style="padding-top:0"><div><label>Editing for</label><div class="help">The Focus Plan and keyword search below apply to this student.</div></div><select class="text-input" id="planStudent" style="max-width:260px">' + list.map(x => '<option value="' + esc(x.id) + '"' + (x.id === me.id ? ' selected' : '') + '>' + esc(x.avatar) + ' ' + esc(x.name) + (Students.current && Students.current.id === x.id ? ' (signed in)' : '') + '</option>').join('') + '</select></div>';
   }
 
   function notFound() { app.innerHTML = '<div class="empty"><h2>Page not found</h2><a class="btn" href="#/">Back to courses</a></div>'; }
 
   /* ---------- router ---------- */
-  function route() {
+  function route() { routeInner(); try { cloudNotice(); } catch (e) {} }
+  function routeInner() {
     const parts = location.hash.replace(/^#\/?/, '').split('/').map(decodeURIComponent);
     window.scrollTo(0, 0);
     delete document.body.dataset.page;
@@ -1416,6 +1466,7 @@
     if (location.hash !== route.last) tUI.msg = '';
     if (location.hash !== route.last) Object.keys(sessionStorage).filter(k => /^learnhub\.(sg\.|studentOpen|workOpen|recOpen|mediaOpen|planOpen|sectionsOpen|focusOpen|teacherOpen|tSecOpen)/.test(k)).forEach(k => sessionStorage.removeItem(k));
     route.last = location.hash;
+    if (!Cloud.enabled && (window.CLOUD_CONFIG || {}).enabled) { app.innerHTML = '<div class="empty"><div class="signin-logo">🎓</div><p>The Academy could not start its connection to the cloud.</p><p class="muted small">Check the internet connection and reload the page.</p><button class="btn" id="reloadBtn">Reload</button></div>'; app.querySelector('#reloadBtn').addEventListener('click', () => location.reload()); return; }
     if (Cloud.enabled) {
       if (!Cloud.ready) { app.innerHTML = '<div class="empty"><div class="signin-logo">🎓</div><p class="muted">Connecting…</p></div>'; return; }
       if (parts[0] === 'welcome' || parts[0] === 'signin') {
@@ -1450,6 +1501,13 @@
     }
   }
   document.addEventListener('click', e => { const g = e.target.closest('[data-open-group]'); if (g) sessionStorage.setItem('learnhub.openGroup', g.dataset.openGroup); });
+  /** A problem found at sign-in (rules not published, update not finished) is shown at the top of every page until it is fixed. */
+  function cloudNotice() {
+    const old = document.getElementById('cloudNotice'); if (old) old.remove();
+    if (!Cloud.enabled || !Cloud.user || !Cloud.loadError) return;
+    const d = document.createElement('div'); d.id = 'cloudNotice'; d.setAttribute('role', 'alert'); d.className = 'card'; d.style.cssText = 'border-left:6px solid var(--danger);margin:0 0 1rem;padding:0.75rem 1rem';
+    d.textContent = '⚠️ ' + Cloud.loadError; app.insertBefore(d, app.firstChild);
+  }
   window.addEventListener('hashchange', route);
   // Live data from the cloud: redraw data pages (not while someone is typing in a box)
   window.addEventListener('cloud:change', () => { const a = document.activeElement; if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return; const p = location.hash.replace(/^#\/?/, '').split('/')[0]; if ((['', 'course', 'lesson', 'work', 'dashboard', 'grades', 'case', 'teachers'].includes(p) || (p === 'settings' && !Students.isStaffSession)) && Students.current) route(); renderWho(); });

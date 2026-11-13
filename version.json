@@ -1,5 +1,5 @@
 {
- "version": "42",
- "date": "2026-11-12",
- "notes": "Headmaster: recognised from the cloud's master record, badge in the header, Teachers tab (add, profiles, sections, students, reset password, remove). Dyslexia-friendly text option. Found a problem? button with screenshot, sent to the Headmaster."
+ "version": "43",
+ "date": "2026-11-13",
+ "notes": "Security update. A teacher receives only the students in their own sections; teacher grades can no longer be changed by a student; teacher notes and e-mail addresses are private; nothing is left on a device after sign-out; exports carry no birthdays or PINs. Publish the new firestore.rules first, then the Headmaster signs in once (see DEPLOY.md)."
 }

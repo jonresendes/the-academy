@@ -50,8 +50,12 @@
 
   function esc(s) {
     return String(s === undefined || s === null ? '' : s)
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
+  /** A link or media address typed by a person: only web addresses (and uploaded files) are ever put into a page. */
+  function safeUrl(u) { u = String(u === undefined || u === null ? '' : u).trim(); return /^(https?:\/\/|idb:)/i.test(u) ? u : ''; }
+  /** A number that came from stored data, for putting into a page. */
+  function num(v) { const n = typeof v === 'number' ? v : parseFloat(v); return isFinite(n) ? n : 0; }
 
   /** Light markdown: blank-line paragraphs, "- " bullets, **bold**, "> " quotes, | a | b | tables. */
   function md(text) {
@@ -220,9 +224,11 @@
   /** Slides of a lesson for the level (with the section overlay's edits, hidden slides and added slides). */
   function slidesFor(lesson, level) {
     level = level || Settings.level;
-    let slides = (lesson.slides || []).map((s, i) => { const o = lesson._ov && lesson._ov.slides && lesson._ov.slides[i]; return o ? Object.assign({}, s, o, { _i: i, _edited: true }) : Object.assign({}, s, { _i: i }); })
+    // `html` (raw markup, e.g. a bar chart) is only ever taken from the course files — never from a section's customisations.
+    const own = lesson._custom ? undefined : null;
+    let slides = (lesson.slides || []).map((s, i) => { const o = lesson._ov && lesson._ov.slides && lesson._ov.slides[i]; return o ? Object.assign({}, s, o, { _i: i, _edited: true, html: own === null ? s.html : undefined }) : Object.assign({}, s, { _i: i, html: own === null ? s.html : undefined }); })
       .filter(s => !s.hidden);
-    if (lesson._ov && lesson._ov.addSlides) slides = slides.concat(lesson._ov.addSlides.map((s, k) => Object.assign({}, s, { _added: k })));
+    if (lesson._ov && lesson._ov.addSlides) slides = slides.concat(lesson._ov.addSlides.map((s, k) => Object.assign({}, s, { _added: k, html: undefined })));
     if (band()) return slides;
     return slides.filter(s => !s.levels || s.levels.includes(level));
   }
@@ -390,7 +396,7 @@
   /** Every term of a unit at the standard level (keys used by the Focus Plan). */
   function allTermKeys(unit) { return (unit.terms || []).map(t => L(t.term, 2)); }
 
-  window.LH = { LEVELS, LEVEL_NAMES, LEVEL_DESC, BANDS, band, body, def, byLevel, L, shuffle, sample, esc, md, speak, stopSpeaking, speakBtn, termsFor, slidesFor, mcOptions,
+  window.LH = { LEVELS, LEVEL_NAMES, LEVEL_DESC, BANDS, band, body, def, byLevel, L, shuffle, sample, esc, safeUrl, num, md, speak, stopSpeaking, speakBtn, termsFor, slidesFor, mcOptions,
                 questionsFor, resolveQuestion, termQuestions, choicePool, normalize, findCourse, findUnit, markSeen,
                 focusFor, unitsFor, lessonsFor, catsOf, allTermKeys, accom, assessmentCount, difficulty, assessmentOrder,
                 lessonCats, lessonCat, lessonQuestions, assignmentsFor, overlaySection, unitOverlay, lessonAt, CUSTOM_BASE, qKey };

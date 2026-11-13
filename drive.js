@@ -33,11 +33,11 @@
     const rows = [['Student', 'Course', 'Unit', 'Lesson', 'Track / level', 'Slides read', 'Quiz best %', 'Quiz attempts', 'Assignments handed in', 'Unit test best %', 'Awards earned']];
     const data = { exportedAt: new Date().toISOString(), by: staff.name, role: staff.role, app: 'The Academy · Learn Hub',
       students: [], sections: Sections.list,
-      // teachers travel with the export (name + PIN) so a pull on another device gives them the same sign-in; the master PIN never leaves the device
-      staff: { teachers: staff.role === 'master' ? Staff.teachers.map(t => ({ id: t.id, name: t.name, pin: t.pin, createdAt: t.createdAt })) : Staff.teachers.map(t => ({ id: t.id, name: t.name })) } };
+      // names only: no PIN, password or e-mail ever leaves in an export (v43)
+      staff: { teachers: Staff.teachers.map(t => ({ id: t.id, name: t.name })) } };
     students.forEach(s => {
-      const prog = Progress.peek(s.id);
-      data.students.push({ profile: Object.assign({}, s, { prefs: undefined }), progress: prog, focus: (() => { try { return JSON.parse(localStorage.getItem('learnhub.focus.' + s.id) || 'null'); } catch (e) { return null; } })() });
+      const prog = Progress.graded(s.id);   // the student's work with the teacher's grades laid over it
+      data.students.push({ profile: Object.assign({}, s, { prefs: undefined, dob: undefined, teachers: undefined, pwCustom: undefined }), progress: prog, focus: (() => { try { return JSON.parse(localStorage.getItem('learnhub.focus.' + s.id) || 'null'); } catch (e) { return null; } })() });
       courses.forEach(c => {
         if (!Students.enrolled(c.id, s)) return;
         const t = Students.trackFor(c.id, s);
@@ -55,7 +55,9 @@
       // level history rows
       Object.keys(s.levelLog || {}).forEach(cid => (s.levelLog[cid] || []).forEach(e => rows.push([s.name, (courses.find(c => c.id === cid) || { title: cid }).title, 'LEVEL CHANGE', e.lesson !== undefined ? 'after lesson ' + (e.lesson + 1) : '', 'Level ' + e.from + ' → ' + e.to + ' (' + e.by + ')', '', e.pct !== undefined ? e.pct : '', '', '', '', new Date(e.at).toLocaleString()])));
     });
-    const csv = rows.map(r => r.map(v => '"' + String(v === undefined || v === null ? '' : v).replace(/"/g, '""') + '"').join(',')).join('\r\n');
+    // a cell that starts with = + - @ (or a tab) would be run as a formula by Excel / Sheets: a leading ' keeps it as text
+    const cell = v => { v = String(v === undefined || v === null ? '' : v); if (/^[=+\-@\t\r]/.test(v)) v = "'" + v; return '"' + v.replace(/"/g, '""') + '"'; };
+    const csv = rows.map(r => r.map(cell).join(',')).join('\r\n');
     return { json: JSON.stringify(data, null, 1), csv, students: students.length, stamp: new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-') };
   }
   function download() {
@@ -67,6 +69,8 @@
   }
   /** Merge an exported JSON back in (students by id; progress replaced for those students). */
   function importJson(text) {
+    // With cloud accounts, students and teachers exist only once the server has created them; a file cannot add them.
+    if (window.Cloud && Cloud.enabled) throw new Error('Importing a file is only for device-only mode. With cloud accounts every device already has the same data.');
     const data = JSON.parse(text);
     let n = 0;
     (data.students || []).forEach(rec => {
