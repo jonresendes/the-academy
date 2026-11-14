@@ -30,6 +30,7 @@
      grades/{uid}__{course}   { student, course, data, updatedAt }   teacher grades; a student can read, not write
      focus/{uid}              { student, data, updatedAt }
      settings/global          { allowSelfSignup, colouringEvery }
+     courses/{CODE}, courseChunks/{CODE}__{n}   courses the Headmaster loaded from a file (see courseloader.js)
      audit/{id}               change log: lines added by staff apps, read by the Headmaster, never edited
    `teachers` (on the student record) is the list of staff who have that student. A teacher's app adds its own id
    when the student goes onto one of its rosters and takes it off again when they leave; the Headmaster's app keeps
@@ -457,6 +458,7 @@
         try { await Cloud.runMigration(); await loadOnce(user, Cloud.role); } catch (e) { console.warn('data upgrade failed', e); Cloud.loadError = 'The update to version 43 could not finish: ' + describe(e) + ' Check that the new firestore.rules are published, then use Settings → Security → Run the data upgrade again.'; } }
       startListening();
       if (Cloud.role !== 'student' && dataVersion >= 43) reconcileAccess().catch(e => console.warn('access lists', e));
+      if (window.CourseFiles) { try { await CourseFiles.loadAll(); } catch (e) { console.warn('loaded courses', e); } }   // courses the Headmaster added from files
       touch();
       Cloud.ready = true; if (Cloud.loadError) setStatus('error', Cloud.loadError); else setStatus(Cloud.online ? 'synced' : 'offline'); readyResolve(); emit('auth');
     } catch (e) { console.warn('cloud sign-in failed', e); Cloud.ready = true; setStatus('error', e.message); readyResolve(); emit('auth'); }
@@ -764,5 +766,5 @@
   Cloud.touch = touch;
   Cloud.keepSignedIn = () => localStorage.getItem(KEY_KEEP) === '1';
   Cloud.dobPassword = dobPassword;
-  Cloud.db = db; Cloud.auth = auth;
+  Cloud.db = db; Cloud.auth = auth; Cloud.log = log;
 })();

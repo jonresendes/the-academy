@@ -1,7 +1,7 @@
 /* The Academy · Learn Hub — service worker (offline cache + update detection).
    BUMP THE VERSION every time you upload changed files; that is what makes
    installed copies show the "Update available" notice. */
-const VERSION = 'learnhub-v46';
+const VERSION = 'learnhub-v49';
 const FILES = [
   './',
   './index.html',
@@ -33,6 +33,7 @@ const FILES = [
   './glc2o.js',
   './cloud-config.js',
   './cloud.js',
+  './courseloader.js',
   './firebase-app-compat.js',
   './firebase-auth-compat.js',
   './firebase-firestore-compat.js'

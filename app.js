@@ -380,13 +380,84 @@
       (Focus.enabled && Object.keys(Focus.data.courses).length ? '<div class="plan-banner">🎯 <strong>Focus Plan is on.</strong> Courses with a plan show only the pieces chosen for you.</div>' : '') +
       '<div class="case-stats"><div class="stat"><div class="n">' + mine.length + '</div><div class="l">Active class' + (mine.length === 1 ? '' : 'es') + '</div></div><div class="stat"><div class="n">🏅 ' + awards + ' / ' + total + '</div><div class="l">Awards</div></div><div class="stat"><div class="n">' + (avg === null ? '–' : avg + '%') + '</div><div class="l">Average best test</div></div><div class="stat"><div class="n">' + arch.length + '</div><div class="l">Archived</div></div></div>' +
       '<div class="desk-tiles">' +
-      tile('#/sections', '🏫', 'Sections', secs.filter(x => !x.archived).length ? secs.filter(x => !x.archived).length + ' section' + (secs.filter(x => !x.archived).length === 1 ? '' : 's') + (teachers.length ? ' with ' + esc(teachers.join(', ')) : '') : 'your teacher adds you to a section') +
-      tile('#/courses', '📚', 'Courses', mine.length + ' active' + (others.length && !s.coursesLocked ? ' · ' + others.length + ' to join' : '') + (arch.length ? ' · ' + arch.length + ' archived' : '')) +
-      tile(mine.length === 1 ? '#/grades/' + mine[0].id : '#/sections', '📊', 'Grades', (handedIn ? handedIn + ' assignment' + (handedIn === 1 ? '' : 's') + ' handed in' : 'quiz, test and assignment marks') + (mine.length > 1 ? ' · pick a class' : '')) +
-      tile('#/case', '🏆', 'Display Case', awards + ' of ' + total + ' awards earned') +
-      notesTile() +
+      tile('#/sections', '🏫', 'Sections', secs.filter(x => !x.archived).length ? secs.filter(x => !x.archived).length + (teachers.length ? ' with ' + esc(teachers.join(', ')) : '') : 'none yet') +
+      tile('#/courses', '📚', 'Courses', mine.length + ' active' + (arch.length ? ' · ' + arch.length + ' archived' : '')) +
+      tile(mine.length === 1 ? '#/grades/' + mine[0].id : '#/sections', '📊', 'Grades', handedIn ? handedIn + ' handed in' : 'your marks') +
+      tile('#/case', '🏆', 'Display Case', awards + ' / ' + total + ' awards') +
       '</div>' + deskNotesHtml();
     bindDeskNotes(pageHome);
+  }
+  /* ----- Load a course from a file (Headmaster) ----- */
+  let pendingCourseFile = null;   // { courses, envelope, source } from the last parsed file
+  function courseLoaderHtml() {
+    const loaded = CourseFiles.list();
+    return '<div class="card" id="courseLoader" style="margin-top:1.5rem;padding:1rem 1.25rem"><h2 style="margin:0 0 0.3rem">📥 Load a course from a file</h2>' +
+      '<p class="muted small">Pick a <code>.json</code> course file: the envelope <code>{ "format": "academy-course/1", "code": "ENG3U", "build": "2026-11-14", "course": {…} }</code> or a bare course object. A course file is <strong>data, never code</strong> — nothing in it is run; a repo-style <code>.js</code> file is converted first with <code>node course2json.js file.js</code>. Every piece of text is scrubbed (no scripts, styles, frames or odd links can get through), the shape is checked, then you confirm its <strong>Ontario course code</strong>. A code that is already in The Academy does not add a second course: it creates a <strong>section</strong> of the existing course for the teacher you choose. A new code adds the course for everyone, exactly like the built-in ones.</p>' +
+      '<div class="btn-row"><input type="file" id="courseFile" accept=".json,application/json"></div>' +
+      '<div id="courseFileOut"></div>' +
+      (loaded.length ? '<h3 style="margin:1rem 0 0.3rem">Courses loaded from files</h3><div class="hist-list">' + loaded.map(x => '<div class="hist-item"><strong>' + esc(x.course.icon || '📘') + ' ' + esc(x.course.title) + '</strong><span class="tag">' + esc(x.code) + '</span><span class="muted small">' + (x.course.build ? 'build ' + esc(x.course.build) + ' · ' : '') + x.course.units.length + ' units</span><button class="btn ghost sm" data-course-remove="' + esc(x.code) + '">🗑 Remove</button></div>').join('') + '</div>' : '') + '</div>';
+  }
+  function courseFileReportHtml(parsed) {
+    const course = parsed.courses[0]; const v = CourseFiles.validate(course); const code = CourseFiles.codeOf(course, parsed.envelope);
+    const st = v.stats;
+    return '<div class="card" style="margin-top:0.8rem;padding:0.9rem 1rem;background:var(--bg)">' +
+      '<p style="margin:0 0 0.3rem"><strong>' + esc(course.icon || '📘') + ' ' + esc(course.title || '(no title)') + '</strong> <span class="muted small">from ' + esc(parsed.source) + (parsed.envelope ? ' · ' + esc(parsed.envelope.format) + (parsed.envelope.build ? ' · build ' + esc(parsed.envelope.build) : '') : '') + '</span></p>' +
+      (parsed.courses.length > 1 ? '<p class="small" style="color:#b45309">This file holds ' + parsed.courses.length + ' courses; only the first is loaded. Put one course per file.</p>' : '') +
+      '<p class="muted small" style="margin:0 0 0.5rem">' + st.units + ' units · ' + st.lessons + ' lessons · ' + st.slides + ' slides · ' + st.questions + ' questions · ' + st.terms + ' terms · ' + st.assignments + ' assignments · ' + Math.round((st.size || 0) / 1024) + ' kB</p>' +
+      (v.errors.length ? '<div class="small" style="color:#b91c1c"><strong>Cannot load — fix these first:</strong><ul style="margin:0.2rem 0 0.4rem;padding-left:1.2rem">' + v.errors.map(e => '<li>' + esc(e) + '</li>').join('') + '</ul></div>' : '') +
+      (v.warns.length ? '<details class="small"><summary class="muted">' + v.warns.length + ' warning' + (v.warns.length === 1 ? '' : 's') + '</summary><ul style="margin:0.2rem 0 0.4rem;padding-left:1.2rem">' + v.warns.map(e => '<li>' + esc(e) + '</li>').join('') + '</ul></details>' : '') +
+      '<div class="plan-section"><div class="plan-label">Ontario course code</div><div class="btn-row"><input class="text-input" id="courseCode" style="max-width:180px;text-transform:uppercase" maxlength="12" placeholder="e.g. ENG3U" value="' + esc(code) + '"><button class="btn" id="courseCodeCheck">Check this code</button></div>' +
+      '<p class="muted small" style="margin:0.3rem 0 0">' + (code ? 'Read from the file — change it if it is wrong.' : 'The file does not say which course this is. Type the code (3 letters, grade digit, letter — e.g. GLC2O, SNC1L/2L).') + '</p><div id="courseCodeOut"></div></div></div>';
+  }
+  function bindCourseLoader() {
+    const inp = app.querySelector('#courseFile'), out = app.querySelector('#courseFileOut'); if (!inp) return;
+    inp.addEventListener('change', async () => {
+      const f = inp.files && inp.files[0]; if (!f) return;
+      out.innerHTML = '<p class="muted small">Reading ' + esc(f.name) + '…</p>';
+      try { pendingCourseFile = await CourseFiles.parse(f); out.innerHTML = courseFileReportHtml(pendingCourseFile); bindCodeCheck(); }
+      catch (e) { pendingCourseFile = null; out.innerHTML = '<p class="small" style="color:#b91c1c">⚠️ ' + esc(e.message || String(e)) + '</p>'; }
+    });
+    app.querySelectorAll('[data-course-remove]').forEach(b => b.addEventListener('click', async () => {
+      const code = b.dataset.courseRemove; const c = CourseFiles.loaded[code]; if (!c) return;
+      if (!confirm('Remove "' + c.title + '" from The Academy?\n\nSections of it stay but their course will be missing until it is loaded again; students\' progress records are kept.')) return;
+      b.disabled = true; try { await CourseFiles.remove(code); pageCourses(); } catch (e) { alert('Could not remove: ' + (e.message || e)); b.disabled = false; }
+    }));
+  }
+  function bindCodeCheck() {
+    const btn = app.querySelector('#courseCodeCheck'), box = app.querySelector('#courseCode'), out = app.querySelector('#courseCodeOut'); if (!btn) return;
+    const check = () => {
+      const code = box.value.toUpperCase().trim(); box.value = code;
+      if (!CourseFiles.isCode(code)) { out.innerHTML = '<p class="small" style="color:#b91c1c">That is not an Ontario course code. Codes look like ENG3U, GLC2O or SNC1L/2L.</p>'; return; }
+      const ex = CourseFiles.existing(code); const course = pendingCourseFile.courses[0]; const v = CourseFiles.validate(course);
+      if (ex) {
+        out.innerHTML = '<div class="plan-banner" style="margin-top:0.5rem">✅ <strong>' + esc(code) + '</strong> is already in The Academy: <em>' + esc(ex.title) + '</em>' + (ex.source === 'cloud' ? ' (loaded from a file' + (ex.build ? ', build ' + esc(ex.build) : '') + ')' : ' (built in)') + '. The file is not added again — create a section of it instead' + (ex.source === 'cloud' ? ', or <button class="btn ghost sm" id="courseReplace">replace the loaded copy with this file</button>' : '') + '.</div>' +
+          '<div class="plan-section"><div class="plan-label">New section of ' + esc(ex.title) + '</div><div class="grid-2">' +
+          '<label class="field">Section name<input class="text-input" id="lcSecName" placeholder="e.g. Period 2"></label><label class="field">Term<input class="text-input" id="lcSecTerm" placeholder="e.g. Fall 2026"></label>' +
+          '<label class="field">Teacher<select class="text-input" id="lcSecTeacher"><option value="">Me (Headmaster)</option>' + Staff.teachers.map(t => '<option value="' + esc(t.id) + '">' + esc(t.name) + '</option>').join('') + '</select></label></div>' +
+          '<div class="btn-row" style="margin-top:0.5rem"><button class="btn" id="lcSecCreate">🏫 Create the section</button></div></div>';
+        app.querySelector('#lcSecCreate').addEventListener('click', () => { const name = app.querySelector('#lcSecName').value.trim(); if (!name) return alert('Give the section a name.'); const t = app.querySelector('#lcSecTeacher').value || null; const sec = Sections.add(name, ex.id, t, app.querySelector('#lcSecTerm').value.trim()); if (Cloud.enabled) Cloud.flushNow().catch(() => {}); Sections.setCurrent(Staff.current.id, sec.id); location.hash = '#/sections'; });
+        const rp = app.querySelector('#courseReplace'); if (rp) rp.addEventListener('click', () => saveCourse(code, course, v, out, true));
+      } else {
+        out.innerHTML = '<div class="plan-banner" style="margin-top:0.5rem">🆕 <strong>' + esc(code) + '</strong> is not in The Academy yet.' + (v.errors.length ? ' Fix the errors above before it can be added.' : '') + '</div>' +
+          (v.errors.length ? '' : '<div class="btn-row" style="margin-top:0.5rem"><button class="btn" id="courseAdd">＋ Add ' + esc(code) + ' to The Academy</button><span class="muted small">It appears in Courses for every teacher at once; students see it once a section of it includes them (or they join it).</span></div>');
+        const add = app.querySelector('#courseAdd'); if (add) add.addEventListener('click', () => saveCourse(code, course, v, out, false));
+      }
+    };
+    btn.addEventListener('click', check); box.addEventListener('keydown', e => { if (e.key === 'Enter') check(); });
+    if (box.value) check();
+  }
+  async function saveCourse(code, course, v, out, replacing) {
+    if (v.errors.length) return;
+    if (!course.id || CourseFiles.existing(code) && CourseFiles.existing(code).id !== course.id && !replacing) course.id = CourseFiles.idFor(code);
+    if (replacing) { const ex = CourseFiles.existing(code); if (ex) course.id = ex.id; }
+    out.innerHTML = '<p class="muted small">Saving to the cloud…</p>';
+    try {
+      const meta = await CourseFiles.save(code, course, { by: Staff.current ? Staff.current.name : '', build: pendingCourseFile.envelope && pendingCourseFile.envelope.build, format: pendingCourseFile.envelope && pendingCourseFile.envelope.format });
+      pendingCourseFile = null;
+      pageCourses();
+      const n = app.querySelector('#courseFileOut'); if (n) n.innerHTML = '<div class="plan-banner">✅ <strong>' + esc(course.title) + '</strong> is now in The Academy (' + esc(code) + ', build ' + esc(meta.build) + '). <a href="#/course/' + esc(course.id) + '">Preview it</a> · <a href="#/sections?new=' + esc(course.id) + '">create a section</a>.</div>';
+      n && n.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } catch (e) { out.innerHTML = '<p class="small" style="color:#b91c1c">⚠️ Could not save: ' + esc(e.message || String(e)) + '</p>'; }
   }
   /** Courses page: a student's classes (join, archive, resume); for staff the course library in teacher preview. */
   function pageCourses() {
@@ -399,7 +470,9 @@
         '<div class="grid">' + allCourses().map(c => { const secs = mine.filter(x => x.courseId === c.id);
           return '<div class="card course-card" style="--course:' + esc(c.color || '') + '"><div class="card-icon">' + c.icon + '</div><h2>' + esc(c.title) + '</h2><p class="muted">' + esc(c.subtitle || '') + '</p><span class="tag">' + c.units.length + ' units · ' + c.units.reduce((n, u) => n + u.lessons.length, 0) + ' lessons</span>' +
             '<p class="muted small" style="margin:0.6rem 0 0">' + (secs.length ? 'Your sections: ' + secs.map(x => esc(x.name) + (Overlay.countChanges(x, c.id) ? ' (' + Overlay.countChanges(x, c.id) + ' change' + (Overlay.countChanges(x, c.id) === 1 ? '' : 's') + ')' : '')).join(', ') : 'No section of yours uses this course yet.') + '</p>' +
-            '<div class="btn-row" style="margin-top:0.6rem"><a class="btn secondary sm" href="#/course/' + c.id + '">👀 Preview</a><a class="btn ghost sm" href="#/sections?new=' + esc(c.id) + '">＋ New section</a></div></div>'; }).join('') + '</div>';
+            '<div class="btn-row" style="margin-top:0.6rem"><a class="btn secondary sm" href="#/course/' + c.id + '">👀 Preview</a><a class="btn ghost sm" href="#/sections?new=' + esc(c.id) + '">＋ New section</a>' + (c.source === 'cloud' && Staff.isMaster ? '<button class="btn ghost sm" data-course-remove="' + esc(c.code || c.id) + '">🗑 Remove</button>' : '') + '</div>' + (c.source === 'cloud' ? '<p class="muted small" style="margin:0.4rem 0 0">Loaded from a file' + (c.build ? ' · build ' + esc(c.build) : '') + '</p>' : '') + '</div>'; }).join('') + '</div>' +
+        (Staff.isMaster ? courseLoaderHtml() : '');
+      if (Staff.isMaster) bindCourseLoader();
       return;
     }
     const mine = courses();
@@ -426,12 +499,11 @@
     document.body.dataset.page = 'desk';
     app.innerHTML = '<div class="page-head"><div><h1>' + (s.role === 'master' ? '🦉 The Headmaster\'s Desk' : '🧑‍🏫 Teacher\'s Desk') + '</h1><p class="muted">Welcome, ' + esc(s.name) + ' · ' + (s.role === 'master' ? '<span class="tag hm-tag">👑 Headmaster</span>' : 'Teacher') + ' · ' + secs.length + ' active section' + (secs.length === 1 ? '' : 's') + ' · ' + scope.length + ' student' + (scope.length === 1 ? '' : 's') + '</p></div></div>' +
       '<div class="desk-tiles">' +
-      tile('#/sections', '🏫', 'Sections', secs.length + ' active' + (archived.length ? ' · ' + archived.length + ' archived' : '') + (cur ? ' · working in ' + esc(cur.name) : '')) +
-      tile('#/students', '👥', 'Students', scope.length + ' student' + (scope.length === 1 ? '' : 's') + (cur ? ' in ' + esc(cur.name) : s.role === 'master' ? ' in the school' : ' in your sections') + (sugg ? ' · 💡 ' + sugg + ' level suggestion' + (sugg === 1 ? '' : 's') : '')) +
-      tile('#/courses', '📚', 'Courses', allCourses().length + ' courses · teacher preview') +
-      tile('#/dashboard', '📊', 'Grades', (cur ? esc(cur.name) : 'all my students') + ' · quizzes, assignments, tests') +
-      notesTile() +
-      (s.role === 'master' ? tile('#/teachers', '🧑‍🏫', 'Teachers', Staff.teachers.length + ' teacher' + (Staff.teachers.length === 1 ? '' : 's') + ' · add, assign sections, reset') : '') +
+      tile('#/sections', '🏫', 'Sections', secs.length + ' active' + (archived.length ? ' · ' + archived.length + ' archived' : '')) +
+      tile('#/students', '👥', 'Students', scope.length + (cur ? ' in ' + esc(cur.name) : s.role === 'master' ? ' in the school' : ' in your sections') + (sugg ? ' · 💡 ' + sugg : '')) +
+      tile('#/courses', '📚', 'Courses', allCourses().length + ' courses') +
+      tile('#/dashboard', '📊', 'Grades', cur ? esc(cur.name) : 'quizzes · assignments · tests') +
+      (s.role === 'master' ? tile('#/teachers', '🧑‍🏫', 'Teachers', Staff.teachers.length + ' teacher' + (Staff.teachers.length === 1 ? '' : 's')) : '') +
       '</div>' + deskNotesHtml();
     bindDeskNotes(pageTeacherHome);
   }
@@ -456,24 +528,19 @@
   /** The notes with something on them, shown on the desk as sticky notes. Toggled by the Notes tile; open by default while there are notes. */
   function deskNotesHtml() {
     const n = notesData(); const used = n.items.slice(0, n.count).map((x, i) => Object.assign({ i }, x)).filter(x => (x.title || x.text).trim());
-    const open = used.length ? sessionStorage.getItem('learnhub.deskNotesClosed') !== '1' : sessionStorage.getItem('learnhub.deskNotesClosed') === '0';
-    return '<div id="deskNotes" class="card desk-fold desk-notes"' + (open ? '' : ' hidden') + '><div class="btn-row between"><h2 style="margin:0">📝 My notes</h2><div class="btn-row"><a class="btn secondary sm" href="#/notes">✏️ Open my notes</a><button class="btn ghost sm" data-notes-hide>Hide</button></div></div>' +
+    return '<div id="deskNotes" class="card desk-fold desk-notes"><div class="btn-row between"><h2 style="margin:0">📝 My notes <span class="muted small" style="font-weight:500">' + (used.length ? used.length + ' on your desk' : 'nothing written yet') + '</span></h2><a class="btn secondary sm" href="#/notes">✏️ Open my notes</a></div>' +
       (used.length ? '<div class="sticky-grid preview">' + used.map(x => '<div class="sticky ' + (NOTE_COLOURS.includes(x.colour) ? x.colour : 'yellow') + '"><div class="sticky-top">' + (x.title ? '<strong class="sticky-title-ro">' + esc(x.title) + '</strong>' : '<span></span>') + '<button class="sticky-clear" data-desk-note-del="' + x.i + '" title="Delete this note">✕</button></div><a class="sticky-text" href="#/notes">' + esc(x.text.slice(0, 220)) + (x.text.length > 220 ? '…' : '') + '</a>' + (x.at ? '<div class="sticky-foot muted small">' + new Date(x.at).toLocaleDateString() + '</div>' : '') + '</div>').join('') + '</div>'
-        : '<p class="muted small" style="margin:0.6rem 0 0">Nothing written yet — <a href="#/notes">open your notes</a> to start one. Notes you write stay here on your desk.</p>') + '</div>';
+        : '<p class="muted small" style="margin:0.6rem 0 0">Sticky notes you write in <a href="#/notes">My notes</a> stay here on your desk.' + (Students.current && Students.current.isStaff ? ' Only you see them.' : ' Your teachers can see them too.') + '</p>') + '</div>';
   }
   function bindDeskNotes(redraw) {
-    const tile = app.querySelector('[data-notes-tile]'); const panel = app.querySelector('#deskNotes');
-    if (tile && panel) tile.addEventListener('click', e => { e.preventDefault(); const show = panel.hidden; panel.hidden = !show; sessionStorage.setItem('learnhub.deskNotesClosed', show ? '0' : '1'); if (show) panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); });
-    app.querySelectorAll('[data-notes-hide]').forEach(b => b.addEventListener('click', () => { panel.hidden = true; sessionStorage.setItem('learnhub.deskNotesClosed', '1'); }));
     app.querySelectorAll('[data-desk-note-del]').forEach(b => b.addEventListener('click', () => { const n = notesData(); const i = +b.dataset.deskNoteDel; if (!confirm('Delete this note?')) return; n.items[i].title = ''; n.items[i].text = ''; n.items[i].at = new Date().toISOString(); saveNotes({ count: n.count, items: n.items }); redraw(); }));
   }
-  function notesTile() { const n = notesData(); const used = n.items.slice(0, n.count).filter(x => (x.title || x.text).trim()).length; return tile('#/notes', '📝', 'Notes', used ? used + ' note' + (used === 1 ? '' : 's') + ' on your desk · tap to show or hide' : 'your sticky notes — only you see them', ' data-notes-tile'); }
   function pageNotes() {
     const me = Students.current; if (!me) { location.hash = '#/'; return; }
     setCourseColor(null); setNav('home');
     const n = notesData();
     app.innerHTML = crumbs([{ label: deskName(), href: '#/' }, { label: 'Notes' }]) +
-      '<div class="page-head"><div><h1>📝 My notes</h1><p class="muted">Sticky notes for ' + esc(me.name) + ' — ' + (me.isStaff ? 'reminders, to-dos, things to say to a class. Only you can see them' : 'reminders, things to finish, questions for your teacher. They follow you') + ', on every device you sign in on. Each note saves itself as you type, and notes with something on them stay on your desk.</p></div>' +
+      '<div class="page-head"><div><h1>📝 My notes</h1><p class="muted">Sticky notes for ' + esc(me.name) + ' — ' + (me.isStaff ? 'reminders, to-dos, things to say to a class. Only you can see them' : 'reminders, things to finish, questions for your teacher. They are part of your profile, so your teachers can see them, and they follow you') + ', on every device you sign in on. Each note saves itself as you type, and notes with something on them stay on your desk.</p></div>' +
       '<div class="btn-row"><span class="muted small">Number of notes</span><div class="seg">' + [4, 6, 8, 10].map(k => '<button data-notes-count="' + k + '" class="' + (n.count === k ? 'on' : '') + '">' + k + '</button>').join('') + '</div></div></div>' +
       '<div class="sticky-grid">' + n.items.slice(0, n.count).map((x, i) => '<div class="sticky ' + (NOTE_COLOURS.includes(x.colour) ? x.colour : 'yellow') + '" data-note="' + i + '"><div class="sticky-top"><input class="sticky-title" data-note-title="' + i + '" placeholder="Title" maxlength="40" value="' + esc(x.title) + '"><span class="sticky-tools">' + NOTE_COLOURS.map(c => '<button class="sticky-dot ' + c + (x.colour === c ? ' on' : '') + '" data-note-colour="' + i + '" data-c="' + c + '" title="' + c + '"></button>').join('') + '<button class="sticky-clear" data-note-clear="' + i + '" title="Delete this note">✕</button></span></div>' +
         '<textarea class="sticky-body" data-note-text="' + i + '" placeholder="Write here…">' + esc(x.text) + '</textarea><div class="sticky-foot muted small" data-note-saved="' + i + '">' + (x.at ? 'saved ' + new Date(x.at).toLocaleString() : '') + '</div></div>').join('') + '</div>';
@@ -1632,6 +1699,7 @@
     d.textContent = '⚠️ ' + Cloud.loadError; app.insertBefore(d, app.firstChild);
   }
   window.addEventListener('hashchange', route);
+  window.addEventListener('courses:change', () => { const a = document.activeElement; if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return; route(); });
   // Live data from the cloud: redraw data pages (not while someone is typing in a box)
   window.addEventListener('cloud:change', () => { const a = document.activeElement; if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return; const p = location.hash.replace(/^#\/?/, '').split('/')[0]; if ((['', 'course', 'lesson', 'work', 'dashboard', 'grades', 'case', 'teachers', 'courses', 'sections', 'students'].includes(p) || (p === 'settings' && !Students.isStaffSession)) && Students.current) route(); renderWho(); });
   window.addEventListener('cloud:auth', () => {

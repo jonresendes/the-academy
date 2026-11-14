@@ -25,6 +25,7 @@ html2canvas.min.js   screenshot library (MIT), loaded only when the button is pr
 opendyslexic-400.woff2 / opendyslexic-700.woff2   dyslexia-friendly font (SIL OFL, see opendyslexic-LICENSE.txt)
 cloud-config.js Firebase project settings (public identifiers)
 cloud.js        Firebase sign-in + live sync layer, account management, access lists, the v43 data upgrade
+courseloader.js courses the Headmaster loads from a file: parse (.js in a worker / .json), validate, course-code check, cloud storage, registration
 firebase-app-compat.js / -auth- / -firestore-   Firebase SDK 10.14.1, served from this site
 firestore.rules security rules to paste into the Firebase console
 sw.js           service worker (offline cache) — bump VERSION on every deploy
@@ -108,6 +109,29 @@ v43 answers the v42 security review (project doc `security-privacy-audit-v42.md`
 
 **Rules changed in v43** — paste `firestore.rules` into Firestore → Rules → Publish before uploading the app (see DEPLOY.md).
 
+## Loading a course from a file (v48–v49)
+
+The Headmaster can add a course without touching the repository: **Courses → 📥 Load a course from a file** (`courseloader.js`).
+
+- **A course file is data, never code.** The app accepts only `.json`: the envelope `{ "format": "academy-course/1", "type": "course", "code": "ENG3U", "build": "2026-11-14", "course": { … } }` or a bare course object. One course per file. A repo-style `.js` course file (`window.LearnHub.courses.push({ … })`) is converted on your own computer first: `node course2json.js eng3u.js` writes `eng3u.json`. Nothing from a file is ever executed in anyone's browser (no eval, no worker, no script tag), and the CSP stays `script-src 'self'`.
+- **Scrubbed, then checked.** Every string in the course is cleaned before it is registered — and again whenever a copy arrives from the cloud or the local cache: the one field the app renders as raw HTML (slide `html`) goes through an allow-list sanitiser (text tags, lists, tables, images from https, links to https; no scripts, event handlers, styles, frames, forms or `javascript:`); every other string loses any tags and is escaped when drawn, as all cloud text is; media links must be http(s); colours must be `#hex`; ids are normalised; `__proto__`/`constructor`/`prototype` keys are dropped; size is capped. Then the shape is validated (id, title "CODE - description", units with lessons and slides, questions, terms) — errors block the load, warnings are listed.
+- **The course code box** is pre-filled from the envelope, id or title and must be confirmed; it is checked against every course already in The Academy (built in or loaded). A **known code** never adds a second course — it offers a **section** of the existing course (name, term, teacher; the Headmaster picks the teacher) or, for a course that was itself loaded from a file, *replace the loaded copy*. A **new code** adds the course.
+- **Storage and access.** `courses/{CODE}` holds the meta (code, id, title, build, size, parts, by, at) and `courseChunks/{CODE}__{n}` the JSON in pieces of ≤ 256k characters (under Firestore's 1 MB document limit at any encoding). Anyone with a record may read them; only the Headmaster writes (`firestore.rules` v48), the app refuses the action for anyone else, and every add / replace / remove is a line in the change log (Settings → Security). Every device registers the loaded courses at sign-in (and from a local cache straight away, which sign-out clears with the rest), so they appear in Courses, Sections, the Display Case, games and Grades exactly like the built-in ones. The Courses page lists loaded courses with their build and a **Remove** (sections of a removed course keep their rosters; progress records are kept).
+- **Authoring.** New courses are delivered as the JSON envelope (or as a `.js` to convert); `check_course.js` still validates a `.js` file offline.
+
+### Security checklist for every build (v49)
+
+Keep these true in any change; they are what the v42 review and the v43 update established.
+
+1. **No code from data.** Nothing read from a file, the cloud, a link or a form is ever executed: no `eval`, `new Function`, `setTimeout(string)`, blob/data workers, dynamic `<script>`, or `'unsafe-eval'`/`'unsafe-inline'` for scripts in the CSP.
+2. **Escape at the point of drawing.** Every value that came from storage or the cloud goes through `esc()` (or the allow-list sanitiser for the single raw-HTML slide field). URLs pass `safeUrl()`/the embed allow-list; colours match `#hex`.
+3. **Least access, enforced by the rules.** Students read and write only their own documents and only their own fields (`studentOwnFields`); teachers see only students on whose access list they are; Headmaster-only actions (staff, courses, settings, log) are Headmaster-only in `firestore.rules`, not just hidden in the UI. New collections get a rules block before they get code.
+4. **Diff, don't clobber.** Profiles and staff records are pushed field by field against the last cloud copy; new teacher-set fields go in the teacher-only set, new student-set fields in `studentOwnFields` (both the app list and the rules list).
+5. **Log what matters.** Account, roster, course and password actions write an `audit/` line.
+6. **Nothing left behind.** New local caches must be cleared by sign-out (everything under `learnhub.*` is).
+7. **Say who can see it.** When something a person writes is readable by someone else (a student's notes by their teachers), the screen says so.
+8. **Test with hostile data.** The smoke tests feed script, styles, frames, `javascript:` links and prototype keys through every new input; a build ships only when they come out as text.
+
 ## Levelled grades (v45)
 
 Each level is a **grade band**: L1 · Explorer 50–59, L2 · Scholar 60–69, L3 · Challenger 70–84, L4 · Trailblazer 85–100 (`LEVEL_BANDS` in `storage.js` — the single source for the level cards, the move-up/move-down offers, teacher suggestions and the grid colours). Work done at a level earns a grade inside that band.
@@ -120,7 +144,7 @@ Each level is a **grade band**: L1 · Explorer 50–59, L2 · Scholar 60–69, L
 
 ## Tile desks, Students page, Sections page, avatars (v44)
 
-- **Both desks are tile grids.** Teacher's Desk (shown as **The Headmaster's Desk** for the Headmaster, in the heading, the top menu and breadcrumbs): **Sections · Students · Courses · Grades · Notes** (+ **Teachers** for the Headmaster). Student Desk: the four stat tiles, then **Sections · Courses · Grades · Display Case · Notes**. Every tile opens a page; nothing folds out on the desk any more. **Settings** lives only in the top menu.
+- **Both desks are tile grids.** Teacher's Desk (shown as **The Headmaster's Desk** for the Headmaster, in the heading, the top menu and breadcrumbs): **Sections · Students · Courses · Grades** (+ **Teachers** for the Headmaster), then the **My notes** area. Student Desk: the four stat tiles, then **Sections · Courses · Grades · Display Case** and My notes. Tiles are compact and equal in height, icon centred above the title (v47); the page scrollbar is slim and its lane always reserved, so content never shifts sideways. Every tile opens a page; nothing folds out on the desk any more. **Settings** lives only in the top menu.
 - **Students page** (`#/students`, staff only, also in the top menu): search by name or student number, choose the scope (all my students / one section, archived sections included), and open any student for the full editor (level, courses and per-course level, Modified program, accommodations, Focus Plan, work, recordings). Each student's row has **🏫 Sections and teachers**: who they are assigned to now, and every section and teacher they have been with before (left when, since when). The history is kept on the section (`sec.log`) and on the student's record (`history`, teacher-only), so it survives archiving and a change of teacher. A teacher sees only the students of their own sections; the Headmaster sees the school.
 - **Sections page** hosts creating and managing sections (it used to be a Settings group). A section is the teacher's own copy of a course for one roster: everything customised in it (hidden lessons, edited slides, extra questions and terms, own lessons) stays in that section — including after it is archived — unless it is copied into another section with *copy customisations from…*. Teachers create their own sections; the **Headmaster** creates sections too and is the only one who can **assign a section to a teacher** (at creation here, or later on the Teachers page). The Headmaster can customise any section by selecting it as the working section.
 - **Courses page** (`#/courses`): students see their classes (resume, join, archived); staff see the library in teacher preview with each course's sections and a *＋ New section* shortcut.
@@ -137,7 +161,7 @@ Each level is a **grade band**: L1 · Explorer 50–59, L2 · Scholar 60–69, L
 
 ## Notes (everyone) and the desk
 
-Every desk — student, teacher, Headmaster — has a **Notes** tile. Tapping it shows or hides a **My notes** panel right there on the desk (no page change); **Open my notes** goes to the full page of 4 / 6 / 8 / 10 sticky notes (title, text, colour, delete). Notes with something on them stay on the desk as sticky notes and can be deleted from the desk (✕) or from inside the notes page; the panel is open whenever there are notes, and Hide folds it for the session. Each note saves itself half a second after you stop typing and the moment you leave the page. Staff notes are private to that teacher (`staffNotes/{uid}`, v43); a student's notes live on their own record (`notes`, a field only the student may write — `firestore.rules` v45) and follow them to any device.
+Every desk — student, teacher, Headmaster — has a **My notes** area under the tiles (v47: no separate Notes tile); **Open my notes** goes to the full page of 4 / 6 / 8 / 10 sticky notes (title, text, colour, delete). Notes with something on them stay on the desk as sticky notes and can be deleted from the desk (✕) or from inside the notes page; the area is always on the desk. Each note saves itself half a second after you stop typing and the moment you leave the page. Staff notes are private to that teacher (`staffNotes/{uid}`, v43); a student's notes live on their own record (`notes`, a field only the student may write — `firestore.rules` v45) and follow them to any device.
 
 ## Grades
 
@@ -236,11 +260,12 @@ The student sees a 🎯 banner, a smaller course and a *My goals* checklist per 
 
 ## Adding a course
 
-1. Copy `glc2o.js` (the smallest course) to `<your-course>.js`.
-2. Change `id`, `title`, `icon`, `color`, the `awards` names and the `units`.
-3. Add `<script src="<your-course>.js"></script>` to `index.html` next to the others.
+Two ways:
 
-That's it — the home page, Display Case and all games pick it up automatically.
+- **Upload it** (no repo change): Headmaster → Courses → *Load a course from a file* (see above). Works with a `.js` course file or the JSON envelope.
+- **Ship it in the repo**: copy `glc2o.js` (the smallest course) to `<your-course>.js`, change `id`, `title`, `icon`, `color`, the `awards` names and the `units`, add `<script src="<your-course>.js"></script>` to `index.html` next to the others and list the file in `sw.js`.
+
+Either way the home page, Display Case and all games pick it up automatically.
 
 ### Level variants
 

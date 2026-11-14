@@ -27,6 +27,7 @@
     <nav class="topnav">
       <a href="#/" data-nav="home">Student Desk</a>
       <a href="#/sections" data-nav="sections">Sections</a>
+      <a href="#/students" data-nav="students" hidden>Students</a>
       <a href="#/teachers" data-nav="teachers" hidden>Teachers</a>
       <a href="#/case" data-nav="case">Display Case</a>
       <a href="#/settings" data-nav="settings">Settings</a>
@@ -41,14 +42,13 @@
 
   <!-- ===== COURSES ===== -->
   <!-- Add one <script> line per course file. Order here is the order on the home page. -->
-  <script src="english.js"></script>
-  <script src="science.js"></script>
   <script src="olc4o.js"></script>
   <script src="colouring.js"></script>  <!-- line-art pictures for the Colouring Page -->
   <script src="hrf3o.js"></script>      <!-- HRF3O World Religions (4 units) — must load after colouring.js: it adds its own colouring pictures -->
   <script src="snc1l2l.js"></script>    <!-- SNC1L/2L Science, Locally Developed — loads after colouring.js -->
   <script src="glc2o.js"></script>      <!-- GLC2O Career Studies (5 units) — loads after colouring.js -->
   <script src="eng3u.js"></script>
+  <script src="courseloader.js"></script>  <!-- courses the Headmaster loads from a file (cached copies register here, before the app draws) -->
 
   <!-- ===== CLOUD (Firebase) — accounts and live sync; set enabled:false in cloud-config.js for device-only mode ===== -->
   <!-- Firebase SDK 10.14.1, served from this site (copied from the official npm package) so no outside script is trusted. -->

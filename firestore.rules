@@ -162,6 +162,17 @@ service cloud.firestore {
       allow read, update, delete: if isMaster();
     }
 
+    // ----- courses loaded from a file by the Headmaster -----
+    // Anyone with a record reads them (students need the course to study it); only the Headmaster writes.
+    match /courses/{code} {
+      allow read: if isStaff() || isStudent();
+      allow write: if isMaster();
+    }
+    match /courseChunks/{part} {
+      allow read: if isStaff() || isStudent();
+      allow write: if isMaster();
+    }
+
     // ----- shared options -----
     // Not secret (two switches). The sign-in screen reads it before anyone is signed in, to know whether to offer "I'm new".
     match /settings/global {
