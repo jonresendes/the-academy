@@ -16,8 +16,6 @@ media.js        dictation (voice to text) and audio recording (IndexedDB)
 drive.js        exports (CSV + JSON), import, Google Drive push/pull
 dashboard.js    teacher dashboard (students × lessons per section)
 app.js          router + pages
-english.js      sample course — copy this to start a new one
-science.js
 olc4o.js        OLC4O Literacy — Unit 1 · Reading Like a Detective (Lessons 1–7)
 colouring.js    line-art pictures for the Colouring Page
 media-guide-<course>.html   checklist of suggested images/videos per lesson (generated)
@@ -109,6 +107,16 @@ v43 answers the v42 security review (project doc `security-privacy-audit-v42.md`
 **Found a problem?** — a button in the bottom-left corner of every page for anyone signed in. It takes a picture of the screen, opens a box showing the picture (with a tick-box to leave it out) and a place to describe the problem, and sends both to the Headmaster. **Settings → 🐞 Reported problems** (Headmaster only) lists them — who, when, which page, app version, the message and the screenshot — with *Save screenshot* (downloads a JPEG), *Mark resolved / Reopen*, *Delete*, and Open / Resolved / All filters. Reports live in `issues/{id}`; the screenshot is a JPEG shrunk to fit inside the record. Embedded Google files and videos appear blank in a screenshot.
 
 **Rules changed in v43** — paste `firestore.rules` into Firestore → Rules → Publish before uploading the app (see DEPLOY.md).
+
+## Tile desks, Students page, Sections page, avatars (v44)
+
+- **Both desks are tile grids.** Teacher's Desk (shown as **The Headmaster's Desk** for the Headmaster, in the heading, the top menu and breadcrumbs): **Sections · Students · Courses · Grades · Notes** (+ **Teachers** for the Headmaster). Student Desk: the four stat tiles, then **Sections · Courses · Grades · Display Case**. Every tile opens a page; nothing folds out on the desk any more. **Settings** lives only in the top menu.
+- **Students page** (`#/students`, staff only, also in the top menu): search by name or student number, choose the scope (all my students / one section, archived sections included), and open any student for the full editor (level, courses and per-course level, Modified program, accommodations, Focus Plan, work, recordings). Each student's row has **🏫 Sections and teachers**: who they are assigned to now, and every section and teacher they have been with before (left when, since when). The history is kept on the section (`sec.log`) and on the student's record (`history`, teacher-only), so it survives archiving and a change of teacher. A teacher sees only the students of their own sections; the Headmaster sees the school.
+- **Sections page** hosts creating and managing sections (it used to be a Settings group). A section is the teacher's own copy of a course for one roster: everything customised in it (hidden lessons, edited slides, extra questions and terms, own lessons) stays in that section — including after it is archived — unless it is copied into another section with *copy customisations from…*. Teachers create their own sections; the **Headmaster** creates sections too and is the only one who can **assign a section to a teacher** (at creation here, or later on the Teachers page). The Headmaster can customise any section by selecting it as the working section.
+- **Courses page** (`#/courses`): students see their classes (resume, join, archived); staff see the library in teacher preview with each course's sections and a *＋ New section* shortcut.
+- **Avatars:** every profile picks from ~400 emoji in groups — People, Animals, School, Sport, Art & music, Math, Tech, Science, Literature & stories, Nature & food, Flags & places. The owl 🦉 is reserved for the Headmaster (it is not offered to anyone else and the store refuses it for other profiles).
+- The two sample courses (`english.js`, `science.js`) are gone; `Sample - English` / `Sample - Science` no longer appear anywhere.
+- Fix: a pending cloud write now carries a snapshot of the data, so an incoming copy of a record can no longer erase a change made a moment earlier (the enrolment history relied on this). Fix: the phone back button steps up one level even after pages that navigate by setting the address directly.
 
 ## Desks, Sections and Grades (v34)
 
@@ -218,7 +226,7 @@ The student sees a 🎯 banner, a smaller course and a *My goals* checklist per 
 
 ## Adding a course
 
-1. Copy `english.js` to `<your-course>.js`.
+1. Copy `glc2o.js` (the smallest course) to `<your-course>.js`.
 2. Change `id`, `title`, `icon`, `color`, the `awards` names and the `units`.
 3. Add `<script src="<your-course>.js"></script>` to `index.html` next to the others.
 
@@ -325,7 +333,7 @@ Accounts are stored on the device (`learnhub.staff`, `learnhub.sections`). To mo
 
 ## Course naming
 
-Every course's `title` is its Ontario course code, a hyphen, and a short description: `HRF3O - World Religions`, `OLC4O - Literacy Course`, `SNC1L/2L - Grade 9-10 Science`, and for future courses e.g. `CLN4U - International Law`, `HZT4U - Philosophy`. The `subtitle` carries the fuller name or theme. The two template courses without a code are titled `Sample - English` and `Sample - Science`.
+Every course's `title` is its Ontario course code, a hyphen, and a short description: `HRF3O - World Religions`, `OLC4O - Literacy Course`, `SNC1L/2L - Grade 9-10 Science`, and for future courses e.g. `CLN4U - International Law`, `HZT4U - Philosophy`. The `subtitle` carries the fuller name or theme. (The two sample courses were removed in v44.)
 
 ## Classroom shell (per-section customisation)
 
