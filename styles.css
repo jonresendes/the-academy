@@ -494,7 +494,7 @@ body { overflow-x: hidden; }
 .level-cards.compact .level-card p { font-size: 0.8rem; }
 .course-line { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.45rem 0; border-bottom: 1px dashed var(--line); flex-wrap: wrap; }
 .course-line label { font-weight: 700; display: flex; align-items: center; gap: 0.5rem; cursor: pointer; }
-.course-line input { width: 20px; height: 20px; accent-color: var(--primary); }
+.course-line input:not(.text-input) { width: 20px; height: 20px; accent-color: var(--primary); }
 .course-line.off label { color: var(--muted); }
 .course-line .seg button { padding: 0.3rem 0.7rem; }
 .suggestion { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; flex-wrap: wrap; padding: 0.5rem 0.75rem; background: var(--accent-soft); border-radius: var(--radius-sm); margin-bottom: 0.4rem; }
