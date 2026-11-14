@@ -1,57 +1,63 @@
-// check_course.js — run: node check_course.js glc2o.js
-const fs = require('fs'), path = require('path');
-global.window = {};
-eval(fs.readFileSync(path.resolve(process.argv[2] || 'glc2o.js'), 'utf8'));
-const LH = window.LearnHub; let err = 0, warn = 0;
-const E = m => { err++; console.log('ERROR', m); }, W = m => { warn++; console.log('warn ', m); };
-function at(v, lvl) { // nearest lower level, then nearest higher
-  if (v === null || typeof v !== 'object' || Array.isArray(v)) return v;
-  for (let l = lvl; l >= 1; l--) if (v[l] !== undefined) return v[l];
-  for (let l = lvl + 1; l <= 4; l++) if (v[l] !== undefined) return v[l];
-}
-const vis = (x, lvl) => !x.levels || x.levels.includes(lvl);
-const NEED = { 1: 4, 2: 6, 3: 8, 4: 10 }, TEST = { 1: 5, 2: 8, 3: 12, 4: 15 };
+// node check_course.js eng3u.js  — validates an Academy course file
+const fs = require('fs'), vm = require('vm');
+const file = process.argv[2]; const ctx = { window: {} }; ctx.window.window = ctx.window;
+vm.runInNewContext(fs.readFileSync(file, 'utf8'), ctx, { filename: file });
+const LH = ctx.window.LearnHub; let errors = 0, warns = 0;
+const err = m => { errors++; console.log('ERROR ' + m); }, warn = m => { warns++; console.log('warn  ' + m); };
+function res(v, L) { if (v == null) return v; if (typeof v !== 'object' || Array.isArray(v)) return v;
+  for (let l = L; l >= 1; l--) if (v[l] != null) return v[l]; for (let l = L; l <= 4; l++) if (v[l] != null) return v[l]; return undefined; }
+const vis = (x, L) => !x.levels || x.levels.includes(L);
 for (const c of LH.courses) {
-  if (!/^[A-Z0-9/]+ - /.test(c.title)) E('course title format: ' + c.title);
-  let tl = 0, ts = 0, tt = 0, tq = 0, ta = 0;
+  let tot = { lessons: 0, slides: 0, terms: 0, q: 0, q4: 0, asg: 0 };
+  if (!/^[A-Z0-9/]+ - /.test(c.title)) err('course title must be "CODE - description"');
+  console.log(`\n${c.title} (${c.id})`);
   for (const u of c.units) {
+    const where = `${u.id}`; let uq4 = 0, uasg = 0;
+    for (let L = 1; L <= 4; L++) if (!res(u.description, L)) err(`${where} description L${L}`);
     const cats = new Set();
-    u.lessons.forEach((l, i) => {
-      const n = i + 1, tag = `${u.id} L${n}`; tl++;
-      if (l.slides.length !== 5) E(tag + ' slide count ' + l.slides.length);
-      l.slides.forEach((s, j) => { ts++; for (let v = 1; v <= 4; v++) { const b = at(s.body, v); if (!b || b.length < 20) E(`${tag} slide ${j} empty at L${v}`); if (/undefined|\$\{/.test(b)) E(`${tag} slide ${j} bad text L${v}`); } 
-        if (at(s.body,1).length > at(s.body,2).length) W(`${tag} slide ${j}: L1 longer than L2`); });
-      if (!/Write this down/.test(l.slides[3].title)) E(tag + ' slide 3 is not the record slide');
-      if (!/^Try it/.test(l.slides[4].title)) E(tag + ' slide 4 is not the Try it slide');
-      if (!l.cats || l.cats.length !== 1) E(tag + ' cats');
-      const cat = l.cats[0]; if (cats.has(cat)) E(tag + ' duplicate cat'); cats.add(cat);
-      if (!cat.startsWith('L' + n + ' ')) E(tag + ' cat prefix ' + cat);
-      if (cat.length - ('L' + n + ' ').length > 32) E(tag + ' cat too long');
+    u.lessons.forEach((les, i) => {
+      const w = `${where} L${i + 1}`;
+      if (les.slides.length !== 5) err(`${w} has ${les.slides.length} slides`);
+      if (!/Write this down/.test(les.slides[3].title)) err(`${w} slide 3 is not the record`);
+      if (!/Try it/.test(les.slides[4].title)) err(`${w} slide 4 is not Try it`);
+      les.slides.forEach((s, k) => { for (let L = 1; L <= 4; L++) { const b = res(s.body, L); if (!b || b.length < 40) err(`${w} slide ${k} L${L} empty`); if (/undefined|\[object/.test(b)) err(`${w} slide ${k} L${L} has undefined`);
+        if (L === 1 && b.split(/\s+/).length > 190) warn(`${w} slide ${k} L1 is long (${b.split(/\s+/).length} words)`); } });
+      if (!les.cats || les.cats.length !== 1) err(`${w} cats`); const cat = les.cats[0];
+      if (cats.has(cat)) err(`${w} duplicate cat ${cat}`); cats.add(cat);
+      if (cat.replace(/^L\d+ /, '').length > 32) err(`${w} cat too long`);
       const qs = u.questions.filter(q => q.cat === cat);
-      for (let v = 1; v <= 4; v++) { const k = qs.filter(q => q.type !== 'match' && vis(q, v)).length; if (k < NEED[v]) E(`${tag} only ${k} quiz questions at L${v}`); }
-      if (qs.filter(q => q.levels && q.levels.length === 1 && q.levels[0] === 4).length < 3) E(tag + ' fewer than 3 L4-only questions');
-      if (qs.filter(q => q.type === 'match').length !== 1) E(tag + ' needs one match question');
-      if (l.assignments.length < 2) E(tag + ' fewer than 2 assignments');
-      l.assignments.forEach(a => { ta++; ['prompt', 'starter', 'success'].forEach(f => { for (let v = 1; v <= 4; v++) if (!at(a[f], v)) E(`${tag} assignment "${a.title}" ${f} L${v}`); }); if (!a.expectations) E(tag + ' assignment expectations'); });
-      if (!/My record/.test(l.assignments[0].title)) E(tag + ' first assignment is not the record');
-      if ((l.media || []).length !== 2) W(tag + ' media slots: ' + (l.media || []).length);
-      (l.media || []).forEach(m => { if (m.slide < 0 || m.slide > 4) E(tag + ' media slide index'); });
+      const need = { 1: 4, 2: 6, 3: 8, 4: 10 };
+      for (let L = 1; L <= 4; L++) { const n = qs.filter(q => q.type !== 'match' && vis(q, L)).length; if (n < need[L]) err(`${w} only ${n} quiz questions at L${L}`); }
+      const l4 = qs.filter(q => q.levels && q.levels.length === 1 && q.levels[0] === 4).length; if (l4 < 3) err(`${w} only ${l4} L4-only questions`); uq4 += l4;
+      if (qs.filter(q => q.type === 'match').length !== 1) err(`${w} match count`);
+      if (!les.assignments || les.assignments.length < 2) err(`${w} needs 2 assignments`);
+      else { if (!/My record/.test(les.assignments[0].title)) err(`${w} first assignment is not the record`);
+        les.assignments.forEach(a => { for (let L = 1; L <= 4; L++) for (const k of ['prompt', 'starter', 'success']) if (!res(a[k], L)) err(`${w} assignment "${a.title}" ${k} L${L}`); if (!a.expectations) err(`${w} assignment expectations`); }); uasg += les.assignments.length; }
+      (les.media || []).forEach(m => { if (m.slide > 4 || !m.type || !m.title || !/^https:\/\//.test(m.url)) err(`${w} media slot`); });
+      if ((les.media || []).length < 2) warn(`${w} has ${(les.media || []).length} media slots`);
+      tot.slides += les.slides.length;
     });
     const prompts = new Set();
-    u.questions.forEach(q => { tq++;
-      if (!cats.has(q.cat)) E(`${u.id} question with unknown cat ${q.cat}`);
-      const key = q.type + '|' + JSON.stringify(q.prompt) + '|' + (q.levels || ''); if (prompts.has(key)) W(`${u.id} duplicate prompt: ${String(q.prompt).slice(0, 60)}`); prompts.add(key);
-      if (q.type === 'mc') for (let v = 1; v <= 4; v++) { if (!vis(q, v)) continue; const o = at(q.options, v); if (!Array.isArray(o) || !o.includes(q.answer)) E(`${u.id} MC answer missing L${v}: ${q.prompt.slice(0, 50)}`); if (new Set(o).size !== o.length) E(`${u.id} MC duplicate options: ${q.prompt.slice(0, 50)}`); if (o.length < 2) E('MC too few options'); if (o.some(x => !x)) E(`${u.id} MC empty option: ${q.prompt.slice(0, 50)}`); }
-      if (q.type === 'fill') { if (!q.prompt.includes('___')) E(`${u.id} fill without blank: ${q.prompt}`); if (!q.bank.includes(q.answer)) E('fill bank'); if (new Set(q.bank).size !== q.bank.length) E(`${u.id} fill duplicate bank: ${q.prompt}`); }
-      if (q.type === 'tf' && typeof q.answer !== 'boolean') E('tf answer');
-      if (q.type === 'match') q.pairs.forEach(p => { if (!p[0] || !p[1]) E('match pair'); });
+    u.questions.forEach(q => {
+      const id = `${where} [${q.cat}] ${JSON.stringify(res(q.prompt, 2)).slice(0, 60)}`;
+      if (!cats.has(q.cat)) err(`${id} unknown cat`);
+      const key = JSON.stringify(q.prompt) + (q.levels || ''); if (prompts.has(key)) err(`${id} duplicate prompt`); prompts.add(key);
+      if (q.type === 'mc') for (let L = 1; L <= 4; L++) { if (!vis(q, L)) continue; const o = res(q.options, L);
+        if (!o || o.length < 2) err(`${id} options L${L}`); else { if (!o.includes(q.answer)) err(`${id} answer missing L${L}`); if (new Set(o).size !== o.length) err(`${id} duplicate options L${L}`); if (o.some(x => !x)) err(`${id} empty option L${L}`); } }
+      else if (q.type === 'tf') { if (typeof q.answer !== 'boolean') err(`${id} tf answer`); }
+      else if (q.type === 'fill') { if (!/___/.test(q.prompt)) err(`${id} no blank`); if (!q.bank.includes(q.answer)) err(`${id} answer not in bank`); if (new Set(q.bank).size !== q.bank.length) err(`${id} dup bank`); if (/\s/.test(q.answer.trim()) ) warn(`${id} multi-word fill answer`); }
+      else if (q.type === 'match') { if (q.pairs.length < 4) err(`${id} match pairs`); if (new Set(q.pairs.map(p => p[1])).size !== q.pairs.length) err(`${id} dup defs`); }
+      else err(`${id} type`);
     });
-    for (let v = 1; v <= 4; v++) { const k = u.questions.filter(q => q.type !== 'match' && vis(q, v)).length; if (k < TEST[v]) E(`${u.id} test pool ${k} at L${v}`); }
-    if (u.terms.length < 10) E(u.id + ' fewer than 10 terms');
-    const tset = new Set(); u.terms.forEach(t => { tt++; if (tset.has(t.term)) E('dup term ' + t.term); tset.add(t.term); for (let v = 1; v <= 4; v++) if (!at(t.def, v)) E('term def ' + t.term); if (at(t.def, 1).toLowerCase().includes(t.term.toLowerCase()) && t.term.length > 4) W(`${u.id} term "${t.term}" appears in its own L1 definition`); });
-    const pics = (LH.colouring || {})[c.id + '/' + u.id]; if (!pics || !pics.length) E(u.id + ' no colouring picture'); else pics.forEach(p => { if ((p.svg.match(/class="region"/g) || []).length < 8) E(u.id + ' colouring regions'); });
-    console.log(`${u.title}: ${u.lessons.length} lessons, ${u.lessons.length * 5} slides, ${u.terms.length} terms, ${u.questions.length} questions (${u.questions.filter(q => q.levels && q.levels[0] === 4 && q.levels.length === 1).length} L4-only), ${u.lessons.reduce((s, l) => s + l.assignments.length, 0)} assignments`);
+    const pool = { 1: 5, 2: 8, 3: 12, 4: 15 };
+    for (let L = 1; L <= 4; L++) { const n = u.questions.filter(q => q.type !== 'match' && vis(q, L)).length; if (n < pool[L]) err(`${where} test pool L${L} = ${n}`); }
+    if (u.terms.length < 10) err(`${where} only ${u.terms.length} terms`);
+    u.terms.forEach(t => { for (let L = 1; L <= 4; L++) if (!res(t.def, L)) err(`${where} term ${t.term}`); });
+    const pics = (LH.colouring || {})[`${c.id}/${u.id}`];
+    if (!pics || !pics.length) err(`${where} no colouring picture`); else pics.forEach(p => { const n = (p.svg.match(/class="region"/g) || []).length; if (n < 8) err(`${where} colouring has ${n} regions`); });
+    console.log(`  ${u.title}: ${u.lessons.length} lessons, ${u.lessons.length * 5} slides, ${u.terms.length} terms, ${u.questions.length} questions (${uq4} L4-only), ${uasg} assignments`);
+    tot.lessons += u.lessons.length; tot.terms += u.terms.length; tot.q += u.questions.length; tot.q4 += uq4; tot.asg += uasg;
   }
-  console.log(`${c.title}: ${c.units.length} units, ${tl} lessons, ${ts} slides, ${tt} terms, ${tq} questions, ${ta} assignments`);
+  console.log(`  TOTAL: ${tot.lessons} lessons, ${tot.slides} slides, ${tot.terms} terms, ${tot.q} questions (${tot.q4} L4-only), ${tot.asg} assignments`);
 }
-console.log(`${err} errors, ${warn} warnings`); process.exit(err ? 1 : 0);
+console.log(`\n${errors} errors, ${warns} warnings`); process.exit(errors ? 1 : 0);
