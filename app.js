@@ -60,7 +60,7 @@
     if (!(Focus.active(course.id))) return '';
     return '<div class="plan-banner">🎯 <strong>Focus Plan is on.</strong> This course shows only the units, lessons and words chosen for you.</div>';
   }
-  const BAND_MIN = { 1: 50, 2: 60, 3: 70, 4: 80 };
+  const BAND_MIN = { 1: LEVEL_BANDS[1][0], 2: LEVEL_BANDS[2][0], 3: LEVEL_BANDS[3][0], 4: LEVEL_BANDS[4][0] };
   /** Small line on the course page: the level the student is working at, with "go back" when a move was made. */
   function levelBanner(course) {
     const t = Students.trackFor(course.id);
@@ -73,13 +73,13 @@
     if (Students.trackFor(course.id)) return '';
     const l = Students.levelFor(course.id);
     if (pct >= 85 && l < 4) return '<div class="level-prompt up"><strong>🚀 ' + pct + '% — that\'s mastery at Level ' + l + '.</strong> Want to work at <strong>Level ' + (l + 1) + ' · ' + LEVEL_NAMES[l + 1] + '</strong> for the next lessons? You can always go back.<div class="btn-row" style="margin-top:0.5rem"><button class="btn success sm" data-level-move="' + (l + 1) + '" data-pct="' + pct + '" data-lesson="' + lessonIdx + '">Yes, move up</button><button class="btn ghost sm" data-level-stay>Not now</button></div></div>';
-    if (pct < BAND_MIN[l] && l > 1) return '<div class="level-prompt down"><strong>💡 ' + pct + '% is below the Level ' + l + ' target (' + BAND_MIN[l] + '%).</strong> Would you like to work at <strong>Level ' + (l - 1) + ' · ' + LEVEL_NAMES[l - 1] + '</strong> for now and build back up?<div class="btn-row" style="margin-top:0.5rem"><button class="btn sm" data-level-move="' + (l - 1) + '" data-pct="' + pct + '" data-lesson="' + lessonIdx + '">Yes, for now</button><button class="btn ghost sm" data-level-stay>Keep going at Level ' + l + '</button></div></div>';
+    if (pct < Badges.PASS_MARK && l > 1) return '<div class="level-prompt down"><strong>💡 ' + pct + '% is below the pass mark (' + Badges.PASS_MARK + '%).</strong> Would you like to work at <strong>Level ' + (l - 1) + ' · ' + LEVEL_NAMES[l - 1] + '</strong> for now and build back up?<div class="btn-row" style="margin-top:0.5rem"><button class="btn sm" data-level-move="' + (l - 1) + '" data-pct="' + pct + '" data-lesson="' + lessonIdx + '">Yes, for now</button><button class="btn ghost sm" data-level-stay>Keep going at Level ' + l + '</button></div></div>';
     return '';
   }
   function bindLevelPrompt(course) {
     app.querySelectorAll('[data-level-move]').forEach(b => b.addEventListener('click', () => {
       const to = +b.dataset.levelMove, from = Students.levelFor(course.id);
-      Students.moveLevel(Students.current.id, course.id, to, 'student', to > from ? 'mastery ≥ 85%' : 'below band', { lesson: +b.dataset.lesson, pct: +b.dataset.pct });
+      Students.moveLevel(Students.current.id, course.id, to, 'student', to > from ? 'mastery ≥ 85%' : 'below pass mark', { lesson: +b.dataset.lesson, pct: +b.dataset.pct });
       const box = b.closest('.level-prompt'); if (box) box.innerHTML = '<strong>✓ You are now working at Level ' + to + ' · ' + LEVEL_NAMES[to] + '.</strong> <span class="muted small">Your teacher can see this change.</span>';
     }));
     app.querySelectorAll('[data-level-stay]').forEach(b => b.addEventListener('click', () => { const box = b.closest('.level-prompt'); if (box) box.remove(); }));
@@ -647,7 +647,7 @@
       '<span class="btn-row">' + (w.done ? '<span class="tag ok">✓ Handed in</span><button class="btn secondary" id="reopen">Edit again</button>' : '<button class="btn secondary" id="saveWork">Save draft</button><button class="btn success" id="handIn">Hand in</button>') + '</span></div></div>' +
       '<p class="center" style="margin-top:1rem"><a class="btn ghost" href="#/lesson/' + course.id + '/' + unit.id + '/' + lessonIdx + '">← Back to the lesson</a></p>';
     const ta = app.querySelector('#workText');
-    const save = (done) => { w.text = ta.value; w.at = new Date().toISOString(); if (done !== undefined) w.done = done; Progress.save(); };
+    const save = (done) => { w.text = ta.value; w.at = new Date().toISOString(); if (done !== undefined) w.done = done; if (done) w.level = Settings.level; else if (!w.level) w.level = Settings.level; Progress.save(); };
     let t = null; ta.addEventListener('input', () => { app.querySelector('#workMeta').textContent = words(ta.value) + ' words · saving…'; clearTimeout(t); t = setTimeout(() => { save(); app.querySelector('#workMeta').textContent = words(ta.value) + ' words · saved'; }, 800); });
     const on = (id, fn) => { const el = app.querySelector(id); if (el) el.addEventListener('click', fn); };
     on('#useStarter', () => { if (!ta.value.trim()) { ta.value = starter + ' '; ta.focus(); save(); } });
@@ -769,7 +769,7 @@
     const qs = o.qs;
     app.innerHTML = o.head + '<div class="card center" style="padding:2.5rem"><div class="card-icon">' + (o.icon || '📝') + '</div><h2>' + esc(o.title || 'Ready?') + '</h2>' +
       '<p class="muted">' + qs.length + ' questions · pass mark ' + Badges.PASS_MARK + '%' + (o.best ? ' · your best: ' + o.best + '%' : '') + '</p>' +
-      '<button class="btn lg" id="startBtn">' + esc(o.start || 'Start') + '</button>' + (o.print ? '<div style="margin-top:0.75rem">' + Print.button(o.print, 'Print a paper copy') + '</div>' : '') + '</div>';
+      '<button class="btn lg" id="startBtn">' + esc(o.start || 'Start') + '</button>' + (o.alt || '') + (o.print ? '<div style="margin-top:0.75rem">' + Print.button(o.print, 'Print a paper copy') + '</div>' : '') + '</div>';
     app.querySelector('#startBtn').addEventListener('click', start);
     function start() {
       let i = 0, score = 0;
@@ -791,9 +791,10 @@
       function finish() {
         const pct = Math.round(score / qs.length * 100);
         const fresh = o.onDone(pct, score) || [];
+        const gl = o.gradeLine ? o.gradeLine(pct) : '';
         app.innerHTML = o.head + '<div class="card result-card"><div class="big-num">' + pct + '%</div>' +
           '<h2>' + (pct === 100 ? 'Perfect!' : pct >= Badges.PASS_MARK ? 'You passed!' : 'Keep practising') + '</h2>' +
-          '<p class="muted">' + score + ' of ' + qs.length + ' correct.' + (pct < Badges.PASS_MARK ? ' Read the lesson again and try once more.' : '') + '</p>' +
+          '<p class="muted">' + score + ' of ' + qs.length + ' correct.' + (pct < Badges.PASS_MARK ? ' Read the lesson again and try once more.' : '') + '</p>' + gl +
           (fresh.length ? '<p>' + fresh.map(a => '<span class="tag accent">' + a.icon + ' ' + esc(a.name) + '</span>').join(' ') + '</p>' : '') +
           (o.extra ? o.extra(pct) : '') + (o.note ? o.note(pct) : '') +
           '<div class="btn-row" style="justify-content:center"><button class="btn" id="retry">Try again</button>' + (o.links || '') + '</div></div>';
@@ -803,33 +804,58 @@
     }
   }
 
-  function pageTest(courseId, unitId) {
+  /** Which level an assessment runs at: the student's working level, or one level up when a rewrite is allowed and asked for. */
+  function assessLevel(course, at) {
+    const base = Settings.level; at = +at || 0;
+    if (!at || at === base) return base;
+    if (Students.trackFor(course.id)) return base;
+    const s = Students.current; const allowed = s && (s.isStaff || s.rewrite);
+    return allowed && at === base + 1 && at <= 4 ? at : base;
+  }
+  /** "Try it at Level N+1" button for the start screen (students whose teacher allows rewrites; teachers always). */
+  function rewriteOffer(course, base, href) {
+    const s = Students.current; if (!s || Students.trackFor(course.id) || base >= 4) return '';
+    if (!(s.isStaff || s.rewrite)) return '';
+    return '<p class="muted small" style="margin-top:0.9rem">Working at <strong>Level ' + base + ' · ' + LEVEL_NAMES[base] + '</strong> (grades ' + LEVELS[base].band + '). ' +
+      'Want to try for a higher grade? <a class="btn ghost sm" href="' + href + '/' + (base + 1) + '">🚀 Take it at Level ' + (base + 1) + ' (' + LEVELS[base + 1].band + ')</a></p>';
+  }
+  function gradeLineHtml(level, pct, rec, what) {
+    const g = Grading.levelled(pct, level); const b = rec && rec.grade !== undefined ? rec : null;
+    return '<div class="grade-line"><strong>Grade for this attempt: ' + g + '</strong> <span class="muted small">(' + pct + '% at Level ' + level + ' · ' + LEVELS[level].band + ')</span>' +
+      (b ? '<div class="muted small">Your ' + what + ' grade that counts: <strong>' + b.grade + '</strong> — your best, earned at Level ' + b.gradeLevel + (b.gradeLevel !== level ? '' : '') + '.</div>' : '') + '</div>';
+  }
+
+  function pageTest(courseId, unitId, at) {
     const course = findCourse(courseId), unit = findUnit(course, unitId); if (!unit || !Students.enrolled(course.id)) return notFound();
     setCourseColor(course); setNav('home');
     const u = Progress.unit(course.id, unit.id);
     const head = crumbs([{ label: deskName(), href: '#/' }, { label: course.title, href: '#/course/' + course.id }, { label: unit.title, href: '#/course/' + course.id }, { label: 'Unit test' }]) +
       '<div class="page-head"><div><h1>📝 Unit test</h1><p class="muted">' + esc(unit.title) + ' · covers every lesson in the unit</p></div></div>';
-    const level = Settings.level;
+    const base = Settings.level, level = assessLevel(course, at);
     const count = assessmentCount(byLevel(level, [5, 8, 12, 15]));
     const qs = buildAssessment(questionsFor(unit, level), count);
     if (!qs.length) { app.innerHTML = head + '<div class="empty">This unit has no test questions yet.</div>'; return; }
-    runAssessment({ head, qs, best: u.testBest, title: 'Ready for the unit test?', start: 'Start the test', print: '#/print/' + course.id + '/' + unit.id + '/test',
+    u.test = u.test || { levels: {} };
+    runAssessment({ head, qs, best: u.testBest, title: level > base ? 'Unit test at Level ' + level + ' · ' + LEVEL_NAMES[level] : 'Ready for the unit test?', start: level > base ? 'Start the Level ' + level + ' test' : 'Start the test', print: '#/print/' + course.id + '/' + unit.id + '/test',
+      alt: level > base ? '<p class="muted small" style="margin-top:0.9rem">A rewrite one level up: a higher grade here replaces your Level ' + base + ' grade; a lower one changes nothing.</p>' : rewriteOffer(course, base, '#/test/' + course.id + '/' + unit.id),
+      gradeLine: (pct) => gradeLineHtml(level, pct, u.test, 'unit test'),
       onDone(pct) {
         u.testAttempts = (u.testAttempts || 0) + 1;
         u.testBest = Math.max(u.testBest || 0, pct);
         if (pct >= Badges.PASS_MARK) u.testPassed = true; else u.failedOnce = true;
         if (pct === 100) u.testPerfect = true;
+        Grading.recordAttempt(u.test, level, pct);
         Progress.save();
         const fresh = Badges.evaluate(course, unit);
         Students.suggest(course.id, unit.title, pct);   // level suggestion for the teacher (never shown to the student)
         return fresh;
       },
-      retry: () => pageTest(courseId, unitId),
+      retry: () => pageTest(courseId, unitId, at),
       links: '<a class="btn secondary" href="#/course/' + course.id + '">Back to the course</a><a class="btn secondary" href="#/games/' + course.id + '/' + unit.id + '">Game Room</a>',
       note: (pct) => '<p class="muted small">Level changes are offered after lesson quizzes (85%+ to move up). Unit tests count toward awards and your teacher\'s level suggestions.</p>' });
   }
 
-  function pageQuiz(courseId, unitId, lessonIdx) {
+  function pageQuiz(courseId, unitId, lessonIdx, at) {
     const course = findCourse(courseId), unit = findUnit(course, unitId); if (!unit || !Students.enrolled(course.id)) return notFound();
     setCourseColor(course); setNav('home');
     lessonIdx = +lessonIdx || 0; const les = lessonAt(unit, lessonIdx); if (!les) return notFound();
@@ -837,22 +863,25 @@
     const rec = u.quiz[lessonIdx] || (u.quiz[lessonIdx] = { best: 0, attempts: 0, passed: false });
     const head = crumbs([{ label: deskName(), href: '#/' }, { label: course.title, href: '#/course/' + course.id }, { label: les.title, href: '#/lesson/' + course.id + '/' + unit.id + '/' + lessonIdx }, { label: 'Quiz' }]) +
       '<div class="page-head"><div><h1>❓ Quiz</h1><p class="muted">' + esc(les.title) + '</p></div></div>';
-    const level = Settings.level;
+    const base = Settings.level, level = assessLevel(course, at);
     const count = assessmentCount(byLevel(level, [4, 6, 8, 10]));
     const qs = buildAssessment(lessonQuestions(unit, lessonIdx, level), count);
     if (!qs.length) { app.innerHTML = head + '<div class="empty">This lesson has no quiz questions yet.</div>'; return; }
-    runAssessment({ head, qs, best: rec.best, icon: '❓', title: 'Quick check on this lesson', start: 'Start the quiz', print: '#/print/' + course.id + '/' + unit.id + '/quiz/' + lessonIdx,
+    runAssessment({ head, qs, best: rec.best, icon: '❓', title: level > base ? 'Quiz at Level ' + level + ' · ' + LEVEL_NAMES[level] : 'Quick check on this lesson', start: level > base ? 'Start the Level ' + level + ' quiz' : 'Start the quiz', print: '#/print/' + course.id + '/' + unit.id + '/quiz/' + lessonIdx,
+      alt: level > base ? '<p class="muted small" style="margin-top:0.9rem">A rewrite one level up: a higher grade here replaces your Level ' + base + ' grade; a lower one changes nothing.</p>' : rewriteOffer(course, base, '#/quiz/' + course.id + '/' + unit.id + '/' + lessonIdx),
+      gradeLine: (pct) => gradeLineHtml(level, pct, rec, 'quiz'),
       onDone(pct) {
         rec.attempts++; rec.best = Math.max(rec.best, pct); if (pct >= Badges.PASS_MARK) rec.passed = true;
+        Grading.recordAttempt(rec, level, pct);
         Progress.save();
-        if (pct >= Badges.PASS_MARK) Students.recordLessonLevel(course.id, lessonIdx, Settings.level, pct);
+        if (pct >= Badges.PASS_MARK) Students.recordLessonLevel(course.id, lessonIdx, level, pct);
         return Badges.evaluate(course, unit);
       },
-      extra: (pct) => levelPromptHtml(course, lessonIdx, pct),
-      note: (pct) => { if (Students.trackFor(course.id)) return ''; const l = Settings.level; if (pct >= 85 && l < 4) return ''; if (pct < BAND_MIN[l] && l > 1) return '';
+      extra: (pct) => level === base ? levelPromptHtml(course, lessonIdx, pct) : '',
+      note: (pct) => { if (Students.trackFor(course.id)) return ''; const l = Settings.level; if (pct >= 85 && l < 4) return ''; if (pct < Badges.PASS_MARK && l > 1) return '';
         return '<p class="muted small">Level ' + l + ' · ' + LEVEL_NAMES[l] + (l < 4 ? ' — score 85% or more on a quiz to be offered Level ' + (l + 1) + '.' : ' — the top level.') + (l > 1 && pct >= BAND_MIN[l] ? ' You are above the Level ' + l + ' band (' + BAND_MIN[l] + '%+).' : '') + '</p>'; },
       afterRender: () => bindLevelPrompt(course),
-      retry: () => pageQuiz(courseId, unitId, lessonIdx),
+      retry: () => pageQuiz(courseId, unitId, lessonIdx, at),
       links: (function () { const ls = lessonsFor(unit); const pos = ls.findIndex(l => l._idx === lessonIdx); const next = pos >= 0 && pos < ls.length - 1 ? ls[pos + 1] : null;
         return '<a class="btn secondary" href="#/lesson/' + course.id + '/' + unit.id + '/' + lessonIdx + '">Back to the lesson</a>' + (next ? '<a class="btn success" href="#/lesson/' + course.id + '/' + unit.id + '/' + next._idx + '">Next lesson →</a>' : '<a class="btn success" href="#/test/' + course.id + '/' + unit.id + '">Unit test →</a>') + '<a class="btn ghost" href="#/course/' + course.id + '">Back to the course</a>'; })() });
   }
@@ -1266,7 +1295,8 @@
             allCourses().map(c => { const on = Students.enrolled(c.id, s); const cl = (s.courseLevels || {})[c.id] || '';
               return '<div class="course-line' + (on ? '' : ' off') + '"><label><input type="checkbox" data-enrol="' + esc(s.id) + '" data-c="' + esc(c.id) + '"' + (on ? ' checked' : '') + '> ' + c.icon + ' ' + esc(c.title) + '</label>' +
                 (on ? '<div class="seg">' + [['', 'Default'], [1, '1'], [2, '2'], [3, '3'], [4, '4']].map(o => '<button data-course-level="' + esc(s.id) + '" data-c="' + esc(c.id) + '" data-v="' + o[0] + '" class="' + (String(cl) === String(o[0]) ? 'on' : '') + '">' + o[1] + '</button>').join('') + '</div>' : '') + '</div>'; }).join('') +
-            sw('', 'Lock the course list', 'On: the student cannot add courses from the home page.', s.coursesLocked, 'data-lock-courses="' + esc(s.id) + '"') + '</div>' +
+            sw('', 'Lock the course list', 'On: the student cannot add courses from the home page.', s.coursesLocked, 'data-lock-courses="' + esc(s.id) + '"') +
+            sw('', 'Rewrites one level up', 'On: every quiz and unit test offers a second version one level above the student\'s working level. The higher of the two levelled grades counts.', !!s.rewrite, 'data-rewrite="' + esc(s.id) + '"') + '</div>' +
             '<div class="plan-section"><div class="plan-label">Modified program (not for credit)</div><p class="muted small" style="margin:0 0 0.4rem">Serves every lesson at a much earlier level, with its own questions and assignments. Standard = the Level 1–4 framework above.</p>' +
             allCourses().filter(c => Students.enrolled(c.id, s)).map(c => { const t = Students.trackFor(c.id, s); return '<div class="course-line"><label>' + c.icon + ' ' + esc(c.title) + '</label><div class="seg">' + [['', 'Standard'], ['k2', 'K–2'], ['g35', 'Gr 3–5'], ['g68', 'Gr 6–8']].map(o => '<button data-track="' + esc(s.id) + '" data-c="' + esc(c.id) + '" data-v="' + o[0] + '" class="' + ((t ? t.band : '') === o[0] ? 'on' : '') + '">' + o[1] + '</button>').join('') + '</div></div>'; }).join('') + '</div>' +
             levelHistoryHtml(s) + studentHistoryHtml(s) +
@@ -1335,6 +1365,7 @@
     on('[data-course-level]', 'click', e => { const b = e.currentTarget; Students.setLevel(b.dataset.courseLevel, b.dataset.c, b.dataset.v ? +b.dataset.v : null); redrawStudents(); });
     on('[data-enrol]', 'change', e => { const b = e.target, s = Students.byId(b.dataset.enrol); let list = Array.isArray(s.courses) ? s.courses.slice() : allCourses().map(c => c.id);
       list = b.checked ? list.concat(b.dataset.c) : list.filter(x => x !== b.dataset.c); Students.setCourses(s.id, list); redrawStudents(); });
+    on('[data-rewrite]', 'click', e => { const s = Students.byId(e.currentTarget.dataset.rewrite); Students.update(s.id, { rewrite: !s.rewrite }); redrawStudents(); });
     on('[data-lock-courses]', 'click', e => { const s = Students.byId(e.currentTarget.dataset.lockCourses); Students.setCourses(s.id, Array.isArray(s.courses) ? s.courses : allCourses().map(c => c.id), !s.coursesLocked); redrawStudents(); });
     on('[data-sugg-apply]', 'click', e => { const b = e.currentTarget; Students.setLevel(b.dataset.suggApply, b.dataset.c, +b.dataset.l); redrawStudents(); });
     on('[data-sugg-dismiss]', 'click', e => { const b = e.currentTarget, s = Students.byId(b.dataset.suggDismiss); delete s.suggestions[b.dataset.c]; Students.save(); redrawStudents(); });
@@ -1353,7 +1384,7 @@
       }
       const s = Students.add(v); if (cur) { Students.setCourses(s.id, [cur.courseId]); Sections.enrol(cur.id, s.id, true); } sessionStorage.setItem('learnhub.studentOpen', s.id); redrawStudents(); };
     on('[data-save-student]', 'click', async e => { const id = e.currentTarget.dataset.saveStudent, msg = app.querySelector('#saveMsg-' + id), b = e.currentTarget; b.disabled = true; b.textContent = 'Saving…';
-      const TEACH = ['level', 'courses', 'courseLevels', 'coursesLocked', 'accommodations', 'track', 'name'];
+      const TEACH = ['level', 'courses', 'courseLevels', 'coursesLocked', 'accommodations', 'track', 'name', 'rewrite'];
       const snap = o => JSON.stringify(TEACH.map(k => o[k] === undefined ? null : o[k]));
       try {
         if (Cloud.enabled) {
@@ -1559,10 +1590,10 @@
       case 'course': return pageCourse(parts[1]);
       case 'lesson': return pageLesson(parts[1], parts[2], parts[3]);
       case 'study': return pageStudy(parts[1], parts[2], parts[3]);
-      case 'quiz': return pageQuiz(parts[1], parts[2], parts[3]);
+      case 'quiz': return pageQuiz(parts[1], parts[2], parts[3], parts[4]);
       case 'assign': return pageAssign(parts[1], parts[2], parts[3], parts[4]);
       case 'work': return pageWork(parts[1], parts[2]);
-      case 'test': return pageTest(parts[1], parts[2]);
+      case 'test': return pageTest(parts[1], parts[2], parts[3]);
       case 'print': return Print.page(parts[1], parts[2], parts[3], parts[4], parts[5]);
       case 'dashboard': if (!Students.isStaffSession) return pageHome(); try { return Dashboard.page(); } catch (e) { app.innerHTML = '<div class="empty"><h2>The dashboard could not load</h2><p class="muted small">' + esc(e.message) + '</p><a class="btn" href="#/settings">Settings</a></div>'; return; }
       case 'games': return pageGames(parts[1], parts[2]);

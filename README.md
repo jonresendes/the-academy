@@ -108,6 +108,16 @@ v43 answers the v42 security review (project doc `security-privacy-audit-v42.md`
 
 **Rules changed in v43** — paste `firestore.rules` into Firestore → Rules → Publish before uploading the app (see DEPLOY.md).
 
+## Levelled grades (v45)
+
+Each level is a **grade band**: L1 · Explorer 50–59, L2 · Scholar 60–69, L3 · Challenger 70–84, L4 · Trailblazer 85–100 (`LEVEL_BANDS` in `storage.js` — the single source for the level cards, the move-up/move-down offers, teacher suggestions and the grid colours). Work done at a level earns a grade inside that band.
+
+- **One rule at every level** (`Grading.levelled(raw, level)`): **50% raw is a pass and a grade of 50**; a perfect score is the top of the band; between them the grade climbs in a straight line; below 50% the grade is the raw score (a fail). Each level is a scaled copy of Level 4: 75% raw is 55 at L1, 60 at L2, 67 at L3, 75 at L4; a perfect Level 2 quiz is 69, never more. `Grading.rawFor(grade, level)` is the inverse ("what do I need for a 60?"). The pass mark for awards and *You passed!* is 50% (`Badges.PASS_MARK`).
+- **Tracked per level.** A quiz record keeps `levels[L] = { best, attempts, at }` beside the raw `best` (which still drives awards and the 85% level offers); the unit test keeps `unit.test.levels[L]`; an assignment stores the level it was handed in at (`work.level`) and the teacher's score out of 10 becomes a levelled grade at that level. The grade that counts is the best levelled grade across levels, worked out at display time. Records from before v45 are graded at the student's current level for the course.
+- **Rewrites one level up.** Students page → student row → *Rewrites one level up* (off by default; teacher-only field). Every quiz and unit test start screen then offers *Take it at Level N+1*; the page runs the next level's version (`#/quiz/c/u/l/N+1`, `#/test/c/u/N+1`), only ever one level up and never on the Modified program. A higher levelled grade replaces the old one; a lower one changes nothing. The result card shows the grade for the attempt and the grade that counts.
+- **Level offers after a quiz:** 85%+ raw → offered one level up; below 50% raw (a fail) → offered one level down.
+- **Grids.** Both Grades grids show the levelled grade with *L · raw%* underneath, assignment cells show *score/10 → grade · L*, and a **Unit avg** column averages every levelled grade in the unit. The chart of raw → grade for every level (and the grade → raw-needed table) is the *Levelled Grades* artifact.
+
 ## Tile desks, Students page, Sections page, avatars (v44)
 
 - **Both desks are tile grids.** Teacher's Desk (shown as **The Headmaster's Desk** for the Headmaster, in the heading, the top menu and breadcrumbs): **Sections · Students · Courses · Grades · Notes** (+ **Teachers** for the Headmaster). Student Desk: the four stat tiles, then **Sections · Courses · Grades · Display Case**. Every tile opens a page; nothing folds out on the desk any more. **Settings** lives only in the top menu.
@@ -171,7 +181,7 @@ Students, sections and teachers are stored on the device (`learnhub.students`, `
 
 Levels follow the Ontario achievement chart and are set per student inside **Settings → Teacher Lock → Students**. The level is never shown to the student (no badge, no label anywhere in the app). After every test the app records a **level suggestion** for the teacher when the score lands in a different band (e.g. "Level 3 → 4, 86% on Unit 1"); it appears in the student's row with *Apply* / *Dismiss* buttons and is never shown to the student.
 
-| | Level 1 · Explorer (50–59%) | Level 2 · Scholar (60–69%) | Level 3 · Challenger (70–79%) | Level 4 · Trailblazer (80–100%) |
+| | Level 1 · Explorer (50–59%) | Level 2 · Scholar (60–69%) | Level 3 · Challenger (70–84%) | Level 4 · Trailblazer (85–100%) |
 |---|---|---|---|---|
 | Slides | `body[1]` text (simple words, shortened passages) | `body[2]` | `body[3]` (+ expectation codes, worked examples) | `body[4]`, or `body[3]` when a course has no Level 4 text |
 | Test | 5 questions, 2 options (obvious distractor), word bank of 2 | 8 questions, 3 options, word bank of 4 | 12 questions, all options, type-in blanks | 15 questions, all options, type-in blanks |
@@ -189,7 +199,7 @@ Accessibility settings (per student): text size, Lexend reading font, contrast (
 
 The course page lists every unit's lessons. Opening a lesson shows its parts:
 - **Slides** — the lesson at the student's level, with read-aloud.
-- **Quiz** — 4 / 6 / 8 / 10 questions (by level) drawn only from that lesson's question bank (questions whose `cat` starts with `L<n>`, or the categories a lesson lists in `cats: […]`). Pass mark 70%; best score is kept.
+- **Quiz** — 4 / 6 / 8 / 10 questions (by level) drawn only from that lesson's question bank (questions whose `cat` starts with `L<n>`, or the categories a lesson lists in `cats: […]`). Pass mark 50%; best score is kept.
 - **Assignments** — open-response tasks with a levelled prompt, a sentence starter and a "complete answer contains…" box. Work autosaves as a draft; *Hand in* marks it done. Teachers read handed-in work in Teacher Lock → Students → *Assignment work*.
 - **Unit test** — covers every lesson in the unit (5 / 8 / 12 / 15 questions by level).
 - **📁 Work folder** (a room on every unit) — every assignment in the unit with its state (not started / draft saved / handed in), a preview of the writing, any voice recording, and Continue / Open / Print buttons. The student sees their own; an unlocked teacher sees the same page for the signed-in student (and all students' work in Teacher Lock → Students).
@@ -353,7 +363,7 @@ A teacher can tailor any course for **one section** without touching the program
 
 After every lesson quiz on the standard track:
 - **85% or more** → the student is offered a move **up one level** for the next lessons ("Yes, move up / Not now").
-- **Below the level's band** (Level 2 < 60%, Level 3 < 70%, Level 4 < 80%) → offered a move **down one level** for now.
+- **Below the pass mark** (50% raw) → offered a move **down one level** for now.
 - Students can **go back** to their previous level at any time (course page banner, or Settings → Me) but can never skip a level; teachers can set any level.
 Every change is logged with who made it, why, the lesson and the score, and the level at which each lesson's quiz was passed is recorded. Teachers see this as **Level history** in the student's row (and in the CSV export) to determine a final grade.
 
@@ -391,7 +401,7 @@ A lesson can list media slots: `media: [{ slide, type: 'image' | 'video', title,
 
 ## Awards
 
-Per unit (20): reading badges (every lesson read), quiz badges (first quiz, every quiz, three first-try passes), the Scribe badge (every assignment handed in), test badges (pass, 90%+, perfect, "never give up"), game and points badges (3 games, 1,000 and 2,000 Jeopardy points, Millionaire top rung, $1,000 Wheel bank, clean Matching), medals (every game, 5,000 points, Lessons Complete, Unit Medal, Unit Gold). Per course (4 trophies): every unit medal, Scholar's Crown (every quiz), **Trailblazer** (80%+ on every unit test — Level 4 achievement), Grand Master (Gold in every unit). Pass mark is 70% (`PASS_MARK` in `badges.js`). Names and icons are themed per course through its `awards` block; any key a course leaves out uses the default name.
+Per unit (20): reading badges (every lesson read), quiz badges (first quiz, every quiz, three first-try passes), the Scribe badge (every assignment handed in), test badges (pass, 90%+, perfect, "never give up"), game and points badges (3 games, 1,000 and 2,000 Jeopardy points, Millionaire top rung, $1,000 Wheel bank, clean Matching), medals (every game, 5,000 points, Lessons Complete, Unit Medal, Unit Gold). Per course (4 trophies): every unit medal, Scholar's Crown (every quiz), **Trailblazer** (80%+ on every unit test — Level 4 achievement), Grand Master (Gold in every unit). Pass mark is 50% (`PASS_MARK` in `badges.js`). Names and icons are themed per course through its `awards` block; any key a course leaves out uses the default name.
 
 ## Where things live
 

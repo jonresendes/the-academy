@@ -46,14 +46,59 @@
   }, DEFAULT_PREFS);
 
   /* ---------- the four achievement levels ---------- */
+  /* Each level is a grade band. Work done at a level earns a grade inside that level's band:
+     a perfect Level 2 quiz is 69, never more. The bands are the single source of truth for
+     everything below (level cards, suggestions, the Grades grids). */
+  const LEVEL_BANDS = { 1: [50, 59], 2: [60, 69], 3: [70, 84], 4: [85, 100] };
   const LEVELS = {
     1: { name: 'Explorer',    band: '50–59%', short: 'Limited',      desc: 'Simple words, short lessons, fewer questions, obvious answer choices and gentle games. (Ontario Level 1)' },
     2: { name: 'Scholar',     band: '60–69%', short: 'Some',         desc: 'Clear language, regular lessons, guided questions with a word bank and all games. (Ontario Level 2)' },
-    3: { name: 'Challenger',  band: '70–79%', short: 'Considerable', desc: 'The full course at the provincial standard: complete lessons, full tests, typed answers and bigger game boards. (Ontario Level 3)' },
-    4: { name: 'Trailblazer', band: '80–100%', short: 'Thorough',    desc: 'Extended thinking: expectation codes, real-life application questions, the longest tests and the hardest game settings. (Ontario Level 4)' }
+    3: { name: 'Challenger',  band: '70–84%', short: 'Considerable', desc: 'The full course at the provincial standard: complete lessons, full tests, typed answers and bigger game boards. (Ontario Level 3)' },
+    4: { name: 'Trailblazer', band: '85–100%', short: 'Thorough',    desc: 'Extended thinking: expectation codes, real-life application questions, the longest tests and the hardest game settings. (Ontario Level 4)' }
   };
-  /** Achievement level suggested by a percentage (Ontario bands). */
-  function bandFor(pct) { return pct >= 80 ? 4 : pct >= 70 ? 3 : pct >= 60 ? 2 : 1; }
+  /** Achievement level suggested by a percentage (the bands above). */
+  function bandFor(pct) { return pct >= LEVEL_BANDS[4][0] ? 4 : pct >= LEVEL_BANDS[3][0] ? 3 : pct >= LEVEL_BANDS[2][0] ? 2 : 1; }
+
+  /* ---------- levelled grades ----------
+     raw   = the percentage scored on the quiz / test (or teacher score ÷ max for an assignment)
+     level = the level the work was done at (1–4)
+     One rule, every level: 50% raw is a pass and earns a grade of 50; a perfect score earns the top of the
+     level's band; in between, the grade climbs in a straight line. Below 50% raw the grade is the raw score (a fail).
+     So each level is a scaled-down copy of Level 4: a Level 2 student who scores 75% has a grade of 60,
+     the same place inside 50–69 as 75 is inside 50–100.
+     The best levelled grade across every level the student has attempted is the grade that counts. */
+  const PASS_MARK_GRADING = 50;
+  const Grading = {
+    BANDS: LEVEL_BANDS,
+    PASS: PASS_MARK_GRADING,
+    /** The grade (0–100, whole number) for a raw percentage earned at a level. */
+    levelled(raw, level) {
+      raw = Math.max(0, Math.min(100, +raw || 0)); level = LEVEL_BANDS[level] ? +level : 2;
+      const hi = LEVEL_BANDS[level][1];
+      if (raw < PASS_MARK_GRADING) return Math.round(raw);
+      return Math.round(PASS_MARK_GRADING + (raw - PASS_MARK_GRADING) / (100 - PASS_MARK_GRADING) * (hi - PASS_MARK_GRADING));
+    },
+    /** The raw percentage a student at this level needs for a given grade (inverse of levelled). */
+    rawFor(grade, level) { const hi = LEVEL_BANDS[level] ? LEVEL_BANDS[level][1] : 69; if (grade < PASS_MARK_GRADING) return grade; return Math.round(PASS_MARK_GRADING + (grade - PASS_MARK_GRADING) / (hi - PASS_MARK_GRADING) * (100 - PASS_MARK_GRADING)); },
+    /** Best grade across per-level attempts: { [level]: { best } } → { grade, level, raw } or null. */
+    bestOf(perLevel) {
+      let out = null;
+      Object.keys(perLevel || {}).forEach(l => { const r = perLevel[l]; if (!r || !(r.attempts > 0) && !(r.best > 0)) return; const g = this.levelled(r.best || 0, +l); if (!out || g > out.grade || (g === out.grade && +l > out.level)) out = { grade: g, level: +l, raw: r.best || 0 }; });
+      return out;
+    },
+    /** Record one attempt at a level on a quiz-style record ({ best, attempts, passed, levels }). Keeps the raw fields for awards. */
+    recordAttempt(rec, level, pct) {
+      rec.levels = rec.levels || {}; const r = rec.levels[level] = rec.levels[level] || { best: 0, attempts: 0 };
+      r.attempts++; r.best = Math.max(r.best, pct); r.at = new Date().toISOString();
+      const b = this.bestOf(rec.levels); if (b) { rec.grade = b.grade; rec.gradeLevel = b.level; rec.gradeRaw = b.raw; }
+      return b;
+    },
+    /** Grade for an assignment: teacher score out of max, at the level the work was done. */
+    assignment(w) { if (!w || !w.grade || w.grade.score === undefined || w.grade.score === null) return null; const max = +w.grade.max || 10; const lvl = +(w.grade.level || w.level) || 2; return { grade: this.levelled(+w.grade.score / max * 100, lvl), level: lvl, raw: Math.round(+w.grade.score / max * 100) }; },
+    /** Average of a list of grades (whole number) or null. */
+    average(list) { const xs = list.filter(x => typeof x === 'number' && !isNaN(x)); return xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) : null; },
+    label(level) { return 'L' + level; }
+  };
 
   function load(key, fallback) {
     try {
@@ -68,7 +113,26 @@
   function remove(key) { try { localStorage.removeItem(key); } catch (e) {} if (window.Cloud && window.Cloud.enabled && window.Cloud.onLocalRemove) window.Cloud.onLocalRemove(key); }
 
   /* ---------- Students ---------- */
-  const AVATARS = ['🦊', '🐼', '🦉', '🐸', '🐙', '🦁', '🐧', '🦄', '🐢', '🐝', '🦋', '🐨', '🐯', '🦖', '🐬', '🦜'];
+  /* Avatars: everyone picks from the groups below. The owl 🦉 is the Headmaster's alone. */
+  const HEADMASTER_AVATAR = '🦉';
+  const AVATAR_GROUPS = [
+    ['People', ['🧑', '👩', '👨', '🧒', '👧', '👦', '🧑‍🎓', '👩‍🎓', '👨‍🎓', '🧑‍🏫', '👩‍🏫', '👨‍🏫', '🧑‍🔬', '👩‍🔬', '👨‍🔬', '🧑‍💻', '👩‍💻', '👨‍💻', '🧑‍🎨', '👩‍🎨', '👨‍🎨', '🧑‍🚀', '👩‍🚀', '👨‍🚀', '🧑‍🍳', '🧑‍🌾', '🧑‍🔧', '🧑‍⚕️', '🦸', '🦹', '🧙', '🧝', '🧛', '🧜', '🧚', '🥷', '🤠', '👻', '🤖', '👽', '🎅', '🤶']],
+    ['Animals', ['🦊', '🐼', '🐸', '🐙', '🦁', '🐧', '🦄', '🐢', '🐝', '🦋', '🐨', '🐯', '🦖', '🐬', '🦜', '🐶', '🐱', '🐭', '🐹', '🐰', '🐻', '🐻‍❄️', '🐷', '🐮', '🐵', '🐔', '🐣', '🦆', '🦅', '🦇', '🐺', '🐗', '🐴', '🦓', '🦒', '🐘', '🦏', '🦛', '🐪', '🦘', '🦥', '🦦', '🦨', '🦔', '🐿️', '🦫', '🐍', '🦎', '🐊', '🐳', '🐋', '🦈', '🐠', '🐡', '🦑', '🦀', '🦞', '🐌', '🐞', '🐜', '🦗', '🕷️', '🦂', '🦩', '🦚', '🦢', '🕊️', '🐉', '🦕']],
+    ['School', ['📚', '📖', '✏️', '📝', '🖍️', '🖊️', '📐', '📏', '🎒', '🏫', '🍎', '🧮', '📎', '📌', '🗂️', '📓', '📒', '🔔', '🎓', '🏅', '🥇', '🏆', '⭐', '🌟']],
+    ['Sport', ['⚽', '🏀', '🏈', '⚾', '🥎', '🎾', '🏐', '🏉', '🥏', '🎱', '🏓', '🏸', '🏒', '🥍', '🏏', '🥅', '⛳', '🏹', '🎣', '🥊', '🥋', '🛹', '🛼', '⛸️', '🎿', '🛷', '🥌', '🏊', '🚴', '🧗', '🏇', '🤸', '⛷️', '🏂', '🏄', '🚣', '🤾', '🏋️', '🤺', '🧘']],
+    ['Art & music', ['🎨', '🖌️', '🖼️', '🎭', '🎬', '🎤', '🎧', '🎼', '🎵', '🎶', '🎹', '🎸', '🎻', '🎺', '🎷', '🪕', '🥁', '🪘', '🪗', '📷', '📸', '🎥', '🎪', '🩰', '🧵', '🧶', '✂️', '🪡']],
+    ['Math', ['➕', '➖', '✖️', '➗', '🟰', '♾️', '📊', '📈', '📉', '🔢', '🔣', '💯', '🧮', '📐', '📏', '⚖️', '🎲', '🧩', '🔷', '🔶', '🟥', '🟩', '🟦', '🟨', '⬛', '⚪', '🔺', '🔻']],
+    ['Tech', ['💻', '🖥️', '⌨️', '🖱️', '🖨️', '💾', '💿', '📱', '📡', '🔋', '🔌', '💡', '🔦', '🕹️', '🎮', '🤖', '🛰️', '🚀', '🛸', '⚙️', '🔧', '🔩', '🛠️', '🧲', '📟', '📠', '🧰', '🔭']],
+    ['Science', ['🔬', '🧪', '🧫', '🧬', '⚗️', '🌡️', '🧲', '⚛️', '🔭', '🪐', '🌍', '🌎', '🌏', '🌕', '🌙', '☀️', '⭐', '☄️', '🌈', '⚡', '🔥', '💧', '🌊', '🌋', '🧊', '🦠', '🌱', '🌿', '🍄', '🐚', '🪨', '💎', '🧠', '🦴', '🫀', '🫁', '🩺', '💊', '🧯', '🧭']],
+    ['Literature & stories', ['📜', '📰', '📗', '📘', '📙', '📕', '📔', '📑', '🔖', '🖋️', '🪶', '🏰', '🗡️', '🛡️', '👑', '🧞', '🧜‍♀️', '🧚‍♂️', '🐲', '🗺️', '🧭', '⚓', '🏴‍☠️', '🔮', '🪄', '🎩', '🕵️', '🕯️', '🗝️', '🧳', '🎠', '🎡', '🧸', '🪁', '🎈']],
+    ['Nature & food', ['🌳', '🌲', '🌴', '🌵', '🌷', '🌹', '🌻', '🌼', '🌸', '💐', '🍀', '🍁', '🍂', '🍃', '🌾', '🍎', '🍏', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🫐', '🍒', '🍑', '🥭', '🍍', '🥝', '🍅', '🥑', '🥕', '🌽', '🥦', '🍕', '🍔', '🌮', '🍣', '🍩', '🍪', '🎂', '🧁', '🍦', '🍫', '🍿', '🥨', '🧇', '🥞', '☕', '🧃']],
+    ['Flags & places', ['🇨🇦', '🍁', '🏔️', '🏕️', '🏖️', '🏝️', '🏞️', '🌅', '🌃', '🌉', '🏙️', '🏟️', '🗽', '🗼', '🎑', '🏠', '🏡', '🏢', '🏥', '🏛️', '⛪', '🕌', '🛕', '🕍', '⛩️', '🚗', '🚌', '🚲', '🛴', '🚂', '✈️', '🚁', '⛵', '🚢']]
+  ];
+  (() => { const seen = new Set(); AVATAR_GROUPS.forEach(g => { g[1] = g[1].filter(a => { if (seen.has(a)) return false; seen.add(a); return true; }); }); })();   // each picture in one group only
+  const AVATAR_ALL = AVATAR_GROUPS.reduce((a, g) => a.concat(g[1]), []).filter(a => a !== HEADMASTER_AVATAR);
+  const AVATARS = ['🦊', '🐼', '🐸', '🐙', '🦁', '🐧', '🦄', '🐢', '🐝', '🦋', '🐨', '🐯', '🦖', '🐬', '🦜', '🐶'];   // defaults handed out to new students
+  /** May this profile use this avatar? The owl belongs to the Headmaster. */
+  const avatarAllowed = (a, isMaster) => a === HEADMASTER_AVATAR ? !!isMaster : AVATAR_ALL.includes(a);
   const COLOURS = ['#3b5bdb', '#2f9e6e', '#f59f00', '#d6336c', '#7048e8', '#15aabf', '#e8590c', '#1f5f8b'];
   function uid() { return 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 
@@ -109,7 +173,7 @@
       this.data.list.push(s); this.save();
       return s;
     },
-    update(id, patch) { const s = this.byId(id); if (!s) return; Object.assign(s, patch); if (s.isStaff) this.saveStaff(s); this.save(); if (s === this.current) Settings.apply(); },
+    update(id, patch) { const s = this.byId(id); if (!s) return; if (patch && patch.avatar !== undefined && !avatarAllowed(patch.avatar, s.role === 'master')) { patch = Object.assign({}, patch); delete patch.avatar; } Object.assign(s, patch); if (s.isStaff) this.saveStaff(s); this.save(); if (s === this.current) Settings.apply(); },
     /** Persist name / avatar / prefs / archived of a staff profile back to its record. */
     saveStaff(s) { const rec = s.staffId === 'master' ? Staff.master : Staff.teachers.find(t => t.id === s.staffId); if (rec) { rec.name = s.name; rec.avatar = s.avatar; rec.colour = s.colour; rec.prefs = s.prefs; rec.archived = s.archived; Staff.save(); } },
     /** Staff only, cloud mode: name / number / picture of every student, for "Add an existing student" (held by cloud.js in memory, never stored). */
@@ -182,7 +246,7 @@
       this.save();
       return s.suggestions[courseId];
     },
-    AVATARS, COLOURS
+    AVATARS, COLOURS, AVATAR_GROUPS, AVATAR_ALL, HEADMASTER_AVATAR, avatarAllowed
   };
   function pick(obj, keys) { const o = {}; keys.forEach(k => { if (obj && obj[k] !== undefined) o[k] = obj[k]; }); return o; }
 
@@ -235,9 +299,37 @@
     enrol(sectionId, studentId, on) {
       const sec = this.byId(sectionId); if (!sec) return;
       sec.students = (sec.students || []).filter(x => x !== studentId); if (on) sec.students.push(studentId);
+      // the section keeps a log of who was in it and when (teachers see it even before a new student's record arrives)
+      const teacher = sec.teacherId ? (Staff.teachers.find(t => t.id === sec.teacherId) || {}) : (Staff.master || {});
+      const nowIso = new Date().toISOString();
+      sec.log = Array.isArray(sec.log) ? sec.log : [];
+      let e = sec.log.find(x => x.student === studentId && !x.until);
+      if (on && !e) sec.log.push({ student: studentId, teacher: sec.teacherId || 'master', teacherName: teacher.name || '', since: nowIso });
+      if (!on) { if (e) e.until = nowIso; else sec.log.push({ student: studentId, teacher: sec.teacherId || 'master', teacherName: teacher.name || '', since: '', until: nowIso }); }
       this.save();
-      const s = Students.byId(studentId);
-      if (s && on && sec.courseId) { if (Array.isArray(s.courses) && !s.courses.includes(sec.courseId)) s.courses.push(sec.courseId); s.archived = (s.archived || []).filter(c => c !== sec.courseId); Students.save(); }
+      const s = Students.byId(studentId); if (!s) return;
+      // ...and the student's own record keeps the same history, so it follows them to any teacher
+      s.history = Array.isArray(s.history) ? s.history : [];
+      let h = s.history.find(x => x.sec === sec.id && !x.until);
+      if (on && !h) s.history.push({ sec: sec.id, name: sec.name, course: sec.courseId, term: sec.term || '', teacher: sec.teacherId || 'master', teacherName: teacher.name || '', since: nowIso });
+      if (!on) { if (h) h.until = nowIso; else s.history.push({ sec: sec.id, name: sec.name, course: sec.courseId, term: sec.term || '', teacher: sec.teacherId || 'master', teacherName: teacher.name || '', since: '', until: nowIso }); }
+      if (on && sec.courseId) { if (Array.isArray(s.courses) && !s.courses.includes(sec.courseId)) s.courses.push(sec.courseId); s.archived = (s.archived || []).filter(c => c !== sec.courseId); }
+      Students.save();
+    },
+    /** Everything a student has been in — open entries (still enrolled) and closed ones, newest first —
+        merged from the section logs, the student's own record and the rosters (for sections older than the log). */
+    historyFor(studentId) {
+      const s = Students.byId(studentId); const out = [];
+      // one entry per stay: the same section and the same leaving time (or both still open) are the same stay
+      const add = h => { const x = out.find(x => x.sec === h.sec && String(x.until || '') === String(h.until || '')); if (!x) out.push(h); else if (!x.since && h.since) x.since = h.since; };
+      this.list.forEach(sec => (sec.log || []).forEach(e => { if (e.student === studentId) add({ sec: sec.id, name: sec.name, course: sec.courseId, term: sec.term || '', teacher: e.teacher, teacherName: e.teacherName, since: e.from, until: e.to }); }));
+      (s && Array.isArray(s.history) ? s.history : []).forEach(h => add(Object.assign({}, h)));
+      this.list.forEach(sec => { if ((sec.students || []).includes(studentId) && !out.some(h => h.sec === sec.id && !h.until)) { const t = sec.teacherId ? (Staff.teachers.find(x => x.id === sec.teacherId) || {}) : (Staff.master || {}); add({ sec: sec.id, name: sec.name, course: sec.courseId, term: sec.term || '', teacher: sec.teacherId || 'master', teacherName: t.name || '', since: sec.createdAt || '' }); } });
+      return out.map(h => { const sec = this.byId(h.sec); const t = h.teacher === 'master' ? (Staff.master || {}) : (Staff.teachers.find(x => x.id === h.teacher) || {});
+        const current = !h.until && !!sec && (sec.students || []).includes(studentId);
+        return Object.assign({}, h, { current, archived: !!(sec && sec.archived), exists: !!sec, teacherName: t.name || h.teacherName || '', name: sec ? sec.name : h.name }); })
+        .filter(h => h.current || h.until || !h.exists)
+        .sort((a, b) => (b.current - a.current) || String(b.until || b.since).localeCompare(String(a.until || a.since)));
     },
     /** Sections a student belongs to. */
     forStudent(studentId, includeArchived) { return this.list.filter(sec => (sec.students || []).includes(studentId) && (includeArchived || !sec.archived)); }
@@ -418,5 +510,5 @@
   window.Progress = Progress;
   window.Focus = Focus;
   window.LEVELS = LEVELS;
-  window.bandFor = bandFor;
+  window.bandFor = bandFor; window.Grading = Grading; window.LEVEL_BANDS = LEVEL_BANDS;
 })();

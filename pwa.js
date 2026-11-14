@@ -86,7 +86,7 @@
      APP_VERSION is baked into this file; version.json on the site says what is published.
      Settings → Updates compares the two and offers a one-tap update (new service worker +
      cache clear + reload). The check also runs on load and hourly. */
-  const APP_VERSION = '43';
+  const APP_VERSION = '45';
   let latest = null;   // { version, date, notes } from the site, when newer
   async function checkForUpdate() {
     try {
@@ -177,6 +177,8 @@
     const h = current();
     if (stack[stack.length - 1] !== h && lastRoute !== h) { if (lastRoute) stack.push(lastRoute); }
     lastRoute = h;
+    // tag the entry the browser just made, so a later back press onto it is steered by our stack (up one level) instead of replaying raw history
+    if (!(history.state && history.state.lh)) try { history.replaceState({ lh: 'guard' }, '', h); } catch (e) {}
   });
 
   function closeDialog() {

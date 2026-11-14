@@ -111,7 +111,7 @@
     const json = JSON.stringify(value);
     if (lastSeen[key] === json) return;
     lastSeen[key] = json;
-    pending[key] = value;
+    pending[key] = JSON.parse(json);   // a snapshot: the live object may be replaced by an incoming cloud copy before the push runs
     clearTimeout(flushTimer); flushTimer = setTimeout(flush, 300);
   };
   /** Push everything waiting right now (Save buttons, sign-out, leaving the page).
@@ -660,7 +660,7 @@
       let cred;
       try { cred = await sec.auth().createUserWithEmailAndPassword(staffEmail(login), password); } catch (e) { throw new Error(friendly(e)); }
       const uid = cred.user.uid, sdb = sec.firestore();
-      const rec = clean({ id: uid, name, role: 'master', login, avatar: '🧑‍🏫', colour: '#1f5f8b', archived: [], createdAt: now() });
+      const rec = clean({ id: uid, name, role: 'master', login, avatar: '🦉', colour: '#1f5f8b', archived: [], createdAt: now() });
       try { await sdb.collection('meta').doc('master').set({ uid, name, at: now() }); await sdb.collection('staff').doc(uid).set(rec); if (email) await sdb.collection('staffPrivate').doc(uid).set({ email: String(email).slice(0, 120), updatedAt: now() }); }
       catch (e) { try { await cred.user.delete(); } catch (x) {} throw new Error(/permission|insufficient/i.test(e.message) ? exists : friendly(e)); }
       return rec;

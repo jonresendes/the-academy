@@ -7,7 +7,7 @@
    and game points, so stronger students keep finding new goals.
    ========================================================= */
 (function () {
-  const PASS_MARK = 70;
+  const PASS_MARK = 50;   // 50% raw passes at every level (the grade is then placed inside the level's band — see Grading in storage.js)
 
   // key → default theme. {unit} and {course} are filled in.
   const DEFAULT_THEME = {
