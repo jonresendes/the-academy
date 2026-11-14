@@ -1,5 +1,5 @@
 {
- "version": "45",
+ "version": "46",
  "date": "2026-11-14",
  "notes": "Levelled grades: levels are grade bands (50–59 / 60–69 / 70–84 / 85–100); 50% passes at every level and a perfect score is the top of the band; quizzes, tests and assignments graded at the level they were done; rewrites one level up when the teacher allows; unit averages on the Grades grids. Also v44: tile desks, Students page, Sections page, avatars. Notes tile on every desk shows written notes as sticky notes in place (students too)."
 }
