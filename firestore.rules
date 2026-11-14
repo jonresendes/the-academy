@@ -58,9 +58,9 @@ service cloud.firestore {
     }
 
     // ----- students -----
-    // What a student may change about themselves. Never the level, course list, accommodations, track, name or number.
+    // What a student may change about themselves (notes = their own sticky notes). Never the level, course list, accommodations, track, name or number.
     function studentOwnFields() {
-      return ['prefs', 'archived', 'suggestions', 'lessonLevels', 'levelLog', 'courseLevels', 'avatar', 'colour', 'rev', 'updatedAt', 'updatedBy'];
+      return ['prefs', 'archived', 'suggestions', 'lessonLevels', 'levelLog', 'courseLevels', 'avatar', 'colour', 'notes', 'rev', 'updatedAt', 'updatedBy'];
     }
     // A picture is one emoji and a colour is a colour — never markup.
     function tidyOwnFields() {

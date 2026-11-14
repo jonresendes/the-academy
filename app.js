@@ -384,7 +384,9 @@
       tile('#/courses', '📚', 'Courses', mine.length + ' active' + (others.length && !s.coursesLocked ? ' · ' + others.length + ' to join' : '') + (arch.length ? ' · ' + arch.length + ' archived' : '')) +
       tile(mine.length === 1 ? '#/grades/' + mine[0].id : '#/sections', '📊', 'Grades', (handedIn ? handedIn + ' assignment' + (handedIn === 1 ? '' : 's') + ' handed in' : 'quiz, test and assignment marks') + (mine.length > 1 ? ' · pick a class' : '')) +
       tile('#/case', '🏆', 'Display Case', awards + ' of ' + total + ' awards earned') +
-      '</div>';
+      notesTile() +
+      '</div>' + deskNotesHtml();
+    bindDeskNotes(pageHome);
   }
   /** Courses page: a student's classes (join, archive, resume); for staff the course library in teacher preview. */
   function pageCourses() {
@@ -421,7 +423,6 @@
     const scope = studentsInScope();
     const sugg = scope.filter(x => Object.keys(x.suggestions || {}).length).length;
     const cur = Sections.currentFor(s.staffId);
-    const n = notesData(); const used = n.items.slice(0, n.count).filter(x => (x.title || x.text).trim()).length;
     document.body.dataset.page = 'desk';
     app.innerHTML = '<div class="page-head"><div><h1>' + (s.role === 'master' ? '🦉 The Headmaster\'s Desk' : '🧑‍🏫 Teacher\'s Desk') + '</h1><p class="muted">Welcome, ' + esc(s.name) + ' · ' + (s.role === 'master' ? '<span class="tag hm-tag">👑 Headmaster</span>' : 'Teacher') + ' · ' + secs.length + ' active section' + (secs.length === 1 ? '' : 's') + ' · ' + scope.length + ' student' + (scope.length === 1 ? '' : 's') + '</p></div></div>' +
       '<div class="desk-tiles">' +
@@ -429,9 +430,10 @@
       tile('#/students', '👥', 'Students', scope.length + ' student' + (scope.length === 1 ? '' : 's') + (cur ? ' in ' + esc(cur.name) : s.role === 'master' ? ' in the school' : ' in your sections') + (sugg ? ' · 💡 ' + sugg + ' level suggestion' + (sugg === 1 ? '' : 's') : '')) +
       tile('#/courses', '📚', 'Courses', allCourses().length + ' courses · teacher preview') +
       tile('#/dashboard', '📊', 'Grades', (cur ? esc(cur.name) : 'all my students') + ' · quizzes, assignments, tests') +
-      tile('#/notes', '📝', 'Notes', used ? used + ' note' + (used === 1 ? '' : 's') + ' with something on them' : 'your sticky notes — only you see them') +
+      notesTile() +
       (s.role === 'master' ? tile('#/teachers', '🧑‍🏫', 'Teachers', Staff.teachers.length + ' teacher' + (Staff.teachers.length === 1 ? '' : 's') + ' · add, assign sections, reset') : '') +
-      '</div>';
+      '</div>' + deskNotesHtml();
+    bindDeskNotes(pageTeacherHome);
   }
 
   /** A section card for teachers (desk + Sections page): roster, grades, course, students. */
@@ -443,37 +445,48 @@
   }
   /* ----- Teacher notes: sticky notes, private to the signed-in teacher ----- */
   const NOTE_COLOURS = ['yellow', 'pink', 'blue', 'green', 'orange', 'purple'];
+  function myNotesRaw() { const me = Students.current; if (!me) return null; return me.isStaff ? Staff.notes : (me.notes || null); }
+  function saveNotes(n) { const me = Students.current; if (!me) return; if (me.isStaff) Staff.setNotes(n); else { n.updatedAt = new Date().toISOString(); Students.update(me.id, { notes: n }); } }
   function notesData() {
-    let n = Staff.notes; if (!n || !Array.isArray(n.items)) n = { count: 6, items: [] };
+    let n = myNotesRaw(); if (!n || !Array.isArray(n.items)) n = { count: 6, items: [] };
     while (n.items.length < 10) n.items.push({ title: '', text: '', colour: NOTE_COLOURS[n.items.length % NOTE_COLOURS.length] });
     n.count = [4, 6, 8, 10].includes(n.count) ? n.count : 6;
     return n;
   }
-  function notesFoldHtml() {
-    const n = notesData(); const used = n.items.slice(0, n.count).filter(x => (x.title || x.text).trim());
-    return '<details class="card desk-fold notes-fold"><summary class="class-summary"><span class="card-icon">📝</span><span class="class-text"><h2>Notes</h2><span class="muted small">' + (used.length ? used.length + ' note' + (used.length === 1 ? '' : 's') + ' with something on them' : 'your sticky notes — only you see them') + '</span></span></summary><div class="class-body">' +
-      (used.length ? '<div class="sticky-grid preview">' + used.slice(0, 4).map((x, i) => '<a class="sticky ' + (NOTE_COLOURS.includes(x.colour) ? x.colour : 'yellow') + '" href="#/notes">' + (x.title ? '<strong>' + esc(x.title) + '</strong>' : '') + '<span class="sticky-text">' + esc(x.text.slice(0, 120)) + (x.text.length > 120 ? '…' : '') + '</span></a>').join('') + '</div>' : '<p class="muted small">Nothing written yet.</p>') +
-      '<div class="btn-row" style="margin-top:0.75rem"><a class="btn" href="#/notes">📝 Open my notes</a></div></div></details>';
+  /** The notes with something on them, shown on the desk as sticky notes. Toggled by the Notes tile; open by default while there are notes. */
+  function deskNotesHtml() {
+    const n = notesData(); const used = n.items.slice(0, n.count).map((x, i) => Object.assign({ i }, x)).filter(x => (x.title || x.text).trim());
+    const open = used.length ? sessionStorage.getItem('learnhub.deskNotesClosed') !== '1' : sessionStorage.getItem('learnhub.deskNotesClosed') === '0';
+    return '<div id="deskNotes" class="card desk-fold desk-notes"' + (open ? '' : ' hidden') + '><div class="btn-row between"><h2 style="margin:0">📝 My notes</h2><div class="btn-row"><a class="btn secondary sm" href="#/notes">✏️ Open my notes</a><button class="btn ghost sm" data-notes-hide>Hide</button></div></div>' +
+      (used.length ? '<div class="sticky-grid preview">' + used.map(x => '<div class="sticky ' + (NOTE_COLOURS.includes(x.colour) ? x.colour : 'yellow') + '"><div class="sticky-top">' + (x.title ? '<strong class="sticky-title-ro">' + esc(x.title) + '</strong>' : '<span></span>') + '<button class="sticky-clear" data-desk-note-del="' + x.i + '" title="Delete this note">✕</button></div><a class="sticky-text" href="#/notes">' + esc(x.text.slice(0, 220)) + (x.text.length > 220 ? '…' : '') + '</a>' + (x.at ? '<div class="sticky-foot muted small">' + new Date(x.at).toLocaleDateString() + '</div>' : '') + '</div>').join('') + '</div>'
+        : '<p class="muted small" style="margin:0.6rem 0 0">Nothing written yet — <a href="#/notes">open your notes</a> to start one. Notes you write stay here on your desk.</p>') + '</div>';
   }
+  function bindDeskNotes(redraw) {
+    const tile = app.querySelector('[data-notes-tile]'); const panel = app.querySelector('#deskNotes');
+    if (tile && panel) tile.addEventListener('click', e => { e.preventDefault(); const show = panel.hidden; panel.hidden = !show; sessionStorage.setItem('learnhub.deskNotesClosed', show ? '0' : '1'); if (show) panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); });
+    app.querySelectorAll('[data-notes-hide]').forEach(b => b.addEventListener('click', () => { panel.hidden = true; sessionStorage.setItem('learnhub.deskNotesClosed', '1'); }));
+    app.querySelectorAll('[data-desk-note-del]').forEach(b => b.addEventListener('click', () => { const n = notesData(); const i = +b.dataset.deskNoteDel; if (!confirm('Delete this note?')) return; n.items[i].title = ''; n.items[i].text = ''; n.items[i].at = new Date().toISOString(); saveNotes({ count: n.count, items: n.items }); redraw(); }));
+  }
+  function notesTile() { const n = notesData(); const used = n.items.slice(0, n.count).filter(x => (x.title || x.text).trim()).length; return tile('#/notes', '📝', 'Notes', used ? used + ' note' + (used === 1 ? '' : 's') + ' on your desk · tap to show or hide' : 'your sticky notes — only you see them', ' data-notes-tile'); }
   function pageNotes() {
-    const me = Students.current; if (!me || !me.isStaff) { location.hash = '#/'; return; }
-    setCourseColor(null); setNav('sections');
+    const me = Students.current; if (!me) { location.hash = '#/'; return; }
+    setCourseColor(null); setNav('home');
     const n = notesData();
     app.innerHTML = crumbs([{ label: deskName(), href: '#/' }, { label: 'Notes' }]) +
-      '<div class="page-head"><div><h1>📝 My notes</h1><p class="muted">Sticky notes for ' + esc(me.name) + ' — reminders, to-dos, things to say to a class. Only you can see them, on every device you sign in on. Each note saves itself as you type.</p></div>' +
+      '<div class="page-head"><div><h1>📝 My notes</h1><p class="muted">Sticky notes for ' + esc(me.name) + ' — ' + (me.isStaff ? 'reminders, to-dos, things to say to a class. Only you can see them' : 'reminders, things to finish, questions for your teacher. They follow you') + ', on every device you sign in on. Each note saves itself as you type, and notes with something on them stay on your desk.</p></div>' +
       '<div class="btn-row"><span class="muted small">Number of notes</span><div class="seg">' + [4, 6, 8, 10].map(k => '<button data-notes-count="' + k + '" class="' + (n.count === k ? 'on' : '') + '">' + k + '</button>').join('') + '</div></div></div>' +
-      '<div class="sticky-grid">' + n.items.slice(0, n.count).map((x, i) => '<div class="sticky ' + (NOTE_COLOURS.includes(x.colour) ? x.colour : 'yellow') + '" data-note="' + i + '"><div class="sticky-top"><input class="sticky-title" data-note-title="' + i + '" placeholder="Title" maxlength="40" value="' + esc(x.title) + '"><span class="sticky-tools">' + NOTE_COLOURS.map(c => '<button class="sticky-dot ' + c + (x.colour === c ? ' on' : '') + '" data-note-colour="' + i + '" data-c="' + c + '" title="' + c + '"></button>').join('') + '<button class="sticky-clear" data-note-clear="' + i + '" title="Clear this note">✕</button></span></div>' +
+      '<div class="sticky-grid">' + n.items.slice(0, n.count).map((x, i) => '<div class="sticky ' + (NOTE_COLOURS.includes(x.colour) ? x.colour : 'yellow') + '" data-note="' + i + '"><div class="sticky-top"><input class="sticky-title" data-note-title="' + i + '" placeholder="Title" maxlength="40" value="' + esc(x.title) + '"><span class="sticky-tools">' + NOTE_COLOURS.map(c => '<button class="sticky-dot ' + c + (x.colour === c ? ' on' : '') + '" data-note-colour="' + i + '" data-c="' + c + '" title="' + c + '"></button>').join('') + '<button class="sticky-clear" data-note-clear="' + i + '" title="Delete this note">✕</button></span></div>' +
         '<textarea class="sticky-body" data-note-text="' + i + '" placeholder="Write here…">' + esc(x.text) + '</textarea><div class="sticky-foot muted small" data-note-saved="' + i + '">' + (x.at ? 'saved ' + new Date(x.at).toLocaleString() : '') + '</div></div>').join('') + '</div>';
     let timer = null, dirty = -1;
-    const persist = (i, msg) => { timer = null; dirty = -1; n.items[i].at = new Date().toISOString(); Staff.setNotes({ count: n.count, items: n.items }); const f = app.querySelector('[data-note-saved="' + i + '"]'); if (f) f.textContent = msg || ('saved ' + new Date().toLocaleTimeString()); };
+    const persist = (i, msg) => { timer = null; dirty = -1; n.items[i].at = new Date().toISOString(); saveNotes({ count: n.count, items: n.items }); const f = app.querySelector('[data-note-saved="' + i + '"]'); if (f) f.textContent = msg || ('saved ' + new Date().toLocaleTimeString()); };
     // leaving the page (back button, a menu tap, closing the app) saves whatever is still being typed, then sends it
     const leave = () => { if (timer) { clearTimeout(timer); persist(dirty); } if (Cloud.enabled) Cloud.flushNow().catch(() => {}); window.removeEventListener('hashchange', leave); window.removeEventListener('pagehide', leave); };
     window.addEventListener('hashchange', leave); window.addEventListener('pagehide', leave);
     app.querySelectorAll('[data-note-text]').forEach(t => t.addEventListener('input', () => { const i = +t.dataset.noteText; n.items[i].text = t.value; dirty = i; const f = app.querySelector('[data-note-saved="' + i + '"]'); if (f) f.textContent = 'saving…'; clearTimeout(timer); timer = setTimeout(() => persist(i), 500); }));
     app.querySelectorAll('[data-note-title]').forEach(t => t.addEventListener('input', () => { const i = +t.dataset.noteTitle; n.items[i].title = t.value; dirty = i; clearTimeout(timer); timer = setTimeout(() => persist(i), 500); }));
     app.querySelectorAll('[data-note-colour]').forEach(b => b.addEventListener('click', () => { const i = +b.dataset.noteColour; n.items[i].colour = b.dataset.c; persist(i); const card = app.querySelector('[data-note="' + i + '"]'); card.className = 'sticky ' + b.dataset.c; card.querySelectorAll('.sticky-dot').forEach(d => d.classList.toggle('on', d.dataset.c === b.dataset.c)); }));
-    app.querySelectorAll('[data-note-clear]').forEach(b => b.addEventListener('click', () => { const i = +b.dataset.noteClear; if (!(n.items[i].title || n.items[i].text) || confirm('Clear this note?')) { n.items[i].title = ''; n.items[i].text = ''; persist(i, 'cleared'); pageNotes(); } }));
-    app.querySelectorAll('[data-notes-count]').forEach(b => b.addEventListener('click', () => { n.count = +b.dataset.notesCount; Staff.setNotes({ count: n.count, items: n.items }); pageNotes(); }));
+    app.querySelectorAll('[data-note-clear]').forEach(b => b.addEventListener('click', () => { const i = +b.dataset.noteClear; if (!(n.items[i].title || n.items[i].text) || confirm('Delete this note?')) { n.items[i].title = ''; n.items[i].text = ''; persist(i, 'deleted'); pageNotes(); } }));
+    app.querySelectorAll('[data-notes-count]').forEach(b => b.addEventListener('click', () => { n.count = +b.dataset.notesCount; saveNotes({ count: n.count, items: n.items }); pageNotes(); }));
   }
 
   /* ----- Sections page (top menu) ----- */

@@ -973,3 +973,12 @@ body[data-page="desk"] .tile:hover { background: #fbf4e6; box-shadow: 3px 4px 0 
 .d-cell .g-lvl { display: block; font-size: 0.68rem; color: var(--muted); font-weight: 500; line-height: 1.1; }
 .d-cell.avg strong { font-size: 1.05rem; }
 .grade-line { margin: 0.6rem auto 0.2rem; padding: 0.6rem 0.9rem; border-radius: 12px; background: var(--surface-2, #f3f4fb); display: inline-block; text-align: left; }
+/* desk notes panel (v45) */
+.desk-notes { margin-bottom: 1.5rem; }
+.desk-notes .sticky-grid.preview { margin-top: 0.8rem; }
+.desk-notes .sticky { min-height: 120px; display: flex; flex-direction: column; }
+.desk-notes .sticky-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.4rem; }
+.desk-notes .sticky-title-ro { font-weight: 800; }
+.desk-notes .sticky-text { display: block; flex: 1; white-space: pre-wrap; color: inherit; text-decoration: none; margin-top: 0.3rem; }
+.desk-notes .sticky-clear { background: none; border: 0; cursor: pointer; font-size: 1rem; opacity: 0.6; }
+.desk-notes .sticky-clear:hover { opacity: 1; }

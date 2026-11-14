@@ -216,7 +216,7 @@
      `rev` and stamps who made it, so the same profile version can be checked on any screen. */
   const seenStudents = {};                                                             // id → last cloud copy applied here
   const META = ['updatedAt', 'updatedBy', 'rev', 'id', 'teachers'];   // stamps, and the access list (changed only by claim / unclaim below)
-  const STUDENT_OWN = ['prefs', 'archived', 'suggestions', 'lessonLevels', 'levelLog', 'courseLevels', 'avatar', 'colour'];   // a student may change these about themselves
+  const STUDENT_OWN = ['prefs', 'archived', 'suggestions', 'lessonLevels', 'levelLog', 'courseLevels', 'avatar', 'colour', 'notes'];   // a student may change these about themselves
   const PER_COURSE = ['courseLevels', 'levelLog', 'lessonLevels', 'suggestions', 'track'];                                     // maps keyed by course: one course at a time
   const isMap = v => !!v && typeof v === 'object' && !Array.isArray(v);
   const J = v => JSON.stringify(v === undefined ? null : v);

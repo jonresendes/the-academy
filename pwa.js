@@ -169,7 +169,7 @@
   }
   document.addEventListener('click', e => {
     const a = e.target.closest('a[href^="#/"], a[href="#/"]');
-    if (!a || e.metaKey || e.ctrlKey || e.shiftKey || e.button) return;
+    if (!a || e.defaultPrevented || e.metaKey || e.ctrlKey || e.shiftKey || e.button) return;   // a page may claim a link for itself (the Notes tile)
     e.preventDefault(); go(a.getAttribute('href'));
   });
   // navigations made by setting location.hash directly (tests, older code)
