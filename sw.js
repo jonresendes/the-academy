@@ -16,6 +16,7 @@ const FILES = [
   './colouring.js',
   './hrf3o.js',
   './snc1l2l.js',
+  './eng3u.js',
   './storage.js',
   './util.js',
   './badges.js',
